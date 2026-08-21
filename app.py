@@ -285,13 +285,14 @@ async def get_models(req: ModelRequest):
     return {"models": models_list}
 
 # --- AI Parsing ---
-def extract_event(text: str, date: datetime, subject: str, settings: dict) -> dict:
+def extract_event(text: str, date: datetime, subject: str, settings: dict) -> List[dict]:
     prompt = f"""
-    Analyze the following email to see if it contains a clear calendar event, appointment, meeting, flight, dinner, deadline, assignment due date, or scheduled task.
+    Analyze the following email to see if it contains one or more clear calendar events, appointments, meetings, flights, dinners, deadlines, assignment due dates, or scheduled tasks.
     Email Subject: {subject}
     Email Date: {date.isoformat()}
     If it does NOT contain any scheduled events or deadlines, return EXACTLY the string "NO_EVENT".
-    If it DOES contain an event or deadline, return a JSON object with keys: "title", "date" (ISO 8601), "description". 
+    If it DOES contain events or deadlines, return a JSON ARRAY of objects, where each object has the keys: "title", "date" (ISO 8601), "description". 
+    Create a separate event object for EVERY distinct scheduled time mentioned (e.g., Departure time, Event time, Return time). Include location addresses in the description if available.
     For assignments or deadlines without a specific time, default the time to 09:00:00 local time.
     Email Content:
     {text[:2000]}
@@ -316,8 +317,16 @@ def extract_event(text: str, date: datetime, subject: str, settings: dict) -> di
         if result.startswith("```json"): result = result[7:-3].strip()
         elif result.startswith("```"): result = result[3:-3].strip()
             
-        event_dict = json.loads(result)
-        if all(k in event_dict for k in ("title", "date", "description")): return event_dict
+        parsed_data = json.loads(result)
+        if isinstance(parsed_data, dict):
+            parsed_data = [parsed_data]
+            
+        valid_events = []
+        for e in parsed_data:
+            if all(k in e for k in ("title", "date", "description")):
+                valid_events.append(e)
+                
+        return valid_events if valid_events else None
     except Exception as e:
         logger.error(f"AI extraction error ({provider} - {model_name}): {e}")
         raise ValueError(f"AI API Error: {str(e)}") 
@@ -357,36 +366,37 @@ async def process_user_emails(user_id: str):
                     text_content = msg.text or msg.html
                     if text_content and len(text_content) > 10:
                         try:
-                            event_data = extract_event(text_content, msg.date, msg.subject, settings)
-                            if event_data:
-                                event_id = str(uuid.uuid4())
-                                c.execute("""INSERT INTO events (id, user_id, email_id, account, title, date, description, status)
-                                             VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')""",
-                                          (event_id, user_id, msg.uid, email_user, event_data['title'], event_data['date'], event_data['description']))
+                            event_data_list = extract_event(text_content, msg.date, msg.subject, settings)
+                            if event_data_list:
+                                for event_data in event_data_list:
+                                    event_id = str(uuid.uuid4())
+                                    c.execute("""INSERT INTO events (id, user_id, email_id, account, title, date, description, status)
+                                                 VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')""",
+                                              (event_id, user_id, msg.uid, email_user, event_data['title'], event_data['date'], event_data['description']))
                                 
                                 # Auto-sync to Google Calendar immediately if connected!
-                                token_file = os.path.join(DATA_DIR, f"token_{user_id}.json")
-                                if os.path.exists(token_file):
-                                    try:
-                                        creds = Credentials.from_authorized_user_file(token_file, SCOPES)
-                                        service = build('calendar', 'v3', credentials=creds)
-                                        start_time = datetime.fromisoformat(event_data['date'].replace("Z", "+00:00"))
-                                        if start_time.tzinfo is None:
-                                            start_time = start_time.replace(tzinfo=datetime.now().astimezone().tzinfo)
-                                        end_time = start_time + timedelta(hours=1)
-                                        gcal_event = {
-                                          'summary': event_data['title'],
-                                          'description': event_data['description'],
-                                          'start': {'dateTime': start_time.isoformat()},
-                                          'end': {'dateTime': end_time.isoformat()}
-                                        }
-                                        service.events().insert(calendarId='primary', body=gcal_event).execute()
-                                        c.execute("UPDATE events SET status='added' WHERE id=?", (event_id,))
-                                        logger.info(f"Background auto-synced event '{event_data['title']}' for {user_id}")
-                                    except Exception as e:
-                                        logger.error(f"Background auto-sync failed for {user_id}: {e}")
-                                
-                                total_events_found += 1
+                                    token_file = os.path.join(DATA_DIR, f"token_{user_id}.json")
+                                    if os.path.exists(token_file):
+                                        try:
+                                            creds = Credentials.from_authorized_user_file(token_file, SCOPES)
+                                            service = build('calendar', 'v3', credentials=creds)
+                                            start_time = datetime.fromisoformat(event_data['date'].replace("Z", "+00:00"))
+                                            if start_time.tzinfo is None:
+                                                start_time = start_time.replace(tzinfo=datetime.now().astimezone().tzinfo)
+                                            end_time = start_time + timedelta(hours=1)
+                                            gcal_event = {
+                                              'summary': event_data['title'],
+                                              'description': event_data['description'],
+                                              'start': {'dateTime': start_time.isoformat()},
+                                              'end': {'dateTime': end_time.isoformat()}
+                                            }
+                                            service.events().insert(calendarId='primary', body=gcal_event).execute()
+                                            c.execute("UPDATE events SET status='added' WHERE id=?", (event_id,))
+                                            logger.info(f"Background auto-synced event '{event_data['title']}' for {user_id}")
+                                        except Exception as e:
+                                            logger.error(f"Background auto-sync failed for {user_id}: {e}")
+                                    
+                                    total_events_found += 1
                         except ValueError as ve:
                             conn.close()
                             return {"error": f"AI Error on {email_user}: {str(ve)}", "new_events": total_events_found}
