@@ -218,6 +218,12 @@
                         </select>
                     </div>
                     
+                    <div class="form-group">
+                        <label for="custom_prompt">Custom AI Instructions (Optional)</label>
+                        <textarea id="custom_prompt" rows="3" placeholder="e.g. I have kids in 2nd, 6th, and 9th grade, ignore other grades..."></textarea>
+                        <small style="color:#888;">Add personal context to help the AI filter emails (e.g. names to ignore, specific sports teams, etc.)</small>
+                    </div>
+                    
                     <div class="form-group" id="gemini_key_group">
                         <label for="gemini_api_key">Gemini API Key</label>
                         <input type="password" id="gemini_api_key" placeholder="Your Gemini API Key" onchange="debouncedFetchModels()" autocomplete="new-password">
@@ -731,6 +737,7 @@
                 document.getElementById('ai_provider').value = settings.ai_provider || 'gemini';
                 document.getElementById('gemini_api_key').value = settings.gemini_api_key || '';
                 document.getElementById('openai_api_key').value = settings.openai_api_key || '';
+                document.getElementById('custom_prompt').value = settings.custom_prompt || '';
                 savedModelSelection = settings.ai_model || '';
 
                 const accContainer = document.getElementById('accounts-container');
@@ -775,7 +782,8 @@
                 ai_model: document.getElementById('ai_model').value,
                 gemini_api_key: document.getElementById('gemini_api_key').value,
                 openai_api_key: document.getElementById('openai_api_key').value,
-                public_url: document.getElementById('public_url').value
+                public_url: document.getElementById('public_url').value,
+                custom_prompt: document.getElementById('custom_prompt').value
             };
             
             try {

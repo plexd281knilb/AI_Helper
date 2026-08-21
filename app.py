@@ -176,6 +176,7 @@ class SettingsSave(BaseModel):
     gemini_api_key: str = ""
     openai_api_key: str = ""
     public_url: str = ""
+    custom_prompt: str = ""
 
 @app.get("/api/settings")
 async def read_settings(user_id: str = Depends(verify_auth)):
@@ -196,6 +197,7 @@ async def read_settings(user_id: str = Depends(verify_auth)):
         "gemini_api_key": settings.get("gemini_api_key", ""),
         "openai_api_key": settings.get("openai_api_key", ""),
         "public_url": settings.get("public_url", ""),
+        "custom_prompt": settings.get("custom_prompt", ""),
         "google_auth_ready": os.path.exists(CLIENT_SECRETS_FILE),
         "google_connected": os.path.exists(token_file)
     }
@@ -286,12 +288,16 @@ async def get_models(req: ModelRequest):
 
 # --- AI Parsing ---
 def extract_event(text: str, date: datetime, subject: str, settings: dict) -> List[dict]:
+    custom_instructions = settings.get("custom_prompt", "")
+    custom_prompt_text = f"\n    USER CUSTOM INSTRUCTIONS: {custom_instructions}\n" if custom_instructions.strip() else ""
+    
     prompt = f"""
     Analyze the following email to see if it contains one or more clear calendar events, appointments, meetings, flights, dinners, deadlines, assignment due dates, or scheduled tasks.
     Email Subject: {subject}
     Email Date: {date.isoformat()}
-    If it does NOT contain any scheduled events or deadlines, return EXACTLY the string "NO_EVENT".
-    If it DOES contain events or deadlines, return a JSON ARRAY of objects, where each object has the keys: "title", "date" (ISO 8601), "description". 
+    {custom_prompt_text}
+    If it does NOT contain any scheduled events or deadlines (or if the event violates the USER CUSTOM INSTRUCTIONS), return EXACTLY the string "NO_EVENT".
+    If it DOES contain valid events or deadlines, return a JSON ARRAY of objects, where each object has the keys: "title", "date" (ISO 8601), "description". 
     Create a separate event object for EVERY distinct scheduled time mentioned (e.g., Departure time, Event time, Return time). Include location addresses in the description if available.
     For assignments or deadlines without a specific time, default the time to 09:00:00 local time.
     Email Content:
