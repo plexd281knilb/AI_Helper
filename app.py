@@ -301,7 +301,7 @@ def extract_event(text: str, date: datetime, subject: str, settings: dict) -> Li
     Create a separate event object for EVERY distinct scheduled time mentioned (e.g., Departure time, Event time, Return time). Include location addresses in the description if available.
     For assignments or deadlines without a specific time, default the time to 09:00:00 local time.
     Email Content:
-    {text[:2000]}
+    {text[:15000]}
     """
     provider = settings.get("ai_provider", "gemini")
     model_name = settings.get("ai_model", "gemini-1.5-flash")
