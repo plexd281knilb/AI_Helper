@@ -34,15 +34,17 @@ LOG_FILE = os.path.join(DATA_DIR, "app.log")
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 
 # --- Logging Setup ---
-logger = logging.getLogger("AIHelper")
-logger.setLevel(logging.INFO)
 file_handler = RotatingFileHandler(LOG_FILE, maxBytes=1024*1024, backupCount=1) # 1 MB max
 log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 file_handler.setFormatter(log_formatter)
-logger.addHandler(file_handler)
-console_handler = logging.StreamHandler()
-console_handler.setFormatter(log_formatter)
-logger.addHandler(console_handler)
+
+# Capture all logs (including uvicorn)
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.INFO)
+if not any(isinstance(h, RotatingFileHandler) for h in root_logger.handlers):
+    root_logger.addHandler(file_handler)
+
+logger = logging.getLogger("AIHelper")
 
 logger.info("Application starting up...")
 
@@ -78,29 +80,6 @@ def init_db():
                     description TEXT,
                     status TEXT DEFAULT 'pending'
                  )''')
-                 
-    # Legacy migration
-    legacy_db = os.path.join(DATA_DIR, "events.db")
-    if os.path.exists(legacy_db):
-        try:
-            logger.info("Found legacy events.db, migrating data to new schema...")
-            lc = sqlite3.connect(legacy_db).cursor()
-            lc.execute("SELECT * FROM events")
-            for row in lc.fetchall():
-                try:
-                    c.execute("INSERT INTO events (id, user_id, email_id, account, title, date, description, status) VALUES (?, 'admin', ?, ?, ?, ?, ?, ?)", 
-                              (row[0], row[1], row[2], row[3], row[4], row[5], row[6]))
-                except: pass
-            lc.execute("SELECT * FROM processed_emails")
-            for row in lc.fetchall():
-                try:
-                    c.execute("INSERT INTO processed_emails (id, user_id, account) VALUES (?, 'admin', ?)", (row[0], row[1]))
-                except: pass
-            os.rename(legacy_db, legacy_db + ".bak")
-            logger.info("Migration successful.")
-        except Exception as e:
-            logger.error(f"Legacy DB migration skipped/failed: {e}")
-            
     conn.commit()
     conn.close()
 
@@ -415,13 +394,20 @@ async def get_google_auth_url(request: Request, user_id: str = Depends(verify_au
     c = conn.cursor()
     c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
     s = json.loads(c.fetchone()[0] or "{}")
-    conn.close()
     
     base_url = s.get("public_url") or f"{request.url.scheme}://{request.url.netloc}"
     redirect_uri = f"{base_url.rstrip('/')}/api/auth/google/callback"
     
     flow = Flow.from_client_secrets_file(CLIENT_SECRETS_FILE, scopes=SCOPES, redirect_uri=redirect_uri)
-    auth_url, _ = flow.authorization_url(prompt='consent', state=user_id)
+    auth_url, state = flow.authorization_url(prompt='consent')
+    
+    # Save the PKCE verifier and state so we can complete the flow
+    s["oauth_state"] = state
+    s["oauth_verifier"] = flow.code_verifier
+    c.execute("UPDATE users SET settings=? WHERE id=?", (json.dumps(s), user_id))
+    conn.commit()
+    conn.close()
+    
     return {"url": auth_url}
 
 @app.get("/api/auth/google/callback")
@@ -430,20 +416,33 @@ async def google_auth_callback(request: Request, state: str):
         logger.error("OAuth callback hit, but client secrets are missing.")
         return "Error: secrets missing."
         
-    user_id = state
+    # Find user by state
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
-    row = c.fetchone()
-    s = json.loads(row[0] if row else "{}")
+    c.execute("SELECT id, settings FROM users")
+    user_id = None
+    user_settings = {}
+    
+    for row in c.fetchall():
+        s = json.loads(row[1] or "{}")
+        if s.get("oauth_state") == state:
+            user_id = row[0]
+            user_settings = s
+            break
+            
     conn.close()
     
-    base_url = s.get("public_url") or f"{request.url.scheme}://{request.url.netloc}"
+    if not user_id:
+        logger.error(f"Google OAuth Failed: Invalid state {state}")
+        return "Error: Invalid state or session expired. Try logging in with Google again."
+    
+    base_url = user_settings.get("public_url") or f"{request.url.scheme}://{request.url.netloc}"
     redirect_uri = f"{base_url.rstrip('/')}/api/auth/google/callback"
     
     try:
         flow = Flow.from_client_secrets_file(CLIENT_SECRETS_FILE, scopes=SCOPES, redirect_uri=redirect_uri)
         os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+        flow.code_verifier = user_settings.get("oauth_verifier")
         flow.fetch_token(authorization_response=str(request.url))
         
         token_file = os.path.join(DATA_DIR, f"token_{user_id}.json")
@@ -510,7 +509,7 @@ async def get_logs():
     if not os.path.exists(LOG_FILE):
         return {"logs": "No logs recorded yet."}
     try:
-        with open(LOG_FILE, "r") as f:
+        with open(LOG_FILE, "r", encoding="utf-8", errors="replace") as f:
             f.seek(0, os.SEEK_END)
             size = f.tell()
             f.seek(max(size - 1024*1024, 0)) # Last 1MB
