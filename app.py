@@ -38,14 +38,12 @@ file_handler = RotatingFileHandler(LOG_FILE, maxBytes=1024*1024, backupCount=1) 
 log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 file_handler.setFormatter(log_formatter)
 
-# Capture all logs (including uvicorn)
 root_logger = logging.getLogger()
 root_logger.setLevel(logging.INFO)
 if not any(isinstance(h, RotatingFileHandler) for h in root_logger.handlers):
     root_logger.addHandler(file_handler)
 
 logger = logging.getLogger("AIHelper")
-
 logger.info("Application starting up...")
 
 # --- Database Init & Migration ---
@@ -66,7 +64,6 @@ def init_db():
                     email_host TEXT
                  )''')
                  
-    # Fix the UNIQUE constraint issue on processed_emails by migrating to v2
     c.execute('''CREATE TABLE IF NOT EXISTS processed_emails_v2 (
                     id TEXT,
                     user_id TEXT,
@@ -74,15 +71,12 @@ def init_db():
                     PRIMARY KEY (id, user_id, account)
                  )''')
                  
-    # Migrate old data if old table exists
     c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='processed_emails'")
     if c.fetchone():
         try:
-            logger.info("Migrating processed_emails to v2 schema to fix UNIQUE constraints...")
             c.execute("INSERT OR IGNORE INTO processed_emails_v2 SELECT id, user_id, account FROM processed_emails")
             c.execute("DROP TABLE processed_emails")
-        except Exception as e:
-            logger.error(f"Error migrating processed_emails: {e}")
+        except: pass
 
     c.execute('''CREATE TABLE IF NOT EXISTS events (
                     id TEXT PRIMARY KEY,
@@ -100,7 +94,7 @@ def init_db():
 init_db()
 
 # --- Authentication Logic ---
-SESSIONS = {} # token -> user_id
+SESSIONS = {} 
 
 class AuthRequest(BaseModel):
     username: str
@@ -116,52 +110,43 @@ def verify_auth(request: Request):
 async def auth_status(request: Request):
     token = request.cookies.get("session_token")
     logged_in = token in SESSIONS
-    
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("SELECT COUNT(*) FROM users")
     count = c.fetchone()[0]
     conn.close()
-    
     return {"setup_required": count == 0, "logged_in": logged_in}
 
 @app.post("/api/auth/register")
 async def auth_register(req: AuthRequest):
     if len(req.password) < 4:
         return {"error": "Password must be at least 4 characters."}
-        
     pwd_hash = hashlib.sha256(req.password.encode()).hexdigest()
     user_id = str(uuid.uuid4())
     default_settings = json.dumps({"ai_provider": "gemini", "ai_model": "gemini-1.5-flash", "public_url": ""})
-    
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     try:
-        c.execute("INSERT INTO users (id, username, password_hash, settings) VALUES (?, ?, ?, ?)", 
-                  (user_id, req.username, pwd_hash, default_settings))
+        c.execute("INSERT INTO users (id, username, password_hash, settings) VALUES (?, ?, ?, ?)", (user_id, req.username, pwd_hash, default_settings))
         conn.commit()
         logger.info(f"New user registered: {req.username}")
     except sqlite3.IntegrityError:
         return {"error": "Username already exists."}
     finally:
         conn.close()
-        
     return {"status": "success"}
 
 @app.post("/api/auth/login")
 async def auth_login(req: AuthRequest, response: Response):
     req_hash = hashlib.sha256(req.password.encode()).hexdigest()
-    
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("SELECT id FROM users WHERE username=? AND password_hash=?", (req.username, req_hash))
     user = c.fetchone()
     conn.close()
-    
     if not user:
         logger.warning(f"Failed login attempt for username: {req.username}")
         return {"error": "Invalid username or password"}
-    
     token = secrets.token_hex(32)
     SESSIONS[token] = user[0]
     response.set_cookie(key="session_token", value=token, httponly=True, max_age=86400*30)
@@ -196,17 +181,13 @@ async def read_settings(user_id: str = Depends(verify_auth)):
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
-    
     c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
     row = c.fetchone()
     settings = json.loads(row['settings']) if row and row['settings'] else {}
-    
     c.execute("SELECT id, email_user, email_pass, email_host FROM email_accounts WHERE user_id=?", (user_id,))
     accounts = [dict(r) for r in c.fetchall()]
     conn.close()
-    
     token_file = os.path.join(DATA_DIR, f"token_{user_id}.json")
-    
     return {
         "accounts": accounts,
         "ai_provider": settings.get("ai_provider", "gemini"),
@@ -226,7 +207,6 @@ async def save_ai_settings(s: SettingsSave, user_id: str = Depends(verify_auth))
     row = c.fetchone()
     current = json.loads(row[0]) if row and row[0] else {}
     current.update(s.dict())
-    
     c.execute("UPDATE users SET settings=? WHERE id=?", (json.dumps(current), user_id))
     conn.commit()
     conn.close()
@@ -238,16 +218,11 @@ async def save_account(acc: AccountSave, user_id: str = Depends(verify_auth)):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     acc_id = acc.id or str(uuid.uuid4())
-    
     c.execute("SELECT id FROM email_accounts WHERE id=? AND user_id=?", (acc_id, user_id))
     if c.fetchone():
-        c.execute("UPDATE email_accounts SET email_user=?, email_pass=?, email_host=? WHERE id=?",
-                  (acc.email_user, acc.email_pass, acc.email_host, acc_id))
-        logger.info(f"User {user_id} updated email account {acc.email_user}")
+        c.execute("UPDATE email_accounts SET email_user=?, email_pass=?, email_host=? WHERE id=?", (acc.email_user, acc.email_pass, acc.email_host, acc_id))
     else:
-        c.execute("INSERT INTO email_accounts (id, user_id, email_user, email_pass, email_host) VALUES (?, ?, ?, ?, ?)",
-                  (acc_id, user_id, acc.email_user, acc.email_pass, acc.email_host))
-        logger.info(f"User {user_id} added email account {acc.email_user}")
+        c.execute("INSERT INTO email_accounts (id, user_id, email_user, email_pass, email_host) VALUES (?, ?, ?, ?, ?)", (acc_id, user_id, acc.email_user, acc.email_pass, acc.email_host))
     conn.commit()
     conn.close()
     return {"status": "success", "id": acc_id}
@@ -259,7 +234,16 @@ async def delete_account(acc_id: str, user_id: str = Depends(verify_auth)):
     c.execute("DELETE FROM email_accounts WHERE id=? AND user_id=?", (acc_id, user_id))
     conn.commit()
     conn.close()
-    logger.info(f"User {user_id} deleted an email account.")
+    return {"status": "success"}
+    
+@app.post("/api/reset_history")
+async def reset_history(user_id: str = Depends(verify_auth)):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("DELETE FROM processed_emails_v2 WHERE user_id=?", (user_id,))
+    conn.commit()
+    conn.close()
+    logger.info(f"User {user_id} reset their email history.")
     return {"status": "success"}
 
 @app.post("/api/upload_client_secret", dependencies=[Depends(verify_auth)])
@@ -312,6 +296,9 @@ def extract_event(text: str, date: datetime, subject: str, settings: dict) -> di
     """
     provider = settings.get("ai_provider", "gemini")
     model_name = settings.get("ai_model", "gemini-1.5-flash")
+    if not model_name:
+        model_name = "gemini-1.5-flash" # fallback
+        
     result = "NO_EVENT"
     try:
         if provider == "gemini":
@@ -330,7 +317,8 @@ def extract_event(text: str, date: datetime, subject: str, settings: dict) -> di
         event_dict = json.loads(result)
         if all(k in event_dict for k in ("title", "date", "description")): return event_dict
     except Exception as e:
-        logger.error(f"AI extraction error ({provider}): {e}")
+        logger.error(f"AI extraction error ({provider} - {model_name}): {e}")
+        raise ValueError(f"AI API Error: {str(e)}") # Bubble up error to abort process
     return None
 
 @app.get("/api/fetch_emails")
@@ -347,11 +335,9 @@ async def fetch_emails(user_id: str = Depends(verify_auth)):
     
     if not accounts:
         conn.close()
-        logger.warning(f"User {user_id} tried to fetch emails but has no accounts.")
         return {"error": "No email accounts configured."}
         
     total_events_found = 0
-    logger.info(f"User {user_id} initiated email fetch for {len(accounts)} accounts.")
     
     for account in accounts:
         email_user = account['email_user']
@@ -363,27 +349,33 @@ async def fetch_emails(user_id: str = Depends(verify_auth)):
                 date_limit = (datetime.now() - timedelta(days=7)).date()
                 messages = mailbox.fetch(AND(date_gte=date_limit), limit=20, reverse=True)
                 
-                new_found_this_acc = 0
                 for msg in messages:
                     c.execute("SELECT id FROM processed_emails_v2 WHERE id=? AND user_id=? AND account=?", (msg.uid, user_id, email_user))
                     if c.fetchone(): continue
                         
                     text_content = msg.text or msg.html
                     if text_content and len(text_content) > 10:
-                        event_data = extract_event(text_content, msg.date, msg.subject, settings)
-                        if event_data:
-                            event_id = str(uuid.uuid4())
-                            c.execute("""INSERT INTO events (id, user_id, email_id, account, title, date, description, status)
-                                         VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')""",
-                                      (event_id, user_id, msg.uid, email_user, event_data['title'], event_data['date'], event_data['description']))
-                            new_found_this_acc += 1
-                            total_events_found += 1
+                        try:
+                            event_data = extract_event(text_content, msg.date, msg.subject, settings)
+                            if event_data:
+                                event_id = str(uuid.uuid4())
+                                c.execute("""INSERT INTO events (id, user_id, email_id, account, title, date, description, status)
+                                             VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')""",
+                                          (event_id, user_id, msg.uid, email_user, event_data['title'], event_data['date'], event_data['description']))
+                                total_events_found += 1
+                        except ValueError as ve:
+                            # CRITICAL: AI error occurred!
+                            # Do not mark as processed. Abort and alert user!
+                            conn.close()
+                            return {"error": f"AI Error on {email_user}: {str(ve)}"}
                     
+                    # Safely mark as processed ONLY if extraction succeeded or was safely ignored
                     c.execute("INSERT INTO processed_emails_v2 (id, user_id, account) VALUES (?, ?, ?)", (msg.uid, user_id, email_user))
                     conn.commit()
-                logger.info(f"Successfully processed emails for {email_user}. Found {new_found_this_acc} new events.")
         except Exception as e:
             logger.error(f"Error fetching emails for {email_user}: {e}")
+            conn.close()
+            return {"error": f"Email connection failed for {email_user}. Check password/host."}
             
     conn.close()
     return {"status": "success", "new_events": total_events_found}
@@ -403,69 +395,51 @@ async def get_events(user_id: str = Depends(verify_auth)):
 async def get_google_auth_url(request: Request, user_id: str = Depends(verify_auth)):
     if not os.path.exists(CLIENT_SECRETS_FILE):
         return {"error": "Client secrets missing"}
-        
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
     s = json.loads(c.fetchone()[0] or "{}")
-    
     base_url = s.get("public_url") or f"{request.url.scheme}://{request.url.netloc}"
     redirect_uri = f"{base_url.rstrip('/')}/api/auth/google/callback"
-    
     flow = Flow.from_client_secrets_file(CLIENT_SECRETS_FILE, scopes=SCOPES, redirect_uri=redirect_uri)
     auth_url, state = flow.authorization_url(prompt='consent')
-    
-    # Save the PKCE verifier and state so we can complete the flow
     s["oauth_state"] = state
     s["oauth_verifier"] = flow.code_verifier
     c.execute("UPDATE users SET settings=? WHERE id=?", (json.dumps(s), user_id))
     conn.commit()
     conn.close()
-    
     return {"url": auth_url}
 
 @app.get("/api/auth/google/callback")
 async def google_auth_callback(request: Request, state: str):
     if not os.path.exists(CLIENT_SECRETS_FILE):
-        logger.error("OAuth callback hit, but client secrets are missing.")
         return "Error: secrets missing."
-        
-    # Find user by state
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("SELECT id, settings FROM users")
     user_id = None
     user_settings = {}
-    
     for row in c.fetchall():
         s = json.loads(row[1] or "{}")
         if s.get("oauth_state") == state:
             user_id = row[0]
             user_settings = s
             break
-            
     conn.close()
-    
     if not user_id:
-        logger.error(f"Google OAuth Failed: Invalid state {state}")
         return "Error: Invalid state or session expired. Try logging in with Google again."
-    
     base_url = user_settings.get("public_url") or f"{request.url.scheme}://{request.url.netloc}"
     redirect_uri = f"{base_url.rstrip('/')}/api/auth/google/callback"
-    
     try:
         flow = Flow.from_client_secrets_file(CLIENT_SECRETS_FILE, scopes=SCOPES, redirect_uri=redirect_uri)
         os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
         flow.code_verifier = user_settings.get("oauth_verifier")
         flow.fetch_token(authorization_response=str(request.url))
-        
         token_file = os.path.join(DATA_DIR, f"token_{user_id}.json")
         with open(token_file, 'w') as f:
             f.write(flow.credentials.to_json())
-        logger.info(f"Google Calendar OAuth successful for user {user_id}")
     except Exception as e:
         logger.error(f"Google OAuth Failed for user {user_id}: {e}")
-        
     return RedirectResponse(url="/")
 
 @app.post("/api/events/{event_id}/sync")
@@ -473,11 +447,9 @@ async def sync_event(event_id: str, user_id: str = Depends(verify_auth)):
     token_file = os.path.join(DATA_DIR, f"token_{user_id}.json")
     if not os.path.exists(token_file):
         return {"error": "Google Calendar not connected"}
-        
     try:
         creds = Credentials.from_authorized_user_file(token_file, SCOPES)
         service = build('calendar', 'v3', credentials=creds)
-        
         conn = sqlite3.connect(DB_FILE)
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
@@ -486,25 +458,20 @@ async def sync_event(event_id: str, user_id: str = Depends(verify_auth)):
         if not event:
             conn.close()
             return {"error": "Event not found"}
-            
         start_time = datetime.fromisoformat(event['date'].replace("Z", "+00:00"))
         end_time = start_time + timedelta(hours=1)
-        
         gcal_event = {
           'summary': event['title'],
           'description': event['description'],
           'start': {'dateTime': start_time.isoformat()},
           'end': {'dateTime': end_time.isoformat()}
         }
-        
         service.events().insert(calendarId='primary', body=gcal_event).execute()
         c.execute("UPDATE events SET status='added' WHERE id=?", (event_id,))
         conn.commit()
         conn.close()
-        logger.info(f"User {user_id} synced event '{event['title']}' to Google Calendar.")
         return {"status": "success"}
     except Exception as e:
-        logger.error(f"Sync event failed for user {user_id}: {e}")
         return {"error": str(e)}
 
 @app.delete("/api/events/{event_id}")
@@ -514,10 +481,8 @@ async def dismiss_event(event_id: str, user_id: str = Depends(verify_auth)):
     c.execute("UPDATE events SET status='dismissed' WHERE id=? AND user_id=?", (event_id, user_id))
     conn.commit()
     conn.close()
-    logger.info(f"User {user_id} dismissed an event.")
     return {"status": "success"}
 
-# --- Logs Endpoint ---
 @app.get("/api/logs", dependencies=[Depends(verify_auth)])
 async def get_logs():
     if not os.path.exists(LOG_FILE):
@@ -526,7 +491,7 @@ async def get_logs():
         with open(LOG_FILE, "r", encoding="utf-8", errors="replace") as f:
             f.seek(0, os.SEEK_END)
             size = f.tell()
-            f.seek(max(size - 1024*1024, 0)) # Last 1MB
+            f.seek(max(size - 1024*1024, 0))
             logs = f.read()
         return {"logs": logs}
     except Exception as e:

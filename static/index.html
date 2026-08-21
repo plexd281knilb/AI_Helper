@@ -193,6 +193,11 @@
                 <p style="color: #bbb; margin-top: 0;">Add the email accounts you want to scan. <br><b>Note for Gmail:</b> You must use an App Password, not your normal password. <a href="https://myaccount.google.com/security" target="_blank">Generate one here</a>.</p>
                 <div id="accounts-container"></div>
                 <button class="add-account-btn" onclick="addAccountRow()">+ Add Email Account</button>
+                
+                <!-- Reset History Button -->
+                <div style="text-align: right; margin-top: -5px; margin-bottom: 25px;">
+                    <button class="remove-btn" onclick="resetEmailHistory()" style="background:#552222; border: 1px solid #ff5252;">⚠️ Reset Processed Emails History (Re-scan Inbox)</button>
+                </div>
 
                 <!-- General Settings Section -->
                 <h3 class="section-title">General & AI Configuration</h3>
@@ -403,13 +408,24 @@
                 await handleApiError(response);
                 const data = await response.json();
                 if (data.error) {
-                    msgBox.innerHTML = `<div class="error">${data.error}</div>`;
+                    msgBox.innerHTML = `<div class="error" style="background:#ff525222; border: 1px solid #ff5252; padding: 15px; border-radius: 4px;">${data.error}</div>`;
                 } else {
                     msgBox.innerHTML = `<div class="success">Finished fetching. Found ${data.new_events} new events!</div>`;
                     renderLocalEvents();
                 }
             } catch(e) {
                 if (e.message !== "Unauthorized") msgBox.innerHTML = '<div class="error">Failed to fetch emails. Check the Logs tab for details.</div>';
+            }
+        }
+        
+        async function resetEmailHistory() {
+            if (!confirm("Are you sure? This will make the app scan and re-process ALL emails from the last 7 days during your next fetch. This is useful if the AI failed previously!")) return;
+            try {
+                const response = await fetch('/api/reset_history', {method: 'POST'});
+                await handleApiError(response);
+                alert("History cleared! Go to the Dashboard and click Fetch New Emails to try again.");
+            } catch (e) {
+                if (e.message !== "Unauthorized") alert("Failed to clear history.");
             }
         }
 
@@ -590,6 +606,11 @@
                     
                     if (savedModelSelection && data.models.includes(savedModelSelection)) {
                         modelSelect.value = savedModelSelection;
+                    } else if (savedModelSelection === 'gemini-2.5-flash-lite' && data.models.includes('gemini-3.5-flash-lite')) {
+                        // Auto-upgrade dead model
+                        modelSelect.value = 'gemini-3.5-flash-lite';
+                        modelWarning.innerText = "Your previous model was discontinued! We auto-selected a new one. Please hit Save.";
+                        modelWarning.style.display = 'block';
                     } else if (!data.models.includes(savedModelSelection) && savedModelSelection !== '') {
                         modelWarning.style.display = 'block'; // Their saved model is 404
                     }
