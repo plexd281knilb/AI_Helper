@@ -58,8 +58,11 @@
         .add-account-btn:hover { background-color: #555; }
         .fetch-models-btn { background-color: #555; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 14px; margin-bottom: 10px; margin-top: 5px;}
         
-        .sync-btn { background-color: #f4b400; color: #000; font-weight: bold; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; margin-right: 15px;}
-        .sync-btn:hover { background-color: #e0a800; }
+        .sync-btn { background-color: #4CAF50; color: white; font-weight: bold; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; margin-right: 15px;}
+        .sync-btn:hover { background-color: #45a049; }
+        
+        .sync-btn-large { background-color: #4CAF50; color: white; font-weight: bold; padding: 15px 30px; border: none; border-radius: 6px; cursor: pointer; font-size: 18px; margin-top: 20px;}
+        .sync-btn-large:hover { background-color: #45a049; }
         
         .view { display: none; }
         .view.active { display: block; }
@@ -229,6 +232,7 @@
                         <select id="ai_model">
                             <option value="">Fetching models...</option>
                         </select>
+                        <small style="color:#ff5252; display:none;" id="model-warning">If the AI fails to run, make sure a valid model is selected here and saved!</small>
                     </div>
 
                     <button class="save-btn" style="width: 100%;" onclick="saveAISettings()">Save General Settings</button>
@@ -422,7 +426,13 @@
                 container.innerHTML = '';
                 
                 if (events.length === 0) {
-                    container.innerHTML = '<div style="padding: 20px; text-align: center; color: #888;">No pending events found. Click "Fetch New Emails" above.</div>';
+                    container.innerHTML = `
+                        <div style="padding: 40px 20px; text-align: center; border: 1px dashed #444; border-radius: 8px;">
+                            <h2 style="color: #888; margin-top: 0;">No Pending Events Found</h2>
+                            <p style="color: #aaa; margin-bottom: 30px;">Click the button below to check your inbox right now!</p>
+                            <button onclick="fetchEmails()" class="sync-btn-large">Fetch New Emails</button>
+                        </div>
+                    `;
                     return;
                 }
 
@@ -471,6 +481,9 @@
                 const data = await response.json();
                 if (data.status === 'success') {
                     card.remove();
+                    if(document.querySelectorAll('.event-card').length === 0) {
+                        renderLocalEvents(); // Show the big fetch button
+                    }
                 } else {
                     alert("Sync failed: " + data.error);
                     card.style.opacity = '1';
@@ -488,6 +501,9 @@
                 const response = await fetch(`/api/events/${id}`, {method: 'DELETE'});
                 await handleApiError(response);
                 card.remove();
+                if(document.querySelectorAll('.event-card').length === 0) {
+                    renderLocalEvents(); // Show the big fetch button
+                }
             } catch(e) {
                 if (e.message !== "Unauthorized") card.style.opacity = '1';
             }
@@ -540,6 +556,7 @@
             const provider = document.getElementById('ai_provider').value;
             const apiKey = provider === 'gemini' ? document.getElementById('gemini_api_key').value : document.getElementById('openai_api_key').value;
             const modelSelect = document.getElementById('ai_model');
+            const modelWarning = document.getElementById('model-warning');
             
             if (!apiKey) {
                 modelSelect.innerHTML = '<option value="">Enter API key to see models</option>';
@@ -570,8 +587,11 @@
                         opt.innerText = m;
                         modelSelect.appendChild(opt);
                     });
+                    
                     if (savedModelSelection && data.models.includes(savedModelSelection)) {
                         modelSelect.value = savedModelSelection;
+                    } else if (!data.models.includes(savedModelSelection) && savedModelSelection !== '') {
+                        modelWarning.style.display = 'block'; // Their saved model is 404
                     }
                 } else {
                     modelSelect.innerHTML = '<option value="">No models found or invalid key</option>';
@@ -585,6 +605,7 @@
             const provider = document.getElementById('ai_provider').value;
             document.getElementById('gemini_key_group').style.display = provider === 'gemini' ? 'block' : 'none';
             document.getElementById('openai_key_group').style.display = provider === 'openai' ? 'block' : 'none';
+            document.getElementById('model-warning').style.display = 'none';
             fetchModels(false);
         }
 
@@ -744,6 +765,8 @@
                 });
                 await handleApiError(response);
                 if (response.ok) {
+                    document.getElementById('model-warning').style.display = 'none';
+                    savedModelSelection = payload.ai_model;
                     msgBox.innerHTML = '<div class="success">Settings saved successfully!</div>';
                     const baseUrl = payload.public_url || window.location.origin;
                     document.getElementById('dynamic-redirect-uri').innerText = baseUrl.replace(/\/$/, '') + '/api/auth/google/callback';

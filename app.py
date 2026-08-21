@@ -65,11 +65,25 @@ def init_db():
                     email_pass TEXT,
                     email_host TEXT
                  )''')
-    c.execute('''CREATE TABLE IF NOT EXISTS processed_emails (
-                    id TEXT PRIMARY KEY,
+                 
+    # Fix the UNIQUE constraint issue on processed_emails by migrating to v2
+    c.execute('''CREATE TABLE IF NOT EXISTS processed_emails_v2 (
+                    id TEXT,
                     user_id TEXT,
-                    account TEXT
+                    account TEXT,
+                    PRIMARY KEY (id, user_id, account)
                  )''')
+                 
+    # Migrate old data if old table exists
+    c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='processed_emails'")
+    if c.fetchone():
+        try:
+            logger.info("Migrating processed_emails to v2 schema to fix UNIQUE constraints...")
+            c.execute("INSERT OR IGNORE INTO processed_emails_v2 SELECT id, user_id, account FROM processed_emails")
+            c.execute("DROP TABLE processed_emails")
+        except Exception as e:
+            logger.error(f"Error migrating processed_emails: {e}")
+
     c.execute('''CREATE TABLE IF NOT EXISTS events (
                     id TEXT PRIMARY KEY,
                     user_id TEXT,
@@ -351,7 +365,7 @@ async def fetch_emails(user_id: str = Depends(verify_auth)):
                 
                 new_found_this_acc = 0
                 for msg in messages:
-                    c.execute("SELECT id FROM processed_emails WHERE id=? AND user_id=? AND account=?", (msg.uid, user_id, email_user))
+                    c.execute("SELECT id FROM processed_emails_v2 WHERE id=? AND user_id=? AND account=?", (msg.uid, user_id, email_user))
                     if c.fetchone(): continue
                         
                     text_content = msg.text or msg.html
@@ -365,7 +379,7 @@ async def fetch_emails(user_id: str = Depends(verify_auth)):
                             new_found_this_acc += 1
                             total_events_found += 1
                     
-                    c.execute("INSERT INTO processed_emails (id, user_id, account) VALUES (?, ?, ?)", (msg.uid, user_id, email_user))
+                    c.execute("INSERT INTO processed_emails_v2 (id, user_id, account) VALUES (?, ?, ?)", (msg.uid, user_id, email_user))
                     conn.commit()
                 logger.info(f"Successfully processed emails for {email_user}. Found {new_found_this_acc} new events.")
         except Exception as e:
