@@ -156,6 +156,7 @@
         <div class="nav">
             <div class="nav-left">
                 <button class="tab-link active" onclick="openTab('dashboard', event)">Dashboard</button>
+                <button class="tab-link" onclick="openTab('history', event)">History</button>
                 <button class="tab-link" onclick="openTab('settings', event)">Settings</button>
                 <button class="tab-link" onclick="openTab('users', event)">Users</button>
                 <button class="tab-link" onclick="openTab('logs', event)">Logs</button>
@@ -174,6 +175,18 @@
                 <div id="dashboard-msg"></div>
                 <div id="events-container">
                     Loading events from database...
+                </div>
+            </div>
+
+            <!-- History View -->
+            <div id="history" class="view">
+                <h1>Email Processing History</h1>
+                <p style="color: #ccc;">Manage which emails the AI has already processed.</p>
+                <div id="history-msg"></div>
+                
+                <h3 class="section-title">Recently Processed Emails</h3>
+                <div id="history-container">
+                    Loading history...
                 </div>
             </div>
 
@@ -243,10 +256,7 @@
                 <div id="accounts-container"></div>
                 <button class="add-account-btn" onclick="addAccountRow()">+ Add Email Account</button>
                 
-                <!-- Reset History Button -->
-                <div style="text-align: right; margin-top: -5px; margin-bottom: 25px;">
-                    <button class="remove-btn" onclick="resetEmailHistory()" style="background:#552222; border: 1px solid #ff5252;">⚠️ Reset Processed Emails History (Re-scan Inbox)</button>
-                </div>
+                <!-- No reset history button here anymore -->
 
                 <!-- General Settings Section -->
                 <h3 class="section-title">General & AI Configuration</h3>
@@ -440,6 +450,8 @@
             
             if (tabName === 'dashboard') {
                 renderLocalEvents();
+            } else if (tabName === 'history') {
+                loadHistory();
             } else if (tabName === 'settings') {
                 loadSettings();
             } else if (tabName === 'users') {
@@ -449,6 +461,68 @@
             }
         }
         
+        // --- HISTORY LOGIC ---
+        async function loadHistory() {
+            const container = document.getElementById('history-container');
+            container.innerHTML = 'Loading history...';
+            try {
+                const response = await fetch('/api/history');
+                await handleApiError(response);
+                const history = await response.json();
+                
+                if (history.length === 0) {
+                    container.innerHTML = '<div style="color:#aaa; text-align:center; padding:20px;">No history found.</div>';
+                    return;
+                }
+                
+                container.innerHTML = '';
+                history.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = 'account-box';
+                    div.style.display = 'flex';
+                    div.style.justifyContent = 'space-between';
+                    div.style.alignItems = 'center';
+                    
+                    const dateStr = item.date ? new Date(item.date).toLocaleString() : 'Unknown Date';
+                    const subject = item.subject || 'No Subject';
+                    
+                    div.innerHTML = `
+                        <div>
+                            <div style="font-weight:bold; font-size:16px;">${subject}</div>
+                            <div style="color:#888; font-size:14px; margin-top:5px;">From: ${item.account} &nbsp;&bull;&nbsp; Date: ${dateStr} &nbsp;&bull;&nbsp; UID: ${item.id}</div>
+                        </div>
+                        <button class="remove-btn" style="margin-left:20px; flex-shrink:0;" onclick="deleteHistoryItem('${item.account}', '${item.id}')">Delete Memory</button>
+                    `;
+                    container.appendChild(div);
+                });
+            } catch(e) {
+                if (e.message !== "Unauthorized") container.innerHTML = '<div class="error">Failed to load history.</div>';
+            }
+        }
+        
+        async function deleteHistoryItem(account, uid) {
+            if (!confirm("Delete this email from memory? The AI will re-process it next time you fetch!")) return;
+            try {
+                const response = await fetch(`/api/history/${encodeURIComponent(account)}/${encodeURIComponent(uid)}`, { method: 'DELETE' });
+                await handleApiError(response);
+                loadHistory();
+            } catch(e) {
+                if (e.message !== "Unauthorized") alert("Failed to delete memory item.");
+            }
+        }
+        
+        async function resetHistory() {
+            if (!confirm("Are you SURE you want to completely wipe the AI's memory? This will cause it to re-process EVERY single email in your inbox and will likely result in thousands of duplicates!")) return;
+            try {
+                const response = await fetch('/api/settings/reset_history', { method: 'DELETE' });
+                await handleApiError(response);
+                loadHistory();
+                alert("History cleared!");
+            } catch(e) {
+                if (e.message !== "Unauthorized") alert("Failed to clear history.");
+            }
+        }
+
         // --- USERS LOGIC ---
         async function loadUsers() {
             const container = document.getElementById('users-list-container');
@@ -586,16 +660,7 @@
             }
         }
         
-        async function resetEmailHistory() {
-            if (!confirm("Are you sure? This will make the app scan and re-process ALL emails from the last 7 days during your next fetch. This is useful if the AI failed previously!")) return;
-            try {
-                const response = await fetch('/api/reset_history', {method: 'POST'});
-                await handleApiError(response);
-                alert("History cleared! Go to the Dashboard and click Fetch New Emails to try again.");
-            } catch (e) {
-                if (e.message !== "Unauthorized") alert("Failed to clear history.");
-            }
-        }
+        // removed resetEmailHistory
 
         async function renderLocalEvents() {
             const container = document.getElementById('events-container');

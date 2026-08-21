@@ -88,12 +88,17 @@ def init_db():
     # Check if we need to migrate processed_emails to processed_emails_v2
     c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='processed_emails'")
     if c.fetchone():
-                    account TEXT,
-                    title TEXT,
-                    date TEXT,
-                    description TEXT,
-                    status TEXT DEFAULT 'pending'
-                 )''')
+        logger.info("Found legacy events.db, migrating data to new schema...")
+        c.execute("INSERT OR IGNORE INTO processed_emails_v2 (id, user_id, account) SELECT id, user_id, account FROM processed_emails")
+        c.execute("DROP TABLE processed_emails")
+        logger.info("Migration successful.")
+        
+    try:
+        c.execute("ALTER TABLE processed_emails_v2 ADD COLUMN subject TEXT")
+        c.execute("ALTER TABLE processed_emails_v2 ADD COLUMN date TEXT")
+    except sqlite3.OperationalError:
+        pass # Columns already exist
+        
     conn.commit()
     conn.close()
 
@@ -314,7 +319,7 @@ async def delete_account(acc_id: str, user_id: str = Depends(verify_auth)):
     conn.close()
     return {"status": "success"}
     
-@app.post("/api/reset_history")
+@app.delete("/api/settings/reset_history")
 async def reset_history(user_id: str = Depends(verify_auth)):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
@@ -322,6 +327,25 @@ async def reset_history(user_id: str = Depends(verify_auth)):
     conn.commit()
     conn.close()
     logger.info(f"User {user_id} reset their email history.")
+    return {"status": "success"}
+
+@app.get("/api/history", dependencies=[Depends(verify_auth)])
+async def get_history(user_id: str = Depends(verify_auth)):
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    c.execute("SELECT id, account, subject, date FROM processed_emails_v2 WHERE user_id=? ORDER BY date DESC LIMIT 100", (user_id,))
+    rows = c.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+@app.delete("/api/history/{account}/{uid}", dependencies=[Depends(verify_auth)])
+async def delete_history_item(account: str, uid: str, user_id: str = Depends(verify_auth)):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("DELETE FROM processed_emails_v2 WHERE user_id=? AND account=? AND id=?", (user_id, account, uid))
+    conn.commit()
+    conn.close()
     return {"status": "success"}
 
 @app.post("/api/upload_client_secret", dependencies=[Depends(verify_auth)])
@@ -487,7 +511,8 @@ async def process_user_emails(user_id: str):
                             conn.close()
                             return {"error": f"AI Error on {email_user}: {str(ve)}", "new_events": total_events_found}
                     
-                    c.execute("INSERT INTO processed_emails_v2 (id, user_id, account) VALUES (?, ?, ?)", (msg.uid, user_id, email_user))
+                    c.execute("INSERT INTO processed_emails_v2 (id, user_id, account, subject, date) VALUES (?, ?, ?, ?, ?)", 
+                        (msg.uid, user_id, email_user, msg.subject, msg.date.isoformat() if msg.date else ""))
                     conn.commit()
         except Exception as e:
             logger.error(f"Error fetching emails for {email_user}: {e}")
