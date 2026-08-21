@@ -99,6 +99,11 @@ def init_db():
     except sqlite3.OperationalError:
         pass # Columns already exist
         
+    try:
+        c.execute("ALTER TABLE events ADD COLUMN location TEXT")
+    except sqlite3.OperationalError:
+        pass # Column already exists
+        
     conn.commit()
     conn.close()
 
@@ -396,8 +401,9 @@ def extract_event(text: str, date: datetime, subject: str, settings: dict) -> Li
     Email Date: {date.isoformat()}
     {custom_prompt_text}
     If it does NOT contain any scheduled events or deadlines (or if the event violates the USER CUSTOM INSTRUCTIONS), return EXACTLY the string "NO_EVENT".
-    If it DOES contain valid events or deadlines, return a JSON ARRAY of objects, where each object has the keys: "title", "date" (ISO 8601), "description". 
-    Create a separate event object for EVERY distinct scheduled time mentioned (e.g., Departure time, Event time, Return time). Include location addresses in the description if available.
+    If it DOES contain valid events or deadlines, return a JSON ARRAY of objects, where each object has the keys: "title", "date" (ISO 8601), "description", and "location". 
+    Create a separate event object for EVERY distinct scheduled time mentioned (e.g., Departure time, Event time, Return time). 
+    Extract the physical address, room number, or place name and put it strictly in the "location" field (leave it blank if none is found).
     For assignments or deadlines without a specific time, default the time to 09:00:00 local time.
     Email Content:
     {text[:15000]}
@@ -480,11 +486,16 @@ async def process_user_emails(user_id: str):
                             if event_data_list:
                                 for event_data in event_data_list:
                                     event_id = str(uuid.uuid4())
-                                    c.execute("""INSERT INTO events (id, user_id, email_id, account, title, date, description, status)
-                                                 VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')""",
-                                              (event_id, user_id, msg.uid, email_user, event_data['title'], event_data['date'], event_data['description']))
-                                
-                                # Auto-sync to Google Calendar immediately if connected!
+                                    c.execute("INSERT INTO events (id, user_id, account, title, date, description, location, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')", 
+                                              (event_id, user_id, email_user, 
+                                               event_data.get("title", "Untitled"),
+                                               event_data.get("date", ""),
+                                               event_data.get("description", ""),
+                                               event_data.get("location", "")
+                                              ))
+                                    conn.commit()
+                                    
+                                    # Auto-sync to Google Calendar immediately if connected!
                                     token_file = os.path.join(DATA_DIR, f"token_{user_id}.json")
                                     if os.path.exists(token_file):
                                         try:
@@ -613,37 +624,50 @@ async def google_auth_callback(request: Request, state: str):
 
 @app.post("/api/events/{event_id}/sync")
 async def sync_event(event_id: str, user_id: str = Depends(verify_auth)):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("SELECT title, date, description, location FROM events WHERE id=? AND user_id=?", (event_id, user_id))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Event not found")
+        
+    title, date_str, description, location = row
+    
     token_file = os.path.join(DATA_DIR, f"token_{user_id}.json")
     if not os.path.exists(token_file):
-        return {"error": "Google Calendar not connected"}
+        conn.close()
+        raise HTTPException(status_code=400, detail="Google Calendar not connected")
+        
     try:
+        start_dt = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+        if start_dt.tzinfo is None:
+            start_dt = start_dt.replace(tzinfo=datetime.now().astimezone().tzinfo)
+            
+        end_dt = start_dt + timedelta(hours=1)
+        
         creds = Credentials.from_authorized_user_file(token_file, SCOPES)
         service = build('calendar', 'v3', credentials=creds)
-        conn = sqlite3.connect(DB_FILE)
-        conn.row_factory = sqlite3.Row
-        c = conn.cursor()
-        c.execute("SELECT * FROM events WHERE id=? AND user_id=?", (event_id, user_id))
-        event = c.fetchone()
-        if not event:
-            conn.close()
-            return {"error": "Event not found"}
-        start_time = datetime.fromisoformat(event['date'].replace("Z", "+00:00"))
-        if start_time.tzinfo is None:
-            start_time = start_time.replace(tzinfo=datetime.now().astimezone().tzinfo)
-        end_time = start_time + timedelta(hours=1)
+        
         gcal_event = {
-          'summary': event['title'],
-          'description': event['description'],
-          'start': {'dateTime': start_time.isoformat()},
-          'end': {'dateTime': end_time.isoformat()}
+            'summary': title,
+            'description': description,
+            'start': {'dateTime': start_dt.isoformat()},
+            'end': {'dateTime': end_dt.isoformat()}
         }
+        
+        if location and location.strip():
+            gcal_event['location'] = location.strip()
+            
         service.events().insert(calendarId='primary', body=gcal_event).execute()
+        
         c.execute("UPDATE events SET status='added' WHERE id=?", (event_id,))
         conn.commit()
         conn.close()
         return {"status": "success"}
     except Exception as e:
-        return {"error": str(e)}
+        conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/api/events/{event_id}")
 async def dismiss_event(event_id: str, user_id: str = Depends(verify_auth)):
