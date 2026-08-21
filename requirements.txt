@@ -3,4 +3,4 @@ uvicorn
 jinja2
 python-dotenv
 imap-tools
-openai
+google-generativeai
