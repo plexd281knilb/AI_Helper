@@ -40,6 +40,8 @@
         .remove-btn { background-color: #f44336; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-top: 5px;}
         .add-account-btn { background-color: #444; color: white; border: 1px solid #555; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 14px; margin-bottom: 15px; }
         .add-account-btn:hover { background-color: #555; }
+        .fetch-models-btn { background-color: #555; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 14px; margin-bottom: 10px; margin-top: 5px;}
+        .fetch-models-btn:hover { background-color: #666; }
         
         .view { display: none; }
         .view.active { display: block; }
@@ -86,19 +88,23 @@
                 </select>
             </div>
             
-            <div class="form-group" id="ai_model_group">
-                <label for="ai_model">Model</label>
-                <select id="ai_model"></select>
-            </div>
-
             <div class="form-group" id="gemini_key_group">
                 <label for="gemini_api_key">Gemini API Key</label>
-                <input type="password" id="gemini_api_key" placeholder="Your Gemini API Key">
+                <input type="password" id="gemini_api_key" placeholder="Your Gemini API Key" onchange="debouncedFetchModels()">
             </div>
 
             <div class="form-group" id="openai_key_group" style="display: none;">
                 <label for="openai_api_key">OpenAI API Key</label>
-                <input type="password" id="openai_api_key" placeholder="Your OpenAI API Key">
+                <input type="password" id="openai_api_key" placeholder="Your OpenAI API Key" onchange="debouncedFetchModels()">
+            </div>
+            
+            <button class="fetch-models-btn" onclick="fetchModels(true)">Refresh Available Models</button>
+
+            <div class="form-group" id="ai_model_group">
+                <label for="ai_model">Model</label>
+                <select id="ai_model">
+                    <option value="">Fetching models...</option>
+                </select>
             </div>
 
             <button class="save-btn" onclick="saveSettings()">Save Settings</button>
@@ -106,10 +112,8 @@
     </div>
 
     <script>
-        const models = {
-            gemini: ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.0-pro"],
-            openai: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"]
-        };
+        let savedModelSelection = null;
+        let modelFetchTimeout = null;
 
         function openTab(tabName, event) {
             document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
@@ -183,24 +187,64 @@
             });
         }
 
-        function updateProviderUI(selectedModel = null) {
+        function debouncedFetchModels() {
+            clearTimeout(modelFetchTimeout);
+            modelFetchTimeout = setTimeout(() => fetchModels(false), 500);
+        }
+
+        async function fetchModels(force = false) {
             const provider = document.getElementById('ai_provider').value;
+            const apiKey = provider === 'gemini' ? document.getElementById('gemini_api_key').value : document.getElementById('openai_api_key').value;
             const modelSelect = document.getElementById('ai_model');
             
-            modelSelect.innerHTML = '';
-            models[provider].forEach(m => {
-                const opt = document.createElement('option');
-                opt.value = m;
-                opt.innerText = m;
-                modelSelect.appendChild(opt);
-            });
-            
-            if (selectedModel && models[provider].includes(selectedModel)) {
-                modelSelect.value = selectedModel;
+            if (!apiKey) {
+                modelSelect.innerHTML = '<option value="">Enter API key to see models</option>';
+                return;
             }
 
+            modelSelect.innerHTML = '<option value="">Fetching models...</option>';
+
+            try {
+                const response = await fetch('/api/models', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ provider: provider, api_key: apiKey })
+                });
+                
+                const data = await response.json();
+                modelSelect.innerHTML = '';
+                
+                if (data.error) {
+                    modelSelect.innerHTML = `<option value="">Error: ${data.error}</option>`;
+                    return;
+                }
+                
+                if (data.models && data.models.length > 0) {
+                    data.models.forEach(m => {
+                        const opt = document.createElement('option');
+                        opt.value = m;
+                        opt.innerText = m;
+                        modelSelect.appendChild(opt);
+                    });
+                    
+                    if (savedModelSelection && data.models.includes(savedModelSelection)) {
+                        modelSelect.value = savedModelSelection;
+                    }
+                } else {
+                    modelSelect.innerHTML = '<option value="">No models found or invalid key</option>';
+                }
+            } catch(e) {
+                modelSelect.innerHTML = '<option value="">Failed to fetch models</option>';
+            }
+        }
+
+        function updateProviderUI() {
+            const provider = document.getElementById('ai_provider').value;
+            
             document.getElementById('gemini_key_group').style.display = provider === 'gemini' ? 'block' : 'none';
             document.getElementById('openai_key_group').style.display = provider === 'openai' ? 'block' : 'none';
+            
+            fetchModels(false);
         }
 
         function createAccountRow(acc = {email_user: '', email_pass: '', email_host: 'imap.gmail.com'}) {
@@ -234,10 +278,10 @@
                 const settings = await response.json();
                 
                 document.getElementById('ai_provider').value = settings.ai_provider || 'gemini';
-                updateProviderUI(settings.ai_model);
-
                 document.getElementById('gemini_api_key').value = settings.gemini_api_key || '';
                 document.getElementById('openai_api_key').value = settings.openai_api_key || '';
+                
+                savedModelSelection = settings.ai_model || '';
 
                 const accContainer = document.getElementById('accounts-container');
                 accContainer.innerHTML = '';
@@ -246,6 +290,8 @@
                 } else {
                     addAccountRow();
                 }
+                
+                updateProviderUI();
 
             } catch(e) {
                 console.error("Failed to load settings", e);

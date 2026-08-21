@@ -33,12 +33,15 @@ class Settings(BaseModel):
     ai_model: str = "gemini-1.5-flash"
     gemini_api_key: str = ""
     openai_api_key: str = ""
+    
+class ModelRequest(BaseModel):
+    provider: str
+    api_key: str
 
 def get_settings():
     if os.path.exists(SETTINGS_FILE):
         with open(SETTINGS_FILE, "r") as f:
             data = json.load(f)
-            # Migration for old format
             if "email_user" in data and "accounts" not in data:
                 data["accounts"] = [{"email_user": data["email_user"], "email_pass": data.get("email_pass", ""), "email_host": "imap.gmail.com"}]
             if "ai_provider" not in data:
@@ -60,8 +63,6 @@ async def read_index():
 @app.get("/api/settings")
 async def read_settings():
     settings = get_settings()
-    
-    # Mask passwords
     for acc in settings.get("accounts", []):
         if acc.get("email_pass"):
             acc["email_pass"] = "*" * 8
@@ -78,7 +79,6 @@ async def read_settings():
 async def save_settings(settings: Settings):
     current_settings = get_settings()
     
-    # Re-apply masked passwords if unchanged
     for i, acc in enumerate(settings.accounts):
         if acc.email_pass == "*" * 8:
             if i < len(current_settings.get("accounts", [])):
@@ -95,6 +95,40 @@ async def save_settings(settings: Settings):
     with open(SETTINGS_FILE, "w") as f:
         json.dump(new_settings, f)
     return {"status": "success"}
+
+@app.post("/api/models")
+async def get_models(req: ModelRequest):
+    api_key = req.api_key
+    if api_key == "*" * 8:
+        current_settings = get_settings()
+        if req.provider == "gemini":
+            api_key = current_settings.get("gemini_api_key", "")
+        elif req.provider == "openai":
+            api_key = current_settings.get("openai_api_key", "")
+            
+    if not api_key:
+        return {"models": []}
+        
+    models_list = []
+    try:
+        if req.provider == "gemini":
+            genai.configure(api_key=api_key)
+            for m in genai.list_models():
+                if "generateContent" in m.supported_generation_methods:
+                    name = m.name.replace("models/", "")
+                    models_list.append(name)
+        elif req.provider == "openai":
+            client = openai.OpenAI(api_key=api_key)
+            models_response = client.models.list()
+            for m in models_response.data:
+                if "gpt" in m.id or "o1" in m.id:
+                    models_list.append(m.id)
+            models_list.sort(reverse=True)
+    except Exception as e:
+        print(f"Error fetching models: {e}")
+        return {"error": str(e)}
+        
+    return {"models": models_list}
 
 def extract_event(text: str, date: datetime, subject: str, settings: dict) -> dict:
     prompt = f"""
