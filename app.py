@@ -287,11 +287,12 @@ async def get_models(req: ModelRequest):
 # --- AI Parsing ---
 def extract_event(text: str, date: datetime, subject: str, settings: dict) -> dict:
     prompt = f"""
-    Analyze the following email to see if it contains a clear calendar event (appointment, meeting, flight, dinner, etc.).
+    Analyze the following email to see if it contains a clear calendar event, appointment, meeting, flight, dinner, deadline, assignment due date, or scheduled task.
     Email Subject: {subject}
     Email Date: {date.isoformat()}
-    If it does NOT contain an event, return EXACTLY the string "NO_EVENT".
-    If it DOES contain an event, return a JSON object with keys: "title", "date" (ISO 8601), "description".
+    If it does NOT contain any scheduled events or deadlines, return EXACTLY the string "NO_EVENT".
+    If it DOES contain an event or deadline, return a JSON object with keys: "title", "date" (ISO 8601), "description". 
+    For assignments or deadlines without a specific time, default the time to 09:00:00 local time.
     Email Content:
     {text[:2000]}
     """
