@@ -59,6 +59,11 @@
         
         .badge-red { background: #f44336; color: white; padding: 2px 6px; border-radius: 4px; font-size: 12px; margin-left: 10px;}
         .badge-green { background: #4CAF50; color: white; padding: 2px 6px; border-radius: 4px; font-size: 12px; margin-left: 10px;}
+        
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        code { background: #333; padding: 2px 4px; border-radius: 3px; font-family: monospace; }
+        details summary { outline: none; margin-bottom: 5px; }
     </style>
 </head>
 <body>
@@ -86,12 +91,27 @@
             <h1>Settings</h1>
             <div id="settings-msg"></div>
             
+            <!-- Google Calendar Section -->
             <h3 class="section-title">
                 Google Calendar Integration
                 <span id="gcal-status" class="badge-red">Not Connected</span>
             </h3>
             <div class="account-box">
-                <p style="margin-top:0;">To automatically sync events to Google Calendar, you must upload a <code>credentials.json</code> file from Google Cloud Console.</p>
+                <p style="margin-top:0; margin-bottom: 15px;">To automatically sync events, you must upload a <code>credentials.json</code> file from Google Cloud.</p>
+                
+                <details style="margin-bottom: 15px; color: #bbb;">
+                    <summary style="cursor: pointer; color: var(--accent); font-weight: bold;">How to get your credentials.json?</summary>
+                    <ol style="margin-top: 10px; line-height: 1.5;">
+                        <li>Go to the <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a> and create a new project.</li>
+                        <li>Search for "Google Calendar API" at the top and click <b>Enable</b>.</li>
+                        <li>Go to <b>APIs & Services > Credentials</b>. Click <b>Create Credentials > OAuth client ID</b>.</li>
+                        <li>Select "Web application". Under "Authorized redirect URIs", add exactly this URL:<br>
+                            <code id="dynamic-redirect-uri" style="color:#fff;">...</code>
+                        </li>
+                        <li>Click Create, then download the JSON file and upload it below!</li>
+                    </ol>
+                </details>
+
                 <div class="form-group">
                     <input type="file" id="client_secret_file" accept=".json">
                     <button class="save-btn" style="font-size: 14px; margin-left: 10px;" onclick="uploadClientSecret()">Upload JSON</button>
@@ -101,10 +121,13 @@
                 </div>
             </div>
             
+            <!-- Email Accounts Section -->
             <h3 class="section-title">Email Accounts</h3>
+            <p style="color: #bbb; margin-top: 0;">Add the email accounts you want to scan. <br><b>Note for Gmail:</b> You must use an App Password, not your normal password. <a href="https://myaccount.google.com/security" target="_blank">Generate one here</a> (Turn on 2-Step Verification -> App Passwords).</p>
             <div id="accounts-container"></div>
             <button class="add-account-btn" onclick="addAccountRow()">+ Add Email Account</button>
 
+            <!-- AI Configuration Section -->
             <h3 class="section-title">AI Configuration</h3>
             <div class="form-group">
                 <label for="ai_provider">AI Provider</label>
@@ -117,11 +140,17 @@
             <div class="form-group" id="gemini_key_group">
                 <label for="gemini_api_key">Gemini API Key</label>
                 <input type="password" id="gemini_api_key" placeholder="Your Gemini API Key" onchange="debouncedFetchModels()">
+                <small style="color: #bbb; display: block; margin-top: 5px;">
+                    Get your free Gemini API key from <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a>.
+                </small>
             </div>
 
             <div class="form-group" id="openai_key_group" style="display: none;">
                 <label for="openai_api_key">OpenAI API Key</label>
                 <input type="password" id="openai_api_key" placeholder="Your OpenAI API Key" onchange="debouncedFetchModels()">
+                <small style="color: #bbb; display: block; margin-top: 5px;">
+                    Get your OpenAI API key from the <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI Platform</a>.
+                </small>
             </div>
             
             <button class="fetch-models-btn" onclick="fetchModels(true)">Refresh Available Models</button>
@@ -138,6 +167,9 @@
     </div>
 
     <script>
+        // Set dynamic redirect URI in instructions
+        document.getElementById('dynamic-redirect-uri').innerText = window.location.origin + '/api/auth/google/callback';
+
         let savedModelSelection = null;
         let modelFetchTimeout = null;
         let googleConnected = false;
@@ -200,12 +232,10 @@
                     
                     const dateObj = new Date(event.date);
                     
-                    // Buttons logic
                     let buttonsHtml = '';
                     if (googleConnected) {
                         buttonsHtml = `<button onclick="syncEvent('${event.id}')" class="add-btn">Auto-Sync to Google Calendar</button>`;
                     } else {
-                        // Fallback to manual link
                         const endDateObj = new Date(dateObj.getTime() + 60*60*1000); 
                         const fmtDate = (d) => d.toISOString().replace(/-|:|\.\d\d\d/g,"");
                         const dates = `${fmtDate(dateObj)}/${fmtDate(endDateObj)}`;
@@ -298,12 +328,6 @@
                 console.error("Could not fetch OAuth URL");
             }
         }
-
-        // Keep all the existing models logic unchanged...
-        const models = {
-            gemini: ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.0-pro"],
-            openai: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"]
-        };
 
         function debouncedFetchModels() {
             clearTimeout(modelFetchTimeout);
@@ -473,7 +497,6 @@
         }
 
         // Init
-        // We load settings first so we know if google is connected before rendering events
         loadSettings().then(() => renderLocalEvents());
     </script>
 </body>
