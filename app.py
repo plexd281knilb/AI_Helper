@@ -2,11 +2,13 @@ import os
 import json
 import sqlite3
 import uuid
+import secrets
+import hashlib
 from datetime import datetime, timedelta
 from typing import List, Optional
-from fastapi import FastAPI, Request, UploadFile, File
+from fastapi import FastAPI, Request, Response, UploadFile, File, Depends, HTTPException
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, RedirectResponse, JSONResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel
 from imap_tools import MailBox, AND
 import google.generativeai as genai
@@ -26,10 +28,12 @@ SETTINGS_FILE = os.path.join(DATA_DIR, "settings.json")
 DB_FILE = os.path.join(DATA_DIR, "events.db")
 CLIENT_SECRETS_FILE = os.path.join(DATA_DIR, "client_secret.json")
 TOKEN_FILE = os.path.join(DATA_DIR, "token.json")
+AUTH_FILE = os.path.join(DATA_DIR, "auth.json")
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 
 os.makedirs(DATA_DIR, exist_ok=True)
 
+# --- Database Init ---
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
@@ -51,6 +55,66 @@ def init_db():
 
 init_db()
 
+# --- Authentication Logic ---
+SESSIONS = set()
+
+class AuthRequest(BaseModel):
+    password: str
+
+def get_password_hash():
+    if os.path.exists(AUTH_FILE):
+        with open(AUTH_FILE, "r") as f:
+            return json.load(f).get("password_hash")
+    return None
+
+def verify_auth(request: Request):
+    if not get_password_hash():
+        return # Skip auth if password isn't set up yet
+    token = request.cookies.get("session_token")
+    if token not in SESSIONS:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+@app.get("/api/auth/status")
+async def auth_status(request: Request):
+    has_pass = get_password_hash() is not None
+    token = request.cookies.get("session_token")
+    logged_in = token in SESSIONS
+    return {"setup_required": not has_pass, "logged_in": logged_in}
+
+@app.post("/api/auth/setup")
+async def auth_setup(req: AuthRequest):
+    if get_password_hash() is not None:
+        return {"error": "Password already set."}
+    if len(req.password) < 4:
+        return {"error": "Password must be at least 4 characters."}
+        
+    pwd_hash = hashlib.sha256(req.password.encode()).hexdigest()
+    with open(AUTH_FILE, "w") as f:
+        json.dump({"password_hash": pwd_hash}, f)
+    return {"status": "success"}
+
+@app.post("/api/auth/login")
+async def auth_login(req: AuthRequest, response: Response):
+    correct_hash = get_password_hash()
+    req_hash = hashlib.sha256(req.password.encode()).hexdigest()
+    
+    if not correct_hash or req_hash != correct_hash:
+        return {"error": "Invalid password"}
+    
+    token = secrets.token_hex(32)
+    SESSIONS.add(token)
+    response.set_cookie(key="session_token", value=token, httponly=True, max_age=86400*30) # 30 days
+    return {"status": "success"}
+
+@app.post("/api/auth/logout")
+async def auth_logout(request: Request, response: Response):
+    token = request.cookies.get("session_token")
+    if token in SESSIONS:
+        SESSIONS.remove(token)
+    response.delete_cookie("session_token")
+    return {"status": "success"}
+
+# --- Settings & Models ---
 class Account(BaseModel):
     email_user: str
     email_pass: str
@@ -89,7 +153,7 @@ def get_settings():
 async def read_index():
     return FileResponse('static/index.html')
 
-@app.get("/api/settings")
+@app.get("/api/settings", dependencies=[Depends(verify_auth)])
 async def read_settings():
     settings = get_settings()
     return {
@@ -102,7 +166,7 @@ async def read_settings():
         "google_connected": os.path.exists(TOKEN_FILE)
     }
 
-@app.post("/api/settings")
+@app.post("/api/settings", dependencies=[Depends(verify_auth)])
 async def save_settings(settings: Settings):
     new_settings = {
         "accounts": [acc.dict() for acc in settings.accounts],
@@ -111,19 +175,18 @@ async def save_settings(settings: Settings):
         "gemini_api_key": settings.gemini_api_key,
         "openai_api_key": settings.openai_api_key
     }
-    
     with open(SETTINGS_FILE, "w") as f:
         json.dump(new_settings, f)
     return {"status": "success"}
 
-@app.post("/api/upload_client_secret")
+@app.post("/api/upload_client_secret", dependencies=[Depends(verify_auth)])
 async def upload_client_secret(file: UploadFile = File(...)):
     contents = await file.read()
     with open(CLIENT_SECRETS_FILE, "wb") as f:
         f.write(contents)
     return {"status": "success"}
 
-@app.post("/api/models")
+@app.post("/api/models", dependencies=[Depends(verify_auth)])
 async def get_models(req: ModelRequest):
     api_key = req.api_key
     if not api_key:
@@ -145,11 +208,10 @@ async def get_models(req: ModelRequest):
                     models_list.append(m.id)
             models_list.sort(reverse=True)
     except Exception as e:
-        print(f"Error fetching models: {e}")
         return {"error": str(e)}
-        
     return {"models": models_list}
 
+# --- AI Parsing ---
 def extract_event(text: str, date: datetime, subject: str, settings: dict) -> dict:
     prompt = f"""
     Analyze the following email to see if it contains a clear calendar event (appointment, meeting, flight, dinner, etc.).
@@ -165,7 +227,6 @@ def extract_event(text: str, date: datetime, subject: str, settings: dict) -> di
     Email Content:
     {text[:2000]}
     """
-    
     provider = settings.get("ai_provider", "gemini")
     model_name = settings.get("ai_model", "gemini-1.5-flash")
     result = "NO_EVENT"
@@ -198,20 +259,17 @@ def extract_event(text: str, date: datetime, subject: str, settings: dict) -> di
             return event_dict
     except Exception as e:
         print(f"AI API error ({provider}): {e}")
-        
     return None
 
-@app.get("/api/fetch_emails")
+@app.get("/api/fetch_emails", dependencies=[Depends(verify_auth)])
 async def fetch_emails():
     settings = get_settings()
     accounts = settings.get("accounts", [])
-    
     if not accounts:
         return {"error": "No email accounts configured."}
         
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    
     new_events_found = 0
     
     for account in accounts:
@@ -232,7 +290,6 @@ async def fetch_emails():
                     text_content = msg.text or msg.html
                     if text_content and len(text_content) > 10:
                         event_data = extract_event(text_content, msg.date, msg.subject, settings)
-                        
                         if event_data:
                             event_id = str(uuid.uuid4())
                             c.execute("""INSERT INTO events (id, email_id, account, title, date, description, status)
@@ -242,14 +299,13 @@ async def fetch_emails():
                     
                     c.execute("INSERT INTO processed_emails (id, account) VALUES (?, ?)", (msg.uid, email_user))
                     conn.commit()
-                    
         except Exception as e:
             print(f"Error fetching emails for {email_user}: {e}")
             
     conn.close()
     return {"status": "success", "new_events": new_events_found}
 
-@app.get("/api/events")
+@app.get("/api/events", dependencies=[Depends(verify_auth)])
 async def get_events():
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
@@ -260,7 +316,7 @@ async def get_events():
     return [dict(r) for r in rows]
 
 # --- Google Calendar OAuth & Sync ---
-@app.get("/api/auth/google/url")
+@app.get("/api/auth/google/url", dependencies=[Depends(verify_auth)])
 async def get_google_auth_url(request: Request):
     if not os.path.exists(CLIENT_SECRETS_FILE):
         return {"error": "Client secrets file missing"}
@@ -290,7 +346,7 @@ async def google_auth_callback(request: Request):
         
     return RedirectResponse(url="/")
 
-@app.post("/api/events/{event_id}/sync")
+@app.post("/api/events/{event_id}/sync", dependencies=[Depends(verify_auth)])
 async def sync_event(event_id: str):
     if not os.path.exists(TOKEN_FILE):
         return {"error": "Google Calendar not connected"}
@@ -303,7 +359,6 @@ async def sync_event(event_id: str):
     c = conn.cursor()
     c.execute("SELECT * FROM events WHERE id=?", (event_id,))
     event = c.fetchone()
-    
     if not event:
         conn.close()
         return {"error": "Event not found"}
@@ -314,12 +369,8 @@ async def sync_event(event_id: str):
     gcal_event = {
       'summary': event['title'],
       'description': event['description'],
-      'start': {
-        'dateTime': start_time.isoformat(),
-      },
-      'end': {
-        'dateTime': end_time.isoformat(),
-      }
+      'start': {'dateTime': start_time.isoformat()},
+      'end': {'dateTime': end_time.isoformat()}
     }
     
     try:
@@ -332,7 +383,7 @@ async def sync_event(event_id: str):
         conn.close()
         return {"error": str(e)}
 
-@app.delete("/api/events/{event_id}")
+@app.delete("/api/events/{event_id}", dependencies=[Depends(verify_auth)])
 async def dismiss_event(event_id: str):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()

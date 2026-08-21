@@ -19,6 +19,17 @@
         }
         
         body { font-family: Arial, sans-serif; margin: 0; background-color: var(--bg-color); color: var(--text-color); }
+        
+        /* Auth Overlay Styles */
+        #auth-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-color); z-index: 9999; display: flex; align-items: center; justify-content: center; flex-direction: column; }
+        .auth-box { background: var(--card-bg); padding: 30px; border-radius: 8px; border: 1px solid var(--border-color); box-shadow: 0 4px 12px rgba(0,0,0,0.5); width: 100%; max-width: 400px; text-align: center; }
+        .auth-box input { width: 100%; padding: 10px; margin: 10px 0 20px 0; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg); color: #fff; box-sizing: border-box; }
+        .auth-box button { width: 100%; padding: 10px; background: var(--accent); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold; }
+        .auth-box button:hover { background: var(--accent-hover); }
+        .auth-msg { color: #ff5252; margin-bottom: 15px; font-size: 14px; }
+        
+        /* Main App Styles */
+        #app-content { display: none; }
         .nav { background-color: var(--nav-bg); overflow: hidden; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between;}
         .nav-left { display: flex; }
         .nav button { float: left; display: block; color: #f2f2f2; text-align: center; padding: 14px 16px; text-decoration: none; border: none; background: none; cursor: pointer; font-size: 16px; }
@@ -70,113 +81,215 @@
     </style>
 </head>
 <body>
-    <div class="nav">
-        <div class="nav-left">
-            <button class="tab-link active" onclick="openTab('dashboard', event)">Dashboard</button>
-            <button class="tab-link" onclick="openTab('settings', event)">Settings</button>
+
+    <!-- Auth Overlay -->
+    <div id="auth-overlay">
+        <div class="auth-box" id="login-box" style="display: none;">
+            <h2>Login</h2>
+            <p style="color:#aaa; font-size: 14px;">Please enter your app password.</p>
+            <div id="login-msg" class="auth-msg"></div>
+            <input type="password" id="login-password" placeholder="Password" onkeypress="if(event.key === 'Enter') submitLogin()">
+            <button onclick="submitLogin()">Login</button>
         </div>
-        <button class="sync-btn" onclick="fetchEmails()">Fetch New Emails</button>
+        
+        <div class="auth-box" id="setup-box" style="display: none;">
+            <h2>Welcome!</h2>
+            <p style="color:#aaa; font-size: 14px;">Since this is your first time, please create a secure admin password for this dashboard.</p>
+            <div id="setup-msg" class="auth-msg"></div>
+            <input type="password" id="setup-password" placeholder="Create Password" onkeypress="if(event.key === 'Enter') submitSetup()">
+            <button onclick="submitSetup()">Save Password</button>
+        </div>
     </div>
 
-    <div class="container">
-        <!-- Dashboard View -->
-        <div id="dashboard" class="view active">
-            <h1>Pending Calendar Events</h1>
-            <p style="color: #ccc;">Events extracted from your emails that haven't been added yet.</p>
-            <div id="dashboard-msg"></div>
-            <div id="events-container">
-                Loading events from database...
+    <!-- Main App Content -->
+    <div id="app-content">
+        <div class="nav">
+            <div class="nav-left">
+                <button class="tab-link active" onclick="openTab('dashboard', event)">Dashboard</button>
+                <button class="tab-link" onclick="openTab('settings', event)">Settings</button>
+            </div>
+            <div>
+                <button class="sync-btn" onclick="fetchEmails()">Fetch New Emails</button>
+                <button class="sync-btn" style="background:#444; color:#fff;" onclick="logout()">Logout</button>
             </div>
         </div>
 
-        <!-- Settings View -->
-        <div id="settings" class="view">
-            <h1>Settings</h1>
-            <div id="settings-msg"></div>
-            
-            <!-- Google Calendar Section -->
-            <h3 class="section-title">
-                Google Calendar Integration
-                <span id="gcal-status" class="badge-red">Not Connected</span>
-            </h3>
-            <div class="account-box">
-                <p style="margin-top:0; margin-bottom: 15px;">To automatically sync events, you must upload a <code>credentials.json</code> file from Google Cloud.</p>
+        <div class="container">
+            <!-- Dashboard View -->
+            <div id="dashboard" class="view active">
+                <h1>Pending Calendar Events</h1>
+                <p style="color: #ccc;">Events extracted from your emails that haven't been added yet.</p>
+                <div id="dashboard-msg"></div>
+                <div id="events-container">
+                    Loading events from database...
+                </div>
+            </div>
+
+            <!-- Settings View -->
+            <div id="settings" class="view">
+                <h1>Settings</h1>
+                <div id="settings-msg"></div>
                 
-                <details style="margin-bottom: 15px; color: #bbb;">
-                    <summary style="cursor: pointer; color: var(--accent); font-weight: bold;">How to get your credentials.json?</summary>
-                    <ol style="margin-top: 10px; line-height: 1.5;">
-                        <li>Go to the <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a> and create a new project.</li>
-                        <li>Search for "Google Calendar API" at the top and click <b>Enable</b>.</li>
-                        <li>Go to <b>APIs & Services > Credentials</b>. Click <b>Create Credentials > OAuth client ID</b>.</li>
-                        <li>Select "Web application". Under "Authorized redirect URIs", add exactly this URL:<br>
-                            <code id="dynamic-redirect-uri" style="color:#fff;">...</code>
-                        </li>
-                        <li>Click Create, then download the JSON file and upload it below!</li>
-                    </ol>
-                </details>
+                <!-- Google Calendar Section -->
+                <h3 class="section-title">
+                    Google Calendar Integration
+                    <span id="gcal-status" class="badge-red">Not Connected</span>
+                </h3>
+                <div class="account-box">
+                    <p style="margin-top:0; margin-bottom: 15px;">To automatically sync events, you must upload a <code>credentials.json</code> file from Google Cloud.</p>
+                    
+                    <details style="margin-bottom: 15px; color: #bbb;">
+                        <summary style="cursor: pointer; color: var(--accent); font-weight: bold;">How to get your credentials.json?</summary>
+                        <ol style="margin-top: 10px; line-height: 1.5;">
+                            <li>Go to the <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a> and create a new project.</li>
+                            <li>Search for "Google Calendar API" at the top and click <b>Enable</b>.</li>
+                            <li>Go to <b>APIs & Services > Credentials</b>. Click <b>Create Credentials > OAuth client ID</b>.</li>
+                            <li>Select "Web application". Under "Authorized redirect URIs", add exactly this URL:<br>
+                                <code id="dynamic-redirect-uri" style="color:#fff;">...</code>
+                            </li>
+                            <li>Click Create, then download the JSON file and upload it below!</li>
+                        </ol>
+                    </details>
 
+                    <div class="form-group">
+                        <input type="file" id="client_secret_file" accept=".json">
+                        <button class="save-btn" style="font-size: 14px; margin-left: 10px;" onclick="uploadClientSecret()">Upload JSON</button>
+                    </div>
+                    <div id="oauth-link-container" style="display:none; margin-top: 15px;">
+                        <a id="oauth-link" href="#" class="add-btn">Login with Google to Authorize Calendar</a>
+                    </div>
+                </div>
+                
+                <!-- Email Accounts Section -->
+                <h3 class="section-title">Email Accounts</h3>
+                <p style="color: #bbb; margin-top: 0;">Add the email accounts you want to scan. <br><b>Note for Gmail:</b> You must use an App Password, not your normal password. <a href="https://myaccount.google.com/security" target="_blank">Generate one here</a> (Turn on 2-Step Verification -> App Passwords).</p>
+                <div id="accounts-container"></div>
+                <button class="add-account-btn" onclick="addAccountRow()">+ Add Email Account</button>
+
+                <!-- AI Configuration Section -->
+                <h3 class="section-title">AI Configuration</h3>
                 <div class="form-group">
-                    <input type="file" id="client_secret_file" accept=".json">
-                    <button class="save-btn" style="font-size: 14px; margin-left: 10px;" onclick="uploadClientSecret()">Upload JSON</button>
+                    <label for="ai_provider">AI Provider</label>
+                    <select id="ai_provider" onchange="updateProviderUI()">
+                        <option value="gemini">Google Gemini</option>
+                        <option value="openai">OpenAI</option>
+                    </select>
                 </div>
-                <div id="oauth-link-container" style="display:none; margin-top: 15px;">
-                    <a id="oauth-link" href="#" class="add-btn">Login with Google to Authorize Calendar</a>
+                
+                <div class="form-group" id="gemini_key_group">
+                    <label for="gemini_api_key">Gemini API Key</label>
+                    <input type="password" id="gemini_api_key" placeholder="Your Gemini API Key" onchange="debouncedFetchModels()">
+                    <button class="toggle-password" onclick="togglePassword('gemini_api_key')">Show</button>
+                    <small style="color: #bbb; display: block; margin-top: 5px;">
+                        Get your free Gemini API key from <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a>.
+                    </small>
                 </div>
-            </div>
-            
-            <!-- Email Accounts Section -->
-            <h3 class="section-title">Email Accounts</h3>
-            <p style="color: #bbb; margin-top: 0;">Add the email accounts you want to scan. <br><b>Note for Gmail:</b> You must use an App Password, not your normal password. <a href="https://myaccount.google.com/security" target="_blank">Generate one here</a> (Turn on 2-Step Verification -> App Passwords).</p>
-            <div id="accounts-container"></div>
-            <button class="add-account-btn" onclick="addAccountRow()">+ Add Email Account</button>
 
-            <!-- AI Configuration Section -->
-            <h3 class="section-title">AI Configuration</h3>
-            <div class="form-group">
-                <label for="ai_provider">AI Provider</label>
-                <select id="ai_provider" onchange="updateProviderUI()">
-                    <option value="gemini">Google Gemini</option>
-                    <option value="openai">OpenAI</option>
-                </select>
-            </div>
-            
-            <div class="form-group" id="gemini_key_group">
-                <label for="gemini_api_key">Gemini API Key</label>
-                <input type="password" id="gemini_api_key" placeholder="Your Gemini API Key" onchange="debouncedFetchModels()">
-                <button class="toggle-password" onclick="togglePassword('gemini_api_key')">Show</button>
-                <small style="color: #bbb; display: block; margin-top: 5px;">
-                    Get your free Gemini API key from <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a>.
-                </small>
-            </div>
+                <div class="form-group" id="openai_key_group" style="display: none;">
+                    <label for="openai_api_key">OpenAI API Key</label>
+                    <input type="password" id="openai_api_key" placeholder="Your OpenAI API Key" onchange="debouncedFetchModels()">
+                    <button class="toggle-password" onclick="togglePassword('openai_api_key')">Show</button>
+                    <small style="color: #bbb; display: block; margin-top: 5px;">
+                        Get your OpenAI API key from the <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI Platform</a>.
+                    </small>
+                </div>
+                
+                <button class="fetch-models-btn" onclick="fetchModels(true)">Refresh Available Models</button>
 
-            <div class="form-group" id="openai_key_group" style="display: none;">
-                <label for="openai_api_key">OpenAI API Key</label>
-                <input type="password" id="openai_api_key" placeholder="Your OpenAI API Key" onchange="debouncedFetchModels()">
-                <button class="toggle-password" onclick="togglePassword('openai_api_key')">Show</button>
-                <small style="color: #bbb; display: block; margin-top: 5px;">
-                    Get your OpenAI API key from the <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI Platform</a>.
-                </small>
-            </div>
-            
-            <button class="fetch-models-btn" onclick="fetchModels(true)">Refresh Available Models</button>
+                <div class="form-group" id="ai_model_group">
+                    <label for="ai_model">Model</label>
+                    <select id="ai_model">
+                        <option value="">Fetching models...</option>
+                    </select>
+                </div>
 
-            <div class="form-group" id="ai_model_group">
-                <label for="ai_model">Model</label>
-                <select id="ai_model">
-                    <option value="">Fetching models...</option>
-                </select>
+                <button class="save-btn" onclick="saveSettings()">Save Settings</button>
             </div>
-
-            <button class="save-btn" onclick="saveSettings()">Save Settings</button>
         </div>
     </div>
 
     <script>
         document.getElementById('dynamic-redirect-uri').innerText = window.location.origin + '/api/auth/google/callback';
 
+        // --- AUTHENTICATION LOGIC ---
+        async function checkAuth() {
+            try {
+                const res = await fetch('/api/auth/status');
+                const data = await res.json();
+                
+                const overlay = document.getElementById('auth-overlay');
+                const appContent = document.getElementById('app-content');
+                
+                if (data.setup_required) {
+                    overlay.style.display = 'flex';
+                    document.getElementById('setup-box').style.display = 'block';
+                    document.getElementById('login-box').style.display = 'none';
+                    appContent.style.display = 'none';
+                } else if (!data.logged_in) {
+                    overlay.style.display = 'flex';
+                    document.getElementById('login-box').style.display = 'block';
+                    document.getElementById('setup-box').style.display = 'none';
+                    appContent.style.display = 'none';
+                } else {
+                    overlay.style.display = 'none';
+                    appContent.style.display = 'block';
+                    initializeApp();
+                }
+            } catch(e) {
+                console.error("Auth check failed", e);
+            }
+        }
+        
+        async function submitSetup() {
+            const pwd = document.getElementById('setup-password').value;
+            const msg = document.getElementById('setup-msg');
+            if (pwd.length < 4) { msg.innerText = "Password too short."; return; }
+            
+            const res = await fetch('/api/auth/setup', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({password: pwd})
+            });
+            const data = await res.json();
+            if (data.error) {
+                msg.innerText = data.error;
+            } else {
+                // Auto login after setup
+                document.getElementById('login-password').value = pwd;
+                submitLogin();
+            }
+        }
+        
+        async function submitLogin() {
+            const pwd = document.getElementById('login-password').value;
+            const msg = document.getElementById('login-msg');
+            
+            const res = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({password: pwd})
+            });
+            const data = await res.json();
+            if (data.error) {
+                msg.innerText = data.error;
+            } else {
+                checkAuth();
+            }
+        }
+        
+        async function logout() {
+            await fetch('/api/auth/logout', { method: 'POST' });
+            window.location.reload();
+        }
+
+        // --- APP LOGIC ---
         let savedModelSelection = null;
         let modelFetchTimeout = null;
         let googleConnected = false;
+        
+        function initializeApp() {
+            loadSettings().then(() => renderLocalEvents());
+        }
         
         function togglePassword(inputId) {
             const input = document.getElementById(inputId);
@@ -219,11 +332,20 @@
             }
         }
         
+        async function handleApiError(response) {
+            if (response.status === 401) {
+                window.location.reload(); // Will trigger login screen
+                throw new Error("Unauthorized");
+            }
+            return response;
+        }
+        
         async function fetchEmails() {
             const msgBox = document.getElementById('dashboard-msg');
             msgBox.innerHTML = '<span style="color: #f4b400;">Checking emails and running AI... This may take a minute!</span>';
             try {
                 const response = await fetch('/api/fetch_emails');
+                await handleApiError(response);
                 const data = await response.json();
                 if (data.error) {
                     msgBox.innerHTML = `<div class="error">${data.error}</div>`;
@@ -232,7 +354,7 @@
                     renderLocalEvents();
                 }
             } catch(e) {
-                msgBox.innerHTML = '<div class="error">Failed to fetch emails.</div>';
+                if (e.message !== "Unauthorized") msgBox.innerHTML = '<div class="error">Failed to fetch emails.</div>';
             }
         }
 
@@ -243,6 +365,7 @@
             
             try {
                 const response = await fetch('/api/events');
+                await handleApiError(response);
                 const events = await response.json();
                 
                 container.innerHTML = '';
@@ -281,8 +404,10 @@
                     container.appendChild(card);
                 });
             } catch (error) {
-                container.innerHTML = '';
-                msgBox.innerHTML = '<div class="error">Error loading events from database.</div>';
+                if (error.message !== "Unauthorized") {
+                    container.innerHTML = '';
+                    msgBox.innerHTML = '<div class="error">Error loading events from database.</div>';
+                }
             }
         }
         
@@ -292,6 +417,7 @@
             
             try {
                 const response = await fetch(`/api/events/${id}/sync`, {method: 'POST'});
+                await handleApiError(response);
                 const data = await response.json();
                 if (data.status === 'success') {
                     card.remove();
@@ -300,7 +426,7 @@
                     card.style.opacity = '1';
                 }
             } catch(e) {
-                alert("Network error.");
+                if (e.message !== "Unauthorized") alert("Network error.");
                 card.style.opacity = '1';
             }
         }
@@ -309,10 +435,11 @@
             const card = document.getElementById(`event-${id}`);
             card.style.opacity = '0.5';
             try {
-                await fetch(`/api/events/${id}`, {method: 'DELETE'});
+                const response = await fetch(`/api/events/${id}`, {method: 'DELETE'});
+                await handleApiError(response);
                 card.remove();
             } catch(e) {
-                card.style.opacity = '1';
+                if (e.message !== "Unauthorized") card.style.opacity = '1';
             }
         }
 
@@ -331,6 +458,7 @@
                     method: 'POST',
                     body: formData
                 });
+                await handleApiError(response);
                 if (response.ok) {
                     alert("Uploaded successfully! Reloading settings.");
                     loadSettings();
@@ -338,13 +466,14 @@
                     alert("Upload failed.");
                 }
             } catch(e) {
-                alert("Error uploading file.");
+                if (e.message !== "Unauthorized") alert("Error uploading file.");
             }
         }
 
         async function setupOAuthLink() {
             try {
                 const response = await fetch('/api/auth/google/url');
+                await handleApiError(response);
                 const data = await response.json();
                 if (data.url) {
                     const link = document.getElementById('oauth-link');
@@ -352,7 +481,7 @@
                     document.getElementById('oauth-link-container').style.display = 'block';
                 }
             } catch(e) {
-                console.error("Could not fetch OAuth URL");
+                if (e.message !== "Unauthorized") console.error("Could not fetch OAuth URL");
             }
         }
 
@@ -379,7 +508,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ provider: provider, api_key: apiKey })
                 });
-                
+                await handleApiError(response);
                 const data = await response.json();
                 modelSelect.innerHTML = '';
                 
@@ -403,7 +532,7 @@
                     modelSelect.innerHTML = '<option value="">No models found or invalid key</option>';
                 }
             } catch(e) {
-                modelSelect.innerHTML = '<option value="">Failed to fetch models</option>';
+                if (e.message !== "Unauthorized") modelSelect.innerHTML = '<option value="">Failed to fetch models</option>';
             }
         }
 
@@ -445,6 +574,7 @@
         async function loadSettings() {
             try {
                 const response = await fetch('/api/settings');
+                await handleApiError(response);
                 const settings = await response.json();
                 
                 document.getElementById('ai_provider').value = settings.ai_provider || 'gemini';
@@ -482,7 +612,7 @@
                 }
 
             } catch(e) {
-                console.error("Failed to load settings", e);
+                if (e.message !== "Unauthorized") console.error("Failed to load settings", e);
             }
         }
 
@@ -513,6 +643,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
+                await handleApiError(response);
                 if (response.ok) {
                     msgBox.innerHTML = '<div class="success">Settings saved successfully!</div>';
                     setTimeout(() => msgBox.innerHTML = '', 3000);
@@ -520,12 +651,12 @@
                     msgBox.innerHTML = '<div class="error">Failed to save settings.</div>';
                 }
             } catch(e) {
-                msgBox.innerHTML = '<div class="error">An error occurred while saving.</div>';
+                if (e.message !== "Unauthorized") msgBox.innerHTML = '<div class="error">An error occurred while saving.</div>';
             }
         }
 
-        // Init
-        loadSettings().then(() => renderLocalEvents());
+        // Kick off auth check on load
+        checkAuth();
     </script>
 </body>
 </html>
