@@ -523,6 +523,11 @@ async def process_user_emails(user_id: str):
                                               'start': {'dateTime': start_time.isoformat()},
                                               'end': {'dateTime': end_time.isoformat()}
                                             }
+                                            
+                                            loc = event_data.get("location", "")
+                                            if loc and loc.strip():
+                                                gcal_event['location'] = loc.strip()
+                                                
                                             service.events().insert(calendarId='primary', body=gcal_event).execute()
                                             c.execute("UPDATE events SET status='added' WHERE id=?", (event_id,))
                                             logger.info(f"Background auto-synced event '{event_data['title']}' for {user_id}")
