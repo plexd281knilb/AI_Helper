@@ -453,7 +453,7 @@ async def get_events(user_id: str = Depends(verify_auth)):
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
-    c.execute("SELECT * FROM events WHERE status='pending' AND user_id=? ORDER BY date DESC", (user_id,))
+    c.execute("SELECT * FROM events WHERE status IN ('pending', 'added') AND user_id=? ORDER BY date DESC", (user_id,))
     rows = c.fetchall()
     conn.close()
     return [dict(r) for r in rows]

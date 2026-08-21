@@ -146,8 +146,8 @@
         <div class="container">
             <!-- Dashboard View -->
             <div id="dashboard" class="view active">
-                <h1>Pending Calendar Events</h1>
-                <p style="color: #ccc;">Events extracted from your emails that haven't been added yet.</p>
+                <h1>Extracted Calendar Events</h1>
+                <p style="color: #ccc;">Events extracted from your emails. Synced events are marked in green.</p>
                 <div id="dashboard-msg"></div>
                 <div id="events-container">
                     Loading events from database...
@@ -450,7 +450,7 @@
                 if (events.length === 0) {
                     container.innerHTML = `
                         <div style="padding: 40px 20px; text-align: center; border: 1px dashed #444; border-radius: 8px;">
-                            <h2 style="color: #888; margin-top: 0;">No Pending Events Found</h2>
+                            <h2 style="color: #888; margin-top: 0;">No Events Found</h2>
                             <p style="color: #aaa; margin-bottom: 30px;">Click the button below to check your inbox right now!</p>
                             <button onclick="fetchEmails()" class="sync-btn-large">Fetch New Emails</button>
                         </div>
@@ -463,10 +463,17 @@
                     card.className = 'event-card';
                     card.id = `event-${event.id}`;
                     
+                    if (event.status === 'added') {
+                        card.style.opacity = '0.75';
+                        card.style.borderLeft = '4px solid #4CAF50';
+                    }
+                    
                     const dateObj = new Date(event.date);
                     
                     let buttonsHtml = '';
-                    if (googleConnected) {
+                    if (event.status === 'added') {
+                        buttonsHtml = `<span style="color: #4CAF50; font-weight: bold; margin-right: 15px;">✓ Synced to Google Calendar</span>`;
+                    } else if (googleConnected) {
                         buttonsHtml = `<button onclick="syncEvent('${event.id}')" class="add-btn">Auto-Sync to Google Calendar</button>`;
                     } else {
                         const endDateObj = new Date(dateObj.getTime() + 60*60*1000); 
