@@ -172,6 +172,15 @@
             <div id="dashboard" class="view active">
                 <h1>Extracted Calendar Events</h1>
                 <p style="color: #ccc;">Upcoming events extracted from your emails, sorted by closest to now. Synced events are marked in green.</p>
+                
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <div>
+                        <input type="checkbox" id="selectAllEvents" onchange="toggleSelectAll('event-checkbox')" style="transform: scale(1.2); cursor: pointer;">
+                        <label for="selectAllEvents" style="margin-left: 5px; cursor: pointer; color: #ccc;">Select All</label>
+                    </div>
+                    <button class="remove-btn" onclick="bulkDismissEvents()" style="padding: 6px 12px; font-size: 14px;">Dismiss Selected</button>
+                </div>
+
                 <div id="dashboard-msg"></div>
                 <div id="events-container">
                     Loading events from database...
@@ -184,7 +193,14 @@
                 <p style="color: #ccc;">Manage which emails the AI has already processed.</p>
                 <div id="history-msg"></div>
                 
-                <h3 class="section-title">Recently Processed Emails</h3>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; margin-top: 20px;">
+                    <h3 class="section-title" style="margin: 0;">Recently Processed Emails</h3>
+                    <div>
+                        <input type="checkbox" id="selectAllHistory" onchange="toggleSelectAll('history-checkbox')" style="transform: scale(1.2); cursor: pointer;">
+                        <label for="selectAllHistory" style="margin-left: 5px; margin-right: 15px; cursor: pointer; color: #ccc;">Select All</label>
+                        <button class="remove-btn" onclick="bulkDeleteHistory()" style="padding: 6px 12px; font-size: 14px;">Delete Selected Memory</button>
+                    </div>
+                </div>
                 <div id="history-container">
                     Loading history...
                 </div>
@@ -487,9 +503,12 @@
                     const subject = item.subject || 'No Subject';
                     
                     div.innerHTML = `
-                        <div>
-                            <div style="font-weight:bold; font-size:16px;">${subject}</div>
-                            <div style="color:#888; font-size:14px; margin-top:5px;">From: ${item.account} &nbsp;&bull;&nbsp; Date: ${dateStr} &nbsp;&bull;&nbsp; UID: ${item.id}</div>
+                        <div style="display: flex; align-items: center;">
+                            <input type="checkbox" class="history-checkbox" value='{"account":"${item.account}","id":"${item.id}"}' style="margin-right: 15px; transform: scale(1.2); cursor: pointer;">
+                            <div>
+                                <div style="font-weight:bold; font-size:16px;">${subject}</div>
+                                <div style="color:#888; font-size:14px; margin-top:5px;">From: ${item.account} &nbsp;&bull;&nbsp; Date: ${dateStr} &nbsp;&bull;&nbsp; UID: ${item.id}</div>
+                            </div>
                         </div>
                         <button class="remove-btn" style="margin-left:20px; flex-shrink:0;" onclick="deleteHistoryItem('${item.account}', '${item.id}')">Delete Memory</button>
                     `;
@@ -497,6 +516,30 @@
                 });
             } catch(e) {
                 if (e.message !== "Unauthorized") container.innerHTML = '<div class="error">Failed to load history.</div>';
+            }
+        }
+        
+        function toggleSelectAll(className) {
+            const isChecked = event.target.checked;
+            document.querySelectorAll('.' + className).forEach(cb => cb.checked = isChecked);
+        }
+
+        async function bulkDeleteHistory() {
+            const selected = Array.from(document.querySelectorAll('.history-checkbox:checked')).map(cb => JSON.parse(cb.value));
+            if (selected.length === 0) return alert("No items selected.");
+            if (!confirm(`Delete ${selected.length} items from memory?`)) return;
+            
+            try {
+                const response = await fetch('/api/history/bulk_delete', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(selected)
+                });
+                await handleApiError(response);
+                document.getElementById('selectAllHistory').checked = false;
+                loadHistory();
+            } catch(e) {
+                if (e.message !== "Unauthorized") alert("Failed to bulk delete memory.");
             }
         }
         
@@ -711,12 +754,19 @@
                     }
                     buttonsHtml += `<button onclick="dismissEvent('${event.id}')" class="dismiss-btn">Dismiss</button>`;
 
+                    const locationHtml = event.location ? `<div style="color: #64B5F6; margin-bottom: 10px;">📍 ${event.location}</div>` : '';
                     card.innerHTML = `
-                        <div class="event-title">${event.title}</div>
-                        <div class="event-account">From: ${event.account}</div>
-                        <div class="event-date">${dateObj.toLocaleString()}</div>
-                        <div style="color: #ddd; margin-bottom: 10px;">${event.description}</div>
-                        <div>${buttonsHtml}</div>
+                        <div style="display: flex; align-items: flex-start;">
+                            <input type="checkbox" class="event-checkbox" value="${event.id}" style="margin-right: 15px; margin-top: 5px; transform: scale(1.2); cursor: pointer;">
+                            <div style="flex-grow: 1;">
+                                <div class="event-title">${event.title}</div>
+                                <div class="event-account">From: ${event.account}</div>
+                                <div class="event-date">${dateObj.toLocaleString()}</div>
+                                <div style="color: #ddd; margin-bottom: 5px;">${event.description.replace(/\n/g, '<br>')}</div>
+                                ${locationHtml}
+                                <div>${buttonsHtml}</div>
+                            </div>
+                        </div>
                     `;
                     container.appendChild(card);
                 });
@@ -725,6 +775,25 @@
                     container.innerHTML = '';
                     msgBox.innerHTML = '<div class="error">Error loading events from database.</div>';
                 }
+            }
+        }
+        
+        async function bulkDismissEvents() {
+            const selected = Array.from(document.querySelectorAll('.event-checkbox:checked')).map(cb => cb.value);
+            if (selected.length === 0) return alert("No events selected.");
+            if (!confirm(`Dismiss ${selected.length} selected events?`)) return;
+            
+            try {
+                const response = await fetch('/api/events/bulk_dismiss', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({event_ids: selected})
+                });
+                await handleApiError(response);
+                document.getElementById('selectAllEvents').checked = false;
+                renderLocalEvents();
+            } catch(e) {
+                if (e.message !== "Unauthorized") alert("Failed to bulk dismiss events.");
             }
         }
         

@@ -353,6 +353,18 @@ async def delete_history_item(account: str, uid: str, user_id: str = Depends(ver
     conn.close()
     return {"status": "success"}
 
+@app.post("/api/history/bulk_delete", dependencies=[Depends(verify_auth)])
+async def bulk_delete_history(req: list[dict], user_id: str = Depends(verify_auth)):
+    if not req:
+        return {"status": "success"}
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    for item in req:
+        c.execute("DELETE FROM processed_emails_v2 WHERE user_id=? AND account=? AND id=?", (user_id, item.get('account'), item.get('id')))
+    conn.commit()
+    conn.close()
+    return {"status": "success"}
+
 @app.post("/api/upload_client_secret", dependencies=[Depends(verify_auth)])
 async def upload_client_secret(file: UploadFile = File(...)):
     contents = await file.read()
@@ -674,6 +686,21 @@ async def dismiss_event(event_id: str, user_id: str = Depends(verify_auth)):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("UPDATE events SET status='dismissed' WHERE id=? AND user_id=?", (event_id, user_id))
+    conn.commit()
+    conn.close()
+    return {"status": "success"}
+
+class BulkEventAction(BaseModel):
+    event_ids: List[str]
+
+@app.post("/api/events/bulk_dismiss")
+async def bulk_dismiss_events(req: BulkEventAction, user_id: str = Depends(verify_auth)):
+    if not req.event_ids:
+        return {"status": "success"}
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    placeholders = ','.join('?' * len(req.event_ids))
+    c.execute(f"UPDATE events SET status='dismissed' WHERE user_id=? AND id IN ({placeholders})", (user_id, *req.event_ids))
     conn.commit()
     conn.close()
     return {"status": "success"}
