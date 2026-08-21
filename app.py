@@ -19,6 +19,7 @@ from dotenv import load_dotenv
 from google_auth_oauthlib.flow import Flow
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+import asyncio
 
 load_dotenv()
 
@@ -297,7 +298,7 @@ def extract_event(text: str, date: datetime, subject: str, settings: dict) -> di
     provider = settings.get("ai_provider", "gemini")
     model_name = settings.get("ai_model", "gemini-1.5-flash")
     if not model_name:
-        model_name = "gemini-1.5-flash" # fallback
+        model_name = "gemini-1.5-flash"
         
     result = "NO_EVENT"
     try:
@@ -318,11 +319,10 @@ def extract_event(text: str, date: datetime, subject: str, settings: dict) -> di
         if all(k in event_dict for k in ("title", "date", "description")): return event_dict
     except Exception as e:
         logger.error(f"AI extraction error ({provider} - {model_name}): {e}")
-        raise ValueError(f"AI API Error: {str(e)}") # Bubble up error to abort process
+        raise ValueError(f"AI API Error: {str(e)}") 
     return None
 
-@app.get("/api/fetch_emails")
-async def fetch_emails(user_id: str = Depends(verify_auth)):
+async def process_user_emails(user_id: str):
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
@@ -335,7 +335,7 @@ async def fetch_emails(user_id: str = Depends(verify_auth)):
     
     if not accounts:
         conn.close()
-        return {"error": "No email accounts configured."}
+        return {"error": "No email accounts configured.", "new_events": 0}
         
     total_events_found = 0
     
@@ -362,23 +362,67 @@ async def fetch_emails(user_id: str = Depends(verify_auth)):
                                 c.execute("""INSERT INTO events (id, user_id, email_id, account, title, date, description, status)
                                              VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')""",
                                           (event_id, user_id, msg.uid, email_user, event_data['title'], event_data['date'], event_data['description']))
+                                
+                                # Auto-sync to Google Calendar immediately if connected!
+                                token_file = os.path.join(DATA_DIR, f"token_{user_id}.json")
+                                if os.path.exists(token_file):
+                                    try:
+                                        creds = Credentials.from_authorized_user_file(token_file, SCOPES)
+                                        service = build('calendar', 'v3', credentials=creds)
+                                        start_time = datetime.fromisoformat(event_data['date'].replace("Z", "+00:00"))
+                                        end_time = start_time + timedelta(hours=1)
+                                        gcal_event = {
+                                          'summary': event_data['title'],
+                                          'description': event_data['description'],
+                                          'start': {'dateTime': start_time.isoformat()},
+                                          'end': {'dateTime': end_time.isoformat()}
+                                        }
+                                        service.events().insert(calendarId='primary', body=gcal_event).execute()
+                                        c.execute("UPDATE events SET status='added' WHERE id=?", (event_id,))
+                                        logger.info(f"Background auto-synced event '{event_data['title']}' for {user_id}")
+                                    except Exception as e:
+                                        logger.error(f"Background auto-sync failed for {user_id}: {e}")
+                                
                                 total_events_found += 1
                         except ValueError as ve:
-                            # CRITICAL: AI error occurred!
-                            # Do not mark as processed. Abort and alert user!
                             conn.close()
-                            return {"error": f"AI Error on {email_user}: {str(ve)}"}
+                            return {"error": f"AI Error on {email_user}: {str(ve)}", "new_events": total_events_found}
                     
-                    # Safely mark as processed ONLY if extraction succeeded or was safely ignored
                     c.execute("INSERT INTO processed_emails_v2 (id, user_id, account) VALUES (?, ?, ?)", (msg.uid, user_id, email_user))
                     conn.commit()
         except Exception as e:
             logger.error(f"Error fetching emails for {email_user}: {e}")
             conn.close()
-            return {"error": f"Email connection failed for {email_user}. Check password/host."}
+            return {"error": f"Email connection failed for {email_user}. Check password/host.", "new_events": total_events_found}
             
     conn.close()
     return {"status": "success", "new_events": total_events_found}
+
+@app.get("/api/fetch_emails")
+async def fetch_emails_endpoint(user_id: str = Depends(verify_auth)):
+    logger.info(f"User {user_id} triggered manual email fetch.")
+    return await process_user_emails(user_id)
+
+# --- Background Task Scheduler ---
+async def scheduled_email_fetch():
+    while True:
+        await asyncio.sleep(3600)  # Sleep for 1 hour
+        logger.info("Running scheduled hourly email fetch for all users...")
+        try:
+            conn = sqlite3.connect(DB_FILE)
+            c = conn.cursor()
+            c.execute("SELECT DISTINCT user_id FROM email_accounts")
+            users = [r[0] for r in c.fetchall()]
+            conn.close()
+            
+            for user_id in users:
+                await process_user_emails(user_id)
+        except Exception as e:
+            logger.error(f"Error in background fetch scheduler: {e}")
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(scheduled_email_fetch())
 
 @app.get("/api/events")
 async def get_events(user_id: str = Depends(verify_auth)):
