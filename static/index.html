@@ -135,6 +135,7 @@
             <div class="nav-left">
                 <button class="tab-link active" onclick="openTab('dashboard', event)">Dashboard</button>
                 <button class="tab-link" onclick="openTab('settings', event)">Settings</button>
+                <button class="tab-link" onclick="openTab('users', event)">Users</button>
                 <button class="tab-link" onclick="openTab('logs', event)">Logs</button>
             </div>
             <div>
@@ -151,6 +152,32 @@
                 <div id="dashboard-msg"></div>
                 <div id="events-container">
                     Loading events from database...
+                </div>
+            </div>
+
+            <!-- Users View -->
+            <div id="users" class="view">
+                <h1>User Management</h1>
+                <p style="color: #ccc;">Create and manage accounts for your family members.</p>
+                <div id="users-msg"></div>
+                
+                <h3 class="section-title">Add New User</h3>
+                <div class="account-box">
+                    <div class="form-group">
+                        <label>Username</label>
+                        <input type="text" id="new-user-name" placeholder="Enter username" autocomplete="off">
+                    </div>
+                    <div class="form-group" style="position: relative;">
+                        <label>Password</label>
+                        <input type="password" id="new-user-pass" placeholder="Enter password (min 4 chars)" autocomplete="new-password">
+                        <button class="toggle-password" onclick="togglePassword('new-user-pass')">Show</button>
+                    </div>
+                    <button class="save-btn" onclick="createUser()">Create User</button>
+                </div>
+                
+                <h3 class="section-title">Existing Users</h3>
+                <div id="users-list-container">
+                    Loading users...
                 </div>
             </div>
 
@@ -393,11 +420,124 @@
                 renderLocalEvents();
             } else if (tabName === 'settings') {
                 loadSettings();
+            } else if (tabName === 'users') {
+                loadUsers();
             } else if (tabName === 'logs') {
                 loadLogs();
             }
         }
         
+        // --- USERS LOGIC ---
+        async function loadUsers() {
+            const container = document.getElementById('users-list-container');
+            container.innerHTML = 'Loading...';
+            try {
+                const response = await fetch('/api/users');
+                await handleApiError(response);
+                const users = await response.json();
+                container.innerHTML = '';
+                users.forEach(u => {
+                    const box = document.createElement('div');
+                    box.className = 'account-box';
+                    box.innerHTML = `
+                        <div class="form-group">
+                            <label>Username</label>
+                            <input type="text" id="edit-user-name-${u.id}" value="${u.username}">
+                        </div>
+                        <div class="form-group" style="position: relative;">
+                            <label>New Password (leave blank to keep current)</label>
+                            <input type="password" id="edit-user-pass-${u.id}" placeholder="New password">
+                            <button class="toggle-password" onclick="togglePassword('edit-user-pass-${u.id}')">Show</button>
+                        </div>
+                        <div id="user-msg-${u.id}" style="margin-top: 5px;"></div>
+                        <div class="account-actions">
+                            <button class="save-btn" onclick="updateUser('${u.id}')" style="margin-top:0;">Update User</button>
+                            <button class="remove-btn" onclick="deleteUser('${u.id}')" style="margin-top:0;">Delete User</button>
+                        </div>
+                    `;
+                    container.appendChild(box);
+                });
+            } catch(e) {
+                if (e.message !== "Unauthorized") container.innerHTML = '<div class="error">Failed to load users.</div>';
+            }
+        }
+        
+        async function createUser() {
+            const msgBox = document.getElementById('users-msg');
+            const username = document.getElementById('new-user-name').value;
+            const password = document.getElementById('new-user-pass').value;
+            if (!username || !password) {
+                msgBox.innerHTML = '<div class="error">Please fill in both fields.</div>';
+                return;
+            }
+            try {
+                const response = await fetch('/api/users', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username, password})
+                });
+                await handleApiError(response);
+                const data = await response.json();
+                if (data.error) {
+                    msgBox.innerHTML = `<div class="error">${data.error}</div>`;
+                } else {
+                    msgBox.innerHTML = '<div class="success">User created!</div>';
+                    document.getElementById('new-user-name').value = '';
+                    document.getElementById('new-user-pass').value = '';
+                    loadUsers();
+                    setTimeout(() => msgBox.innerHTML = '', 3000);
+                }
+            } catch(e) {
+                if (e.message !== "Unauthorized") msgBox.innerHTML = '<div class="error">Network error.</div>';
+            }
+        }
+
+        async function updateUser(id) {
+            const msgBox = document.getElementById(`user-msg-${id}`);
+            const username = document.getElementById(`edit-user-name-${id}`).value;
+            const password = document.getElementById(`edit-user-pass-${id}`).value;
+            
+            const payload = {};
+            if (username) payload.username = username;
+            if (password) payload.password = password;
+            
+            msgBox.innerHTML = '<span style="color: #aaa;">Saving...</span>';
+            try {
+                const response = await fetch(`/api/users/${id}`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                await handleApiError(response);
+                const data = await response.json();
+                if (data.error) {
+                    msgBox.innerHTML = `<span class="error">${data.error}</span>`;
+                } else {
+                    msgBox.innerHTML = '<span class="success">Updated!</span>';
+                    document.getElementById(`edit-user-pass-${id}`).value = '';
+                    setTimeout(() => msgBox.innerHTML = '', 3000);
+                }
+            } catch(e) {
+                if (e.message !== "Unauthorized") msgBox.innerHTML = '<span class="error">Network error.</span>';
+            }
+        }
+
+        async function deleteUser(id) {
+            if (!confirm("Are you sure? This will delete the user, their settings, their connected email accounts, and all their saved events!")) return;
+            try {
+                const response = await fetch(`/api/users/${id}`, {method: 'DELETE'});
+                await handleApiError(response);
+                const data = await response.json();
+                if (data.error) {
+                    alert(data.error);
+                } else {
+                    loadUsers();
+                }
+            } catch(e) {
+                if (e.message !== "Unauthorized") alert("Failed to delete user.");
+            }
+        }
+
         async function handleApiError(response) {
             if (response.status === 401) {
                 window.location.reload(); 

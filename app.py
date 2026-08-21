@@ -163,6 +163,76 @@ async def auth_logout(request: Request, response: Response):
     response.delete_cookie("session_token")
     return {"status": "success"}
 
+# --- User Management ---
+class UserCreate(BaseModel):
+    username: str
+    password: str
+
+class UserUpdate(BaseModel):
+    username: Optional[str] = None
+    password: Optional[str] = None
+
+@app.get("/api/users", dependencies=[Depends(verify_auth)])
+async def get_users():
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("SELECT id, username FROM users")
+    users = [{"id": r[0], "username": r[1]} for r in c.fetchall()]
+    conn.close()
+    return users
+
+@app.post("/api/users", dependencies=[Depends(verify_auth)])
+async def create_user(req: UserCreate):
+    if len(req.password) < 4:
+        return {"error": "Password must be at least 4 characters."}
+    pwd_hash = hashlib.sha256(req.password.encode()).hexdigest()
+    user_id = str(uuid.uuid4())
+    default_settings = json.dumps({"ai_provider": "gemini", "ai_model": "gemini-1.5-flash", "public_url": ""})
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    try:
+        c.execute("INSERT INTO users (id, username, password_hash, settings) VALUES (?, ?, ?, ?)", (user_id, req.username, pwd_hash, default_settings))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        return {"error": "Username already exists."}
+    finally:
+        conn.close()
+    return {"status": "success"}
+
+@app.put("/api/users/{target_user_id}", dependencies=[Depends(verify_auth)])
+async def update_user(target_user_id: str, req: UserUpdate):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    if req.username:
+        try:
+            c.execute("UPDATE users SET username=? WHERE id=?", (req.username, target_user_id))
+        except sqlite3.IntegrityError:
+            conn.close()
+            return {"error": "Username already exists."}
+    if req.password:
+        if len(req.password) < 4:
+            conn.close()
+            return {"error": "Password too short."}
+        pwd_hash = hashlib.sha256(req.password.encode()).hexdigest()
+        c.execute("UPDATE users SET password_hash=? WHERE id=?", (pwd_hash, target_user_id))
+    conn.commit()
+    conn.close()
+    return {"status": "success"}
+
+@app.delete("/api/users/{target_user_id}")
+async def delete_user(target_user_id: str, current_user: str = Depends(verify_auth)):
+    if target_user_id == current_user:
+        return {"error": "You cannot delete yourself."}
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("DELETE FROM users WHERE id=?", (target_user_id,))
+    c.execute("DELETE FROM email_accounts WHERE user_id=?", (target_user_id,))
+    c.execute("DELETE FROM events WHERE user_id=?", (target_user_id,))
+    c.execute("DELETE FROM processed_emails_v2 WHERE user_id=?", (target_user_id,))
+    conn.commit()
+    conn.close()
+    return {"status": "success"}
+
 # --- Settings & Accounts ---
 class AccountSave(BaseModel):
     id: Optional[str] = None
