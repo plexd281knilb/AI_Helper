@@ -35,7 +35,7 @@
         .dismiss-btn { background-color: #555; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; margin-top: 10px; margin-left: 10px; }
         .dismiss-btn:hover { background-color: #666; }
         
-        .form-group { margin-bottom: 15px; }
+        .form-group { margin-bottom: 15px; position: relative;}
         .form-group label { display: block; margin-bottom: 5px; font-weight: bold; color: #ccc; }
         .form-group input, .form-group select { width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; box-sizing: border-box; background-color: var(--input-bg); color: var(--text-color); }
         .save-btn { background-color: #4CAF50; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-size: 16px; margin-top: 10px; }
@@ -64,6 +64,9 @@
         a:hover { text-decoration: underline; }
         code { background: #333; padding: 2px 4px; border-radius: 3px; font-family: monospace; }
         details summary { outline: none; margin-bottom: 5px; }
+        
+        .toggle-password { position: absolute; right: 10px; top: 32px; background: #444; border: none; color: #fff; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 12px;}
+        .toggle-password:hover { background: #555; }
     </style>
 </head>
 <body>
@@ -140,6 +143,7 @@
             <div class="form-group" id="gemini_key_group">
                 <label for="gemini_api_key">Gemini API Key</label>
                 <input type="password" id="gemini_api_key" placeholder="Your Gemini API Key" onchange="debouncedFetchModels()">
+                <button class="toggle-password" onclick="togglePassword('gemini_api_key')">Show</button>
                 <small style="color: #bbb; display: block; margin-top: 5px;">
                     Get your free Gemini API key from <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a>.
                 </small>
@@ -148,6 +152,7 @@
             <div class="form-group" id="openai_key_group" style="display: none;">
                 <label for="openai_api_key">OpenAI API Key</label>
                 <input type="password" id="openai_api_key" placeholder="Your OpenAI API Key" onchange="debouncedFetchModels()">
+                <button class="toggle-password" onclick="togglePassword('openai_api_key')">Show</button>
                 <small style="color: #bbb; display: block; margin-top: 5px;">
                     Get your OpenAI API key from the <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI Platform</a>.
                 </small>
@@ -167,12 +172,34 @@
     </div>
 
     <script>
-        // Set dynamic redirect URI in instructions
         document.getElementById('dynamic-redirect-uri').innerText = window.location.origin + '/api/auth/google/callback';
 
         let savedModelSelection = null;
         let modelFetchTimeout = null;
         let googleConnected = false;
+        
+        function togglePassword(inputId) {
+            const input = document.getElementById(inputId);
+            const btn = input.nextElementSibling;
+            if (input.type === "password") {
+                input.type = "text";
+                btn.innerText = "Hide";
+            } else {
+                input.type = "password";
+                btn.innerText = "Show";
+            }
+        }
+        
+        function toggleAccountPassword(btn) {
+            const input = btn.previousElementSibling;
+            if (input.type === "password") {
+                input.type = "text";
+                btn.innerText = "Hide";
+            } else {
+                input.type = "password";
+                btn.innerText = "Show";
+            }
+        }
 
         function openTab(tabName, event) {
             document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
@@ -397,9 +424,10 @@
                     <label>Email Address</label>
                     <input type="email" class="acc_user" value="${acc.email_user}" placeholder="e.g. you@gmail.com">
                 </div>
-                <div class="form-group">
+                <div class="form-group" style="position: relative;">
                     <label>App Password</label>
                     <input type="password" class="acc_pass" value="${acc.email_pass}" placeholder="Password">
+                    <button class="toggle-password" onclick="toggleAccountPassword(this)">Show</button>
                 </div>
                 <div class="form-group">
                     <label>IMAP Host</label>

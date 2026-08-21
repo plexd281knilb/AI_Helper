@@ -92,35 +92,24 @@ async def read_index():
 @app.get("/api/settings")
 async def read_settings():
     settings = get_settings()
-    for acc in settings.get("accounts", []):
-        if acc.get("email_pass"):
-            acc["email_pass"] = "*" * 8
-            
     return {
         "accounts": settings.get("accounts", []),
         "ai_provider": settings.get("ai_provider", "gemini"),
         "ai_model": settings.get("ai_model", "gemini-1.5-flash"),
-        "gemini_api_key": "*" * 8 if settings.get("gemini_api_key") else "",
-        "openai_api_key": "*" * 8 if settings.get("openai_api_key") else "",
+        "gemini_api_key": settings.get("gemini_api_key", ""),
+        "openai_api_key": settings.get("openai_api_key", ""),
         "google_auth_ready": os.path.exists(CLIENT_SECRETS_FILE),
         "google_connected": os.path.exists(TOKEN_FILE)
     }
 
 @app.post("/api/settings")
 async def save_settings(settings: Settings):
-    current_settings = get_settings()
-    
-    for i, acc in enumerate(settings.accounts):
-        if acc.email_pass == "*" * 8:
-            if i < len(current_settings.get("accounts", [])):
-                acc.email_pass = current_settings["accounts"][i]["email_pass"]
-
     new_settings = {
         "accounts": [acc.dict() for acc in settings.accounts],
         "ai_provider": settings.ai_provider,
         "ai_model": settings.ai_model,
-        "gemini_api_key": settings.gemini_api_key if settings.gemini_api_key != "*" * 8 else current_settings.get("gemini_api_key", ""),
-        "openai_api_key": settings.openai_api_key if settings.openai_api_key != "*" * 8 else current_settings.get("openai_api_key", "")
+        "gemini_api_key": settings.gemini_api_key,
+        "openai_api_key": settings.openai_api_key
     }
     
     with open(SETTINGS_FILE, "w") as f:
@@ -137,13 +126,6 @@ async def upload_client_secret(file: UploadFile = File(...)):
 @app.post("/api/models")
 async def get_models(req: ModelRequest):
     api_key = req.api_key
-    if api_key == "*" * 8:
-        current_settings = get_settings()
-        if req.provider == "gemini":
-            api_key = current_settings.get("gemini_api_key", "")
-        elif req.provider == "openai":
-            api_key = current_settings.get("openai_api_key", "")
-            
     if not api_key:
         return {"models": []}
         
@@ -243,7 +225,6 @@ async def fetch_emails():
                 messages = mailbox.fetch(AND(date_gte=date_limit), limit=20, reverse=True)
                 
                 for msg in messages:
-                    # Check if already processed
                     c.execute("SELECT id FROM processed_emails WHERE id=? AND account=?", (msg.uid, email_user))
                     if c.fetchone():
                         continue
@@ -259,7 +240,6 @@ async def fetch_emails():
                                       (event_id, msg.uid, email_user, event_data['title'], event_data['date'], event_data['description']))
                             new_events_found += 1
                     
-                    # Mark as processed regardless to avoid reprocessing
                     c.execute("INSERT INTO processed_emails (id, account) VALUES (?, ?)", (msg.uid, email_user))
                     conn.commit()
                     
@@ -285,12 +265,9 @@ async def get_google_auth_url(request: Request):
     if not os.path.exists(CLIENT_SECRETS_FILE):
         return {"error": "Client secrets file missing"}
     
-    # We must construct the redirect URI dynamically based on how the user accesses it
     redirect_uri = f"{request.url.scheme}://{request.url.netloc}/api/auth/google/callback"
-    
     flow = Flow.from_client_secrets_file(
         CLIENT_SECRETS_FILE, scopes=SCOPES, redirect_uri=redirect_uri)
-        
     auth_url, _ = flow.authorization_url(prompt='consent')
     return {"url": auth_url}
 
@@ -303,10 +280,7 @@ async def google_auth_callback(request: Request):
     flow = Flow.from_client_secrets_file(
         CLIENT_SECRETS_FILE, scopes=SCOPES, redirect_uri=redirect_uri)
     
-    # Allow http for local unraid IP OAuth testing
     os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
-    
-    # Fetch token
     authorization_response = str(request.url)
     flow.fetch_token(authorization_response=authorization_response)
     
@@ -334,7 +308,6 @@ async def sync_event(event_id: str):
         conn.close()
         return {"error": "Event not found"}
         
-    # Create Google Calendar Event
     start_time = datetime.fromisoformat(event['date'].replace("Z", "+00:00"))
     end_time = start_time + timedelta(hours=1)
     
@@ -351,8 +324,6 @@ async def sync_event(event_id: str):
     
     try:
         service.events().insert(calendarId='primary', body=gcal_event).execute()
-        
-        # Mark as added
         c.execute("UPDATE events SET status='added' WHERE id=?", (event_id,))
         conn.commit()
         conn.close()
