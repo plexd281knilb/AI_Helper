@@ -21,42 +21,44 @@
         body { font-family: Arial, sans-serif; margin: 0; background-color: var(--bg-color); color: var(--text-color); }
         
         /* Auth Overlay Styles */
-        #auth-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-color); z-index: 9999; display: flex; align-items: center; justify-content: center; flex-direction: column; }
-        .auth-box { background: var(--card-bg); padding: 30px; border-radius: 8px; border: 1px solid var(--border-color); box-shadow: 0 4px 12px rgba(0,0,0,0.5); width: 100%; max-width: 400px; text-align: center; }
-        .auth-box input { width: 100%; padding: 10px; margin: 10px 0 20px 0; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg); color: #fff; box-sizing: border-box; }
-        .auth-box button { width: 100%; padding: 10px; background: var(--accent); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold; }
+        #auth-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-color); z-index: 9999; display: flex; align-items: center; justify-content: center; flex-direction: column; padding: 20px; box-sizing: border-box; }
+        .auth-box { background: var(--card-bg); padding: 30px; border-radius: 8px; border: 1px solid var(--border-color); box-shadow: 0 4px 12px rgba(0,0,0,0.5); width: 100%; max-width: 400px; text-align: center; box-sizing: border-box; }
+        .auth-box input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid var(--border-color); border-radius: 4px; background: var(--input-bg); color: #fff; box-sizing: border-box; }
+        .auth-box button { width: 100%; padding: 12px; background: var(--accent); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold; margin-top: 10px; }
         .auth-box button:hover { background: var(--accent-hover); }
-        .auth-msg { color: #ff5252; margin-bottom: 15px; font-size: 14px; }
+        .auth-msg { color: #ff5252; margin-bottom: 10px; font-size: 14px; }
+        .auth-toggle { background: none !important; color: var(--accent) !important; font-size: 14px !important; margin-top: 15px !important; font-weight: normal !important; padding: 0 !important; }
+        .auth-toggle:hover { text-decoration: underline; background: none !important; }
         
         /* Main App Styles */
         #app-content { display: none; }
-        .nav { background-color: var(--nav-bg); overflow: hidden; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between;}
+        .nav { background-color: var(--nav-bg); overflow: hidden; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; }
         .nav-left { display: flex; }
-        .nav button { float: left; display: block; color: #f2f2f2; text-align: center; padding: 14px 16px; text-decoration: none; border: none; background: none; cursor: pointer; font-size: 16px; }
+        .nav button { display: block; color: #f2f2f2; text-align: center; padding: 14px 16px; text-decoration: none; border: none; background: none; cursor: pointer; font-size: 16px; }
         .nav button:hover { background-color: #333; }
         .nav button.active { background-color: var(--nav-active); color: white; }
         
-        .container { max-width: 800px; margin: 20px auto; padding: 0 20px; }
+        .container { max-width: 800px; margin: 20px auto; padding: 0 15px; }
         .event-card { background: var(--card-bg); padding: 15px; margin-bottom: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.3); border: 1px solid var(--border-color); }
         .event-title { font-size: 1.2em; font-weight: bold; margin-bottom: 5px; color: #fff; }
         .event-date { color: #aaa; font-size: 0.9em; margin-bottom: 10px; }
         .event-account { color: #888; font-size: 0.8em; margin-bottom: 5px; }
-        .add-btn { background-color: var(--accent); color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; margin-top: 10px; }
+        .add-btn { background-color: var(--accent); color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; margin-top: 10px; font-size: 14px; }
         .add-btn:hover { background-color: var(--accent-hover); }
-        .dismiss-btn { background-color: #555; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; margin-top: 10px; margin-left: 10px; }
+        .dismiss-btn { background-color: #555; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; margin-top: 10px; margin-left: 10px; font-size: 14px;}
         .dismiss-btn:hover { background-color: #666; }
         
         .form-group { margin-bottom: 15px; position: relative;}
         .form-group label { display: block; margin-bottom: 5px; font-weight: bold; color: #ccc; }
-        .form-group input, .form-group select { width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; box-sizing: border-box; background-color: var(--input-bg); color: var(--text-color); }
-        .save-btn { background-color: #4CAF50; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-size: 16px; margin-top: 10px; }
+        .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; box-sizing: border-box; background-color: var(--input-bg); color: var(--text-color); font-size: 16px; }
+        .save-btn { background-color: #4CAF50; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-size: 15px; margin-top: 10px; }
         .save-btn:hover { background-color: #45a049; }
-        .remove-btn { background-color: #f44336; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-top: 5px;}
-        .add-account-btn { background-color: #444; color: white; border: 1px solid #555; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 14px; margin-bottom: 15px; }
+        .remove-btn { background-color: #f44336; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 14px; margin-top: 5px;}
+        .add-account-btn { background-color: #444; color: white; border: 1px solid #555; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-size: 15px; margin-bottom: 15px; width: 100%;}
         .add-account-btn:hover { background-color: #555; }
         .fetch-models-btn { background-color: #555; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 14px; margin-bottom: 10px; margin-top: 5px;}
         
-        .sync-btn { background-color: #f4b400; color: #000; font-weight: bold; padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer; margin-right: 20px;}
+        .sync-btn { background-color: #f4b400; color: #000; font-weight: bold; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; margin-right: 15px;}
         .sync-btn:hover { background-color: #e0a800; }
         
         .view { display: none; }
@@ -73,31 +75,39 @@
         
         a { color: var(--accent); text-decoration: none; }
         a:hover { text-decoration: underline; }
-        code { background: #333; padding: 2px 4px; border-radius: 3px; font-family: monospace; }
+        code { background: #333; padding: 2px 4px; border-radius: 3px; font-family: monospace; word-break: break-all; }
         details summary { outline: none; margin-bottom: 5px; }
         
-        .toggle-password { position: absolute; right: 10px; top: 32px; background: #444; border: none; color: #fff; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 12px;}
+        .toggle-password { position: absolute; right: 10px; top: 35px; background: #444; border: none; color: #fff; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px;}
         .toggle-password:hover { background: #555; }
+        
+        .account-actions { display: flex; justify-content: space-between; margin-top: 15px; }
+        
+        /* Mobile Responsiveness */
+        @media (max-width: 600px) {
+            .nav { flex-direction: column; align-items: stretch; }
+            .nav-left { flex-direction: row; justify-content: space-around; width: 100%; border-bottom: 1px solid var(--border-color); }
+            .nav-left button { flex: 1; }
+            .nav > div:last-child { display: flex; justify-content: space-between; padding: 10px; }
+            .sync-btn { margin: 0 5px; flex: 1; padding: 12px; font-size: 14px; text-align: center; }
+            
+            .add-btn, .dismiss-btn { width: 100%; box-sizing: border-box; margin-left: 0; text-align: center; }
+            .account-actions { flex-direction: column; gap: 10px; }
+            .account-actions button { width: 100%; }
+        }
     </style>
 </head>
 <body>
 
     <!-- Auth Overlay -->
     <div id="auth-overlay">
-        <div class="auth-box" id="login-box" style="display: none;">
-            <h2>Login</h2>
-            <p style="color:#aaa; font-size: 14px;">Please enter your app password.</p>
-            <div id="login-msg" class="auth-msg"></div>
-            <input type="password" id="login-password" placeholder="Password" onkeypress="if(event.key === 'Enter') submitLogin()">
-            <button onclick="submitLogin()">Login</button>
-        </div>
-        
-        <div class="auth-box" id="setup-box" style="display: none;">
-            <h2>Welcome!</h2>
-            <p style="color:#aaa; font-size: 14px;">Since this is your first time, please create a secure admin password for this dashboard.</p>
-            <div id="setup-msg" class="auth-msg"></div>
-            <input type="password" id="setup-password" placeholder="Create Password" onkeypress="if(event.key === 'Enter') submitSetup()">
-            <button onclick="submitSetup()">Save Password</button>
+        <div class="auth-box" id="auth-container" style="display: none;">
+            <h2 id="auth-title">Login</h2>
+            <div id="auth-msg" class="auth-msg"></div>
+            <input type="text" id="auth-user" placeholder="Username" onkeypress="if(event.key === 'Enter') submitAuth()">
+            <input type="password" id="auth-pass" placeholder="Password" onkeypress="if(event.key === 'Enter') submitAuth()">
+            <button id="auth-btn" onclick="submitAuth()">Login</button>
+            <button class="auth-toggle" id="auth-toggle-btn" onclick="toggleAuthMode()">Need an account? Register</button>
         </div>
     </div>
 
@@ -128,7 +138,6 @@
             <!-- Settings View -->
             <div id="settings" class="view">
                 <h1>Settings</h1>
-                <div id="settings-msg"></div>
                 
                 <!-- Google Calendar Section -->
                 <h3 class="section-title">
@@ -153,7 +162,7 @@
 
                     <div class="form-group">
                         <input type="file" id="client_secret_file" accept=".json">
-                        <button class="save-btn" style="font-size: 14px; margin-left: 10px;" onclick="uploadClientSecret()">Upload JSON</button>
+                        <button class="save-btn" style="font-size: 14px;" onclick="uploadClientSecret()">Upload JSON</button>
                     </div>
                     <div id="oauth-link-container" style="display:none; margin-top: 15px;">
                         <a id="oauth-link" href="#" class="add-btn">Login with Google to Authorize Calendar</a>
@@ -162,118 +171,131 @@
                 
                 <!-- Email Accounts Section -->
                 <h3 class="section-title">Email Accounts</h3>
-                <p style="color: #bbb; margin-top: 0;">Add the email accounts you want to scan. <br><b>Note for Gmail:</b> You must use an App Password, not your normal password. <a href="https://myaccount.google.com/security" target="_blank">Generate one here</a> (Turn on 2-Step Verification -> App Passwords).</p>
+                <p style="color: #bbb; margin-top: 0;">Add the email accounts you want to scan. <br><b>Note for Gmail:</b> You must use an App Password, not your normal password. <a href="https://myaccount.google.com/security" target="_blank">Generate one here</a>.</p>
                 <div id="accounts-container"></div>
                 <button class="add-account-btn" onclick="addAccountRow()">+ Add Email Account</button>
 
-                <!-- AI Configuration Section -->
-                <h3 class="section-title">AI Configuration</h3>
-                <div class="form-group">
-                    <label for="ai_provider">AI Provider</label>
-                    <select id="ai_provider" onchange="updateProviderUI()">
-                        <option value="gemini">Google Gemini</option>
-                        <option value="openai">OpenAI</option>
-                    </select>
-                </div>
-                
-                <div class="form-group" id="gemini_key_group">
-                    <label for="gemini_api_key">Gemini API Key</label>
-                    <input type="password" id="gemini_api_key" placeholder="Your Gemini API Key" onchange="debouncedFetchModels()">
-                    <button class="toggle-password" onclick="togglePassword('gemini_api_key')">Show</button>
-                    <small style="color: #bbb; display: block; margin-top: 5px;">
-                        Get your free Gemini API key from <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a>.
-                    </small>
-                </div>
+                <!-- General Settings Section -->
+                <h3 class="section-title">General & AI Configuration</h3>
+                <div class="account-box" style="margin-bottom: 30px;">
+                    <div id="settings-msg"></div>
+                    
+                    <div class="form-group">
+                        <label for="public_url">Public Custom Web Address (Optional)</label>
+                        <input type="text" id="public_url" placeholder="e.g. https://calendar.mydomain.com">
+                        <small style="color:#888;">If you use a reverse proxy or Cloudflare tunnel, enter it here to fix the Google Auth redirect URL.</small>
+                    </div>
+                    
+                    <div class="form-group" style="margin-top: 20px;">
+                        <label for="ai_provider">AI Provider</label>
+                        <select id="ai_provider" onchange="updateProviderUI()">
+                            <option value="gemini">Google Gemini</option>
+                            <option value="openai">OpenAI</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group" id="gemini_key_group">
+                        <label for="gemini_api_key">Gemini API Key</label>
+                        <input type="password" id="gemini_api_key" placeholder="Your Gemini API Key" onchange="debouncedFetchModels()" autocomplete="new-password">
+                        <button class="toggle-password" onclick="togglePassword('gemini_api_key')">Show</button>
+                    </div>
 
-                <div class="form-group" id="openai_key_group" style="display: none;">
-                    <label for="openai_api_key">OpenAI API Key</label>
-                    <input type="password" id="openai_api_key" placeholder="Your OpenAI API Key" onchange="debouncedFetchModels()">
-                    <button class="toggle-password" onclick="togglePassword('openai_api_key')">Show</button>
-                    <small style="color: #bbb; display: block; margin-top: 5px;">
-                        Get your OpenAI API key from the <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI Platform</a>.
-                    </small>
-                </div>
-                
-                <button class="fetch-models-btn" onclick="fetchModels(true)">Refresh Available Models</button>
+                    <div class="form-group" id="openai_key_group" style="display: none;">
+                        <label for="openai_api_key">OpenAI API Key</label>
+                        <input type="password" id="openai_api_key" placeholder="Your OpenAI API Key" onchange="debouncedFetchModels()" autocomplete="new-password">
+                        <button class="toggle-password" onclick="togglePassword('openai_api_key')">Show</button>
+                    </div>
+                    
+                    <button class="fetch-models-btn" onclick="fetchModels(true)">Refresh Available Models</button>
 
-                <div class="form-group" id="ai_model_group">
-                    <label for="ai_model">Model</label>
-                    <select id="ai_model">
-                        <option value="">Fetching models...</option>
-                    </select>
-                </div>
+                    <div class="form-group" id="ai_model_group">
+                        <label for="ai_model">Model</label>
+                        <select id="ai_model">
+                            <option value="">Fetching models...</option>
+                        </select>
+                    </div>
 
-                <button class="save-btn" onclick="saveSettings()">Save Settings</button>
+                    <button class="save-btn" style="width: 100%;" onclick="saveAISettings()">Save General Settings</button>
+                </div>
             </div>
         </div>
     </div>
 
     <script>
-        document.getElementById('dynamic-redirect-uri').innerText = window.location.origin + '/api/auth/google/callback';
-
         // --- AUTHENTICATION LOGIC ---
+        let authMode = 'login'; // 'login' or 'register'
+        
         async function checkAuth() {
             try {
                 const res = await fetch('/api/auth/status');
                 const data = await res.json();
                 
                 const overlay = document.getElementById('auth-overlay');
+                const container = document.getElementById('auth-container');
                 const appContent = document.getElementById('app-content');
                 
-                if (data.setup_required) {
-                    overlay.style.display = 'flex';
-                    document.getElementById('setup-box').style.display = 'block';
-                    document.getElementById('login-box').style.display = 'none';
-                    appContent.style.display = 'none';
-                } else if (!data.logged_in) {
-                    overlay.style.display = 'flex';
-                    document.getElementById('login-box').style.display = 'block';
-                    document.getElementById('setup-box').style.display = 'none';
-                    appContent.style.display = 'none';
-                } else {
+                if (data.logged_in) {
                     overlay.style.display = 'none';
                     appContent.style.display = 'block';
                     initializeApp();
+                } else {
+                    overlay.style.display = 'flex';
+                    container.style.display = 'block';
+                    appContent.style.display = 'none';
+                    if (data.setup_required) {
+                        setAuthMode('register');
+                        document.getElementById('auth-toggle-btn').style.display = 'none';
+                        document.getElementById('auth-title').innerText = 'Create First Admin Account';
+                    } else {
+                        setAuthMode('login');
+                    }
                 }
             } catch(e) {
                 console.error("Auth check failed", e);
             }
         }
         
-        async function submitSetup() {
-            const pwd = document.getElementById('setup-password').value;
-            const msg = document.getElementById('setup-msg');
-            if (pwd.length < 4) { msg.innerText = "Password too short."; return; }
-            
-            const res = await fetch('/api/auth/setup', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({password: pwd})
-            });
-            const data = await res.json();
-            if (data.error) {
-                msg.innerText = data.error;
-            } else {
-                // Auto login after setup
-                document.getElementById('login-password').value = pwd;
-                submitLogin();
-            }
+        function setAuthMode(mode) {
+            authMode = mode;
+            document.getElementById('auth-title').innerText = mode === 'login' ? 'Login' : 'Register Account';
+            document.getElementById('auth-btn').innerText = mode === 'login' ? 'Login' : 'Create Account';
+            document.getElementById('auth-toggle-btn').innerText = mode === 'login' ? 'Need an account? Register' : 'Have an account? Login';
+            document.getElementById('auth-msg').innerText = '';
         }
         
-        async function submitLogin() {
-            const pwd = document.getElementById('login-password').value;
-            const msg = document.getElementById('login-msg');
+        function toggleAuthMode() {
+            setAuthMode(authMode === 'login' ? 'register' : 'login');
+        }
+        
+        async function submitAuth() {
+            const user = document.getElementById('auth-user').value;
+            const pwd = document.getElementById('auth-pass').value;
+            const msg = document.getElementById('auth-msg');
             
-            const res = await fetch('/api/auth/login', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({password: pwd})
-            });
-            const data = await res.json();
-            if (data.error) {
-                msg.innerText = data.error;
-            } else {
-                checkAuth();
+            if (!user || !pwd) { msg.innerText = "Please enter both fields."; return; }
+            if (authMode === 'register' && pwd.length < 4) { msg.innerText = "Password too short."; return; }
+            
+            const url = authMode === 'login' ? '/api/auth/login' : '/api/auth/register';
+            
+            try {
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username: user, password: pwd})
+                });
+                const data = await res.json();
+                if (data.error) {
+                    msg.innerText = data.error;
+                } else {
+                    if (authMode === 'register') {
+                        setAuthMode('login');
+                        submitAuth(); // Auto login after register
+                    } else {
+                        checkAuth();
+                    }
+                }
+            } catch(e) {
+                msg.innerText = "Network error.";
             }
         }
         
@@ -334,7 +356,7 @@
         
         async function handleApiError(response) {
             if (response.status === 401) {
-                window.location.reload(); // Will trigger login screen
+                window.location.reload(); 
                 throw new Error("Unauthorized");
             }
             return response;
@@ -371,7 +393,7 @@
                 container.innerHTML = '';
                 
                 if (events.length === 0) {
-                    container.innerHTML = 'No pending events. Click "Fetch New Emails" above to check your inbox.';
+                    container.innerHTML = '<div style="padding: 20px; text-align: center; color: #888;">No pending events found. Click "Fetch New Emails" above.</div>';
                     return;
                 }
 
@@ -398,8 +420,8 @@
                         <div class="event-title">${event.title}</div>
                         <div class="event-account">From: ${event.account}</div>
                         <div class="event-date">${dateObj.toLocaleString()}</div>
-                        <div style="color: #ddd;">${event.description}</div>
-                        ${buttonsHtml}
+                        <div style="color: #ddd; margin-bottom: 10px;">${event.description}</div>
+                        <div>${buttonsHtml}</div>
                     `;
                     container.appendChild(card);
                 });
@@ -414,7 +436,6 @@
         async function syncEvent(id) {
             const card = document.getElementById(`event-${id}`);
             card.style.opacity = '0.5';
-            
             try {
                 const response = await fetch(`/api/events/${id}/sync`, {method: 'POST'});
                 await handleApiError(response);
@@ -449,15 +470,11 @@
                 alert("Please select a JSON file first.");
                 return;
             }
-            
             const formData = new FormData();
             formData.append("file", fileInput.files[0]);
             
             try {
-                const response = await fetch('/api/upload_client_secret', {
-                    method: 'POST',
-                    body: formData
-                });
+                const response = await fetch('/api/upload_client_secret', { method: 'POST', body: formData });
                 await handleApiError(response);
                 if (response.ok) {
                     alert("Uploaded successfully! Reloading settings.");
@@ -524,7 +541,6 @@
                         opt.innerText = m;
                         modelSelect.appendChild(opt);
                     });
-                    
                     if (savedModelSelection && data.models.includes(savedModelSelection)) {
                         modelSelect.value = savedModelSelection;
                     }
@@ -538,31 +554,34 @@
 
         function updateProviderUI() {
             const provider = document.getElementById('ai_provider').value;
-            
             document.getElementById('gemini_key_group').style.display = provider === 'gemini' ? 'block' : 'none';
             document.getElementById('openai_key_group').style.display = provider === 'openai' ? 'block' : 'none';
-            
             fetchModels(false);
         }
 
-        function createAccountRow(acc = {email_user: '', email_pass: '', email_host: 'imap.gmail.com'}) {
+        function createAccountRow(acc = {id: '', email_user: '', email_pass: '', email_host: 'imap.gmail.com'}) {
             const div = document.createElement('div');
             div.className = 'account-box';
+            div.dataset.id = acc.id;
             div.innerHTML = `
                 <div class="form-group">
                     <label>Email Address</label>
-                    <input type="email" class="acc_user" value="${acc.email_user}" placeholder="e.g. you@gmail.com">
+                    <input type="email" class="acc_user" value="${acc.email_user}" placeholder="e.g. you@gmail.com" autocomplete="off">
                 </div>
                 <div class="form-group" style="position: relative;">
                     <label>App Password</label>
-                    <input type="password" class="acc_pass" value="${acc.email_pass}" placeholder="Password">
+                    <input type="password" class="acc_pass" value="${acc.email_pass}" placeholder="Password" autocomplete="new-password">
                     <button class="toggle-password" onclick="toggleAccountPassword(this)">Show</button>
                 </div>
                 <div class="form-group">
                     <label>IMAP Host</label>
-                    <input type="text" class="acc_host" value="${acc.email_host}" placeholder="imap.gmail.com">
+                    <input type="text" class="acc_host" value="${acc.email_host}" placeholder="imap.gmail.com" autocomplete="off">
                 </div>
-                <button class="remove-btn" onclick="this.parentElement.remove()">Remove Account</button>
+                <div id="msg-${acc.id || 'new'}" style="margin-top: 5px;"></div>
+                <div class="account-actions">
+                    <button class="save-btn" onclick="saveAccount(this)" style="margin-top:0;">Save Account</button>
+                    <button class="remove-btn" onclick="removeAccount(this)" style="margin-top:0;">Delete Account</button>
+                </div>
             `;
             return div;
         }
@@ -571,16 +590,77 @@
             document.getElementById('accounts-container').appendChild(createAccountRow());
         }
 
+        async function saveAccount(btn) {
+            const box = btn.closest('.account-box');
+            const accId = box.dataset.id;
+            const msgBox = box.querySelector(`[id^='msg-']`);
+            
+            const payload = {
+                id: accId || null,
+                email_user: box.querySelector('.acc_user').value,
+                email_pass: box.querySelector('.acc_pass').value,
+                email_host: box.querySelector('.acc_host').value
+            };
+            
+            msgBox.innerHTML = '<span style="color: #aaa;">Saving...</span>';
+            
+            try {
+                const response = await fetch('/api/accounts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                await handleApiError(response);
+                const data = await response.json();
+                if (data.status === 'success') {
+                    box.dataset.id = data.id;
+                    msgBox.innerHTML = '<span class="success">Saved!</span>';
+                    setTimeout(() => msgBox.innerHTML = '', 2000);
+                } else {
+                    msgBox.innerHTML = '<span class="error">Error saving.</span>';
+                }
+            } catch(e) {
+                if (e.message !== "Unauthorized") msgBox.innerHTML = '<span class="error">Network error.</span>';
+            }
+        }
+        
+        async function removeAccount(btn) {
+            const box = btn.closest('.account-box');
+            const accId = box.dataset.id;
+            
+            if (!accId) {
+                box.remove();
+                return;
+            }
+            
+            if (!confirm("Delete this email account?")) return;
+            
+            try {
+                const response = await fetch(`/api/accounts/${accId}`, { method: 'DELETE' });
+                await handleApiError(response);
+                if (response.ok) {
+                    box.remove();
+                }
+            } catch(e) {
+                if (e.message !== "Unauthorized") alert("Failed to delete account");
+            }
+        }
+
         async function loadSettings() {
             try {
                 const response = await fetch('/api/settings');
                 await handleApiError(response);
                 const settings = await response.json();
                 
+                document.getElementById('public_url').value = settings.public_url || '';
+                
+                // Set the dynamic redirect URI display
+                const baseUrl = settings.public_url || window.location.origin;
+                document.getElementById('dynamic-redirect-uri').innerText = baseUrl.replace(/\/$/, '') + '/api/auth/google/callback';
+                
                 document.getElementById('ai_provider').value = settings.ai_provider || 'gemini';
                 document.getElementById('gemini_api_key').value = settings.gemini_api_key || '';
                 document.getElementById('openai_api_key').value = settings.openai_api_key || '';
-                
                 savedModelSelection = settings.ai_model || '';
 
                 const accContainer = document.getElementById('accounts-container');
@@ -616,29 +696,20 @@
             }
         }
 
-        async function saveSettings() {
+        async function saveAISettings() {
             const msgBox = document.getElementById('settings-msg');
             msgBox.innerHTML = 'Saving...';
-            
-            const accounts = [];
-            document.querySelectorAll('.account-box').forEach(box => {
-                accounts.push({
-                    email_user: box.querySelector('.acc_user').value,
-                    email_pass: box.querySelector('.acc_pass').value,
-                    email_host: box.querySelector('.acc_host').value
-                });
-            });
 
             const payload = {
-                accounts: accounts,
                 ai_provider: document.getElementById('ai_provider').value,
                 ai_model: document.getElementById('ai_model').value,
                 gemini_api_key: document.getElementById('gemini_api_key').value,
-                openai_api_key: document.getElementById('openai_api_key').value
+                openai_api_key: document.getElementById('openai_api_key').value,
+                public_url: document.getElementById('public_url').value
             };
             
             try {
-                const response = await fetch('/api/settings', {
+                const response = await fetch('/api/settings/ai', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
@@ -646,6 +717,9 @@
                 await handleApiError(response);
                 if (response.ok) {
                     msgBox.innerHTML = '<div class="success">Settings saved successfully!</div>';
+                    // Update dynamic URL
+                    const baseUrl = payload.public_url || window.location.origin;
+                    document.getElementById('dynamic-redirect-uri').innerText = baseUrl.replace(/\/$/, '') + '/api/auth/google/callback';
                     setTimeout(() => msgBox.innerHTML = '', 3000);
                 } else {
                     msgBox.innerHTML = '<div class="error">Failed to save settings.</div>';
