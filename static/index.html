@@ -19,7 +19,8 @@
         }
         
         body { font-family: Arial, sans-serif; margin: 0; background-color: var(--bg-color); color: var(--text-color); }
-        .nav { background-color: var(--nav-bg); overflow: hidden; border-bottom: 1px solid var(--border-color); }
+        .nav { background-color: var(--nav-bg); overflow: hidden; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between;}
+        .nav-left { display: flex; }
         .nav button { float: left; display: block; color: #f2f2f2; text-align: center; padding: 14px 16px; text-decoration: none; border: none; background: none; cursor: pointer; font-size: 16px; }
         .nav button:hover { background-color: #333; }
         .nav button.active { background-color: var(--nav-active); color: white; }
@@ -31,6 +32,8 @@
         .event-account { color: #888; font-size: 0.8em; margin-bottom: 5px; }
         .add-btn { background-color: var(--accent); color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; margin-top: 10px; }
         .add-btn:hover { background-color: var(--accent-hover); }
+        .dismiss-btn { background-color: #555; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; margin-top: 10px; margin-left: 10px; }
+        .dismiss-btn:hover { background-color: #666; }
         
         .form-group { margin-bottom: 15px; }
         .form-group label { display: block; margin-bottom: 5px; font-weight: bold; color: #ccc; }
@@ -41,7 +44,9 @@
         .add-account-btn { background-color: #444; color: white; border: 1px solid #555; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 14px; margin-bottom: 15px; }
         .add-account-btn:hover { background-color: #555; }
         .fetch-models-btn { background-color: #555; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 14px; margin-bottom: 10px; margin-top: 5px;}
-        .fetch-models-btn:hover { background-color: #666; }
+        
+        .sync-btn { background-color: #f4b400; color: #000; font-weight: bold; padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer; margin-right: 20px;}
+        .sync-btn:hover { background-color: #e0a800; }
         
         .view { display: none; }
         .view.active { display: block; }
@@ -51,22 +56,28 @@
 
         .account-box { border: 1px solid var(--border-color); padding: 15px; border-radius: 6px; margin-bottom: 15px; background: var(--container-bg); }
         .section-title { border-bottom: 1px solid var(--border-color); padding-bottom: 5px; margin-top: 30px; margin-bottom: 15px; color: #fff;}
+        
+        .badge-red { background: #f44336; color: white; padding: 2px 6px; border-radius: 4px; font-size: 12px; margin-left: 10px;}
+        .badge-green { background: #4CAF50; color: white; padding: 2px 6px; border-radius: 4px; font-size: 12px; margin-left: 10px;}
     </style>
 </head>
 <body>
     <div class="nav">
-        <button class="tab-link active" onclick="openTab('dashboard', event)">Dashboard</button>
-        <button class="tab-link" onclick="openTab('settings', event)">Settings</button>
+        <div class="nav-left">
+            <button class="tab-link active" onclick="openTab('dashboard', event)">Dashboard</button>
+            <button class="tab-link" onclick="openTab('settings', event)">Settings</button>
+        </div>
+        <button class="sync-btn" onclick="fetchEmails()">Fetch New Emails</button>
     </div>
 
     <div class="container">
         <!-- Dashboard View -->
         <div id="dashboard" class="view active">
-            <h1>AI Calendar Helper</h1>
-            <p style="color: #ccc;">Events extracted from your emails:</p>
+            <h1>Pending Calendar Events</h1>
+            <p style="color: #ccc;">Events extracted from your emails that haven't been added yet.</p>
             <div id="dashboard-msg"></div>
             <div id="events-container">
-                Loading events...
+                Loading events from database...
             </div>
         </div>
 
@@ -74,6 +85,21 @@
         <div id="settings" class="view">
             <h1>Settings</h1>
             <div id="settings-msg"></div>
+            
+            <h3 class="section-title">
+                Google Calendar Integration
+                <span id="gcal-status" class="badge-red">Not Connected</span>
+            </h3>
+            <div class="account-box">
+                <p style="margin-top:0;">To automatically sync events to Google Calendar, you must upload a <code>credentials.json</code> file from Google Cloud Console.</p>
+                <div class="form-group">
+                    <input type="file" id="client_secret_file" accept=".json">
+                    <button class="save-btn" style="font-size: 14px; margin-left: 10px;" onclick="uploadClientSecret()">Upload JSON</button>
+                </div>
+                <div id="oauth-link-container" style="display:none; margin-top: 15px;">
+                    <a id="oauth-link" href="#" class="add-btn">Login with Google to Authorize Calendar</a>
+                </div>
+            </div>
             
             <h3 class="section-title">Email Accounts</h3>
             <div id="accounts-container"></div>
@@ -114,6 +140,7 @@
     <script>
         let savedModelSelection = null;
         let modelFetchTimeout = null;
+        let googleConnected = false;
 
         function openTab(tabName, event) {
             document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
@@ -127,65 +154,156 @@
             }
             
             if (tabName === 'dashboard') {
-                fetchEvents();
+                renderLocalEvents();
             } else if (tabName === 'settings') {
                 loadSettings();
             }
         }
+        
+        async function fetchEmails() {
+            const msgBox = document.getElementById('dashboard-msg');
+            msgBox.innerHTML = '<span style="color: #f4b400;">Checking emails and running AI... This may take a minute!</span>';
+            try {
+                const response = await fetch('/api/fetch_emails');
+                const data = await response.json();
+                if (data.error) {
+                    msgBox.innerHTML = `<div class="error">${data.error}</div>`;
+                } else {
+                    msgBox.innerHTML = `<div class="success">Finished fetching. Found ${data.new_events} new events!</div>`;
+                    renderLocalEvents();
+                }
+            } catch(e) {
+                msgBox.innerHTML = '<div class="error">Failed to fetch emails.</div>';
+            }
+        }
 
-        async function fetchEvents() {
+        async function renderLocalEvents() {
             const container = document.getElementById('events-container');
             const msgBox = document.getElementById('dashboard-msg');
-            container.innerHTML = 'Loading events... This may take a moment (it checks all accounts).';
-            msgBox.innerHTML = '';
+            container.innerHTML = 'Loading from database...';
             
             try {
                 const response = await fetch('/api/events');
-                const data = await response.json();
+                const events = await response.json();
                 
-                if (data.error) {
-                    container.innerHTML = '';
-                    msgBox.innerHTML = `<div class="error">${data.error}</div>`;
+                container.innerHTML = '';
+                
+                if (events.length === 0) {
+                    container.innerHTML = 'No pending events. Click "Fetch New Emails" above to check your inbox.';
                     return;
                 }
-                renderEvents(data);
+
+                events.forEach(event => {
+                    const card = document.createElement('div');
+                    card.className = 'event-card';
+                    card.id = `event-${event.id}`;
+                    
+                    const dateObj = new Date(event.date);
+                    
+                    // Buttons logic
+                    let buttonsHtml = '';
+                    if (googleConnected) {
+                        buttonsHtml = `<button onclick="syncEvent('${event.id}')" class="add-btn">Auto-Sync to Google Calendar</button>`;
+                    } else {
+                        // Fallback to manual link
+                        const endDateObj = new Date(dateObj.getTime() + 60*60*1000); 
+                        const fmtDate = (d) => d.toISOString().replace(/-|:|\.\d\d\d/g,"");
+                        const dates = `${fmtDate(dateObj)}/${fmtDate(endDateObj)}`;
+                        const gcalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(event.title)}&dates=${dates}&details=${encodeURIComponent(event.description)}`;
+                        buttonsHtml = `<a href="${gcalUrl}" target="_blank" class="add-btn" onclick="dismissEvent('${event.id}')">Manual Add to Calendar</a>`;
+                    }
+                    buttonsHtml += `<button onclick="dismissEvent('${event.id}')" class="dismiss-btn">Dismiss</button>`;
+
+                    card.innerHTML = `
+                        <div class="event-title">${event.title}</div>
+                        <div class="event-account">From: ${event.account}</div>
+                        <div class="event-date">${dateObj.toLocaleString()}</div>
+                        <div style="color: #ddd;">${event.description}</div>
+                        ${buttonsHtml}
+                    `;
+                    container.appendChild(card);
+                });
             } catch (error) {
                 container.innerHTML = '';
-                msgBox.innerHTML = '<div class="error">Error loading events. Check server logs.</div>';
+                msgBox.innerHTML = '<div class="error">Error loading events from database.</div>';
+            }
+        }
+        
+        async function syncEvent(id) {
+            const card = document.getElementById(`event-${id}`);
+            card.style.opacity = '0.5';
+            
+            try {
+                const response = await fetch(`/api/events/${id}/sync`, {method: 'POST'});
+                const data = await response.json();
+                if (data.status === 'success') {
+                    card.remove();
+                } else {
+                    alert("Sync failed: " + data.error);
+                    card.style.opacity = '1';
+                }
+            } catch(e) {
+                alert("Network error.");
+                card.style.opacity = '1';
+            }
+        }
+        
+        async function dismissEvent(id) {
+            const card = document.getElementById(`event-${id}`);
+            card.style.opacity = '0.5';
+            try {
+                await fetch(`/api/events/${id}`, {method: 'DELETE'});
+                card.remove();
+            } catch(e) {
+                card.style.opacity = '1';
             }
         }
 
-        function renderEvents(events) {
-            const container = document.getElementById('events-container');
-            container.innerHTML = '';
-            
-            if (events.length === 0) {
-                container.innerText = 'No events found in recent emails.';
+        async function uploadClientSecret() {
+            const fileInput = document.getElementById('client_secret_file');
+            if (!fileInput.files[0]) {
+                alert("Please select a JSON file first.");
                 return;
             }
-
-            events.forEach(event => {
-                const card = document.createElement('div');
-                card.className = 'event-card';
-                
-                const dateObj = new Date(event.date);
-                const endDateObj = new Date(dateObj.getTime() + 60*60*1000); 
-                
-                const fmtDate = (d) => d.toISOString().replace(/-|:|\.\d\d\d/g,"");
-                const dates = `${fmtDate(dateObj)}/${fmtDate(endDateObj)}`;
-                
-                const gcalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(event.title)}&dates=${dates}&details=${encodeURIComponent(event.description)}`;
-
-                card.innerHTML = `
-                    <div class="event-title">${event.title}</div>
-                    ${event.account ? `<div class="event-account">From: ${event.account}</div>` : ''}
-                    <div class="event-date">${dateObj.toLocaleString()}</div>
-                    <div style="color: #ddd;">${event.description}</div>
-                    <a href="${gcalUrl}" target="_blank" class="add-btn">Add to Google Calendar</a>
-                `;
-                container.appendChild(card);
-            });
+            
+            const formData = new FormData();
+            formData.append("file", fileInput.files[0]);
+            
+            try {
+                const response = await fetch('/api/upload_client_secret', {
+                    method: 'POST',
+                    body: formData
+                });
+                if (response.ok) {
+                    alert("Uploaded successfully! Reloading settings.");
+                    loadSettings();
+                } else {
+                    alert("Upload failed.");
+                }
+            } catch(e) {
+                alert("Error uploading file.");
+            }
         }
+
+        async function setupOAuthLink() {
+            try {
+                const response = await fetch('/api/auth/google/url');
+                const data = await response.json();
+                if (data.url) {
+                    const link = document.getElementById('oauth-link');
+                    link.href = data.url;
+                    document.getElementById('oauth-link-container').style.display = 'block';
+                }
+            } catch(e) {
+                console.error("Could not fetch OAuth URL");
+            }
+        }
+
+        // Keep all the existing models logic unchanged...
+        const models = {
+            gemini: ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.0-pro"],
+            openai: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"]
+        };
 
         function debouncedFetchModels() {
             clearTimeout(modelFetchTimeout);
@@ -293,6 +411,24 @@
                 
                 updateProviderUI();
 
+                // Google Status
+                const statusBadge = document.getElementById('gcal-status');
+                googleConnected = settings.google_connected;
+                
+                if (settings.google_connected) {
+                    statusBadge.className = 'badge-green';
+                    statusBadge.innerText = 'Connected';
+                    document.getElementById('oauth-link-container').style.display = 'none';
+                } else if (settings.google_auth_ready) {
+                    statusBadge.className = 'badge-red';
+                    statusBadge.innerText = 'Needs Login';
+                    setupOAuthLink();
+                } else {
+                    statusBadge.className = 'badge-red';
+                    statusBadge.innerText = 'Missing Credentials';
+                    document.getElementById('oauth-link-container').style.display = 'none';
+                }
+
             } catch(e) {
                 console.error("Failed to load settings", e);
             }
@@ -337,7 +473,8 @@
         }
 
         // Init
-        fetchEvents();
+        // We load settings first so we know if google is connected before rendering events
+        loadSettings().then(() => renderLocalEvents());
     </script>
 </body>
 </html>

@@ -5,3 +5,7 @@ python-dotenv
 imap-tools
 google-generativeai
 openai
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
+python-multipart
