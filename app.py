@@ -513,31 +513,35 @@ async def process_user_emails(user_id: str):
                                         try:
                                             creds = Credentials.from_authorized_user_file(token_file, SCOPES)
                                             service = build('calendar', 'v3', credentials=creds)
-                                            start_time = datetime.fromisoformat(event_data['date'].replace("Z", "+00:00"))
-                                            if start_time.tzinfo is None:
-                                                start_time = start_time.replace(tzinfo=datetime.now().astimezone().tzinfo)
-                                            end_time = start_time + timedelta(hours=1)
-                                            gcal_event = {
-                                              'summary': event_data['title'],
-                                              'description': event_data['description'],
-                                              'start': {'dateTime': start_time.isoformat()},
-                                              'end': {'dateTime': end_time.isoformat()}
-                                            }
-                                            
-                                            loc = event_data.get("location", "")
-                                            if loc and loc.strip():
-                                                gcal_event['location'] = loc.strip()
+                                            try:
+                                                start_time = datetime.fromisoformat(event_data['date'].replace("Z", "+00:00"))
+                                                if start_time.tzinfo is None:
+                                                    start_time = start_time.replace(tzinfo=datetime.now().astimezone().tzinfo)
+                                                end_time = start_time + timedelta(hours=1)
+                                                gcal_event = {
+                                                  'summary': event_data['title'],
+                                                  'description': event_data['description'],
+                                                  'start': {'dateTime': start_time.isoformat()},
+                                                  'end': {'dateTime': end_time.isoformat()}
+                                                }
                                                 
-                                            service.events().insert(calendarId='primary', body=gcal_event).execute()
-                                            c.execute("UPDATE events SET status='added' WHERE id=?", (event_id,))
-                                            logger.info(f"Background auto-synced event '{event_data['title']}' for {user_id}")
+                                                loc = event_data.get("location", "")
+                                                if loc and loc.strip():
+                                                    gcal_event['location'] = loc.strip()
+                                                    
+                                                service.events().insert(calendarId='primary', body=gcal_event).execute()
+                                                c.execute("UPDATE events SET status='added' WHERE id=?", (event_id,))
+                                                logger.info(f"Background auto-synced event '{event_data['title']}' for {user_id}")
+                                            except Exception as date_err:
+                                                logger.error(f"Failed to auto-sync event {event_data['title']} (bad date format?): {date_err}")
                                         except Exception as e:
                                             logger.error(f"Background auto-sync failed for {user_id}: {e}")
                                     
                                     total_events_found += 1
                         except ValueError as ve:
-                            conn.close()
-                            return {"error": f"AI Error on {email_user}: {str(ve)}", "new_events": total_events_found}
+                            logger.error(f"AI API Error on {email_user}: {str(ve)}")
+                            # Skip this email for now without marking it processed if the API failed
+                            continue
                     
                     c.execute("INSERT INTO processed_emails_v2 (id, user_id, account, subject, date) VALUES (?, ?, ?, ?, ?)", 
                         (msg.uid, user_id, email_user, msg.subject, msg.date.isoformat() if msg.date else ""))
