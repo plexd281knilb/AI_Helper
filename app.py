@@ -373,6 +373,11 @@ async def process_user_emails(user_id: str):
                     if text_content and len(text_content) > 10:
                         try:
                             event_data_list = extract_event(text_content, msg.date, msg.subject, settings)
+                            
+                            # Gemini Free Tier limit is 15 RPM (1 request every 4 seconds)
+                            if settings.get("ai_provider", "gemini") == "gemini":
+                                await asyncio.sleep(4.1)
+                                
                             if event_data_list:
                                 for event_data in event_data_list:
                                     event_id = str(uuid.uuid4())
