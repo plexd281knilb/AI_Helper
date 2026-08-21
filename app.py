@@ -371,6 +371,8 @@ async def process_user_emails(user_id: str):
                                         creds = Credentials.from_authorized_user_file(token_file, SCOPES)
                                         service = build('calendar', 'v3', credentials=creds)
                                         start_time = datetime.fromisoformat(event_data['date'].replace("Z", "+00:00"))
+                                        if start_time.tzinfo is None:
+                                            start_time = start_time.replace(tzinfo=datetime.now().astimezone().tzinfo)
                                         end_time = start_time + timedelta(hours=1)
                                         gcal_event = {
                                           'summary': event_data['title'],
@@ -504,6 +506,8 @@ async def sync_event(event_id: str, user_id: str = Depends(verify_auth)):
             conn.close()
             return {"error": "Event not found"}
         start_time = datetime.fromisoformat(event['date'].replace("Z", "+00:00"))
+        if start_time.tzinfo is None:
+            start_time = start_time.replace(tzinfo=datetime.now().astimezone().tzinfo)
         end_time = start_time + timedelta(hours=1)
         gcal_event = {
           'summary': event['title'],
