@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Calendar Helper</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f9; }
+        .container { max-width: 800px; margin: auto; }
+        .event-card { background: white; padding: 15px; margin-bottom: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .event-title { font-size: 1.2em; font-weight: bold; margin-bottom: 5px; }
+        .event-date { color: #555; font-size: 0.9em; margin-bottom: 10px; }
+        .add-btn { background-color: #4285F4; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; }
+        .add-btn:hover { background-color: #357ae8; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>AI Calendar Helper</h1>
+        <p>Events extracted from your emails:</p>
+        <div id="events-container">
+            Loading events...
+        </div>
+    </div>
+
+    <script>
+        async function fetchEvents() {
+            try {
+                const response = await fetch('/api/events');
+                const events = await response.json();
+                renderEvents(events);
+            } catch (error) {
+                document.getElementById('events-container').innerText = 'Error loading events.';
+            }
+        }
+
+        function renderEvents(events) {
+            const container = document.getElementById('events-container');
+            container.innerHTML = '';
+            
+            if (events.length === 0) {
+                container.innerText = 'No events found.';
+                return;
+            }
+
+            events.forEach(event => {
+                const card = document.createElement('div');
+                card.className = 'event-card';
+                
+                // Format date for Google Calendar link (YMDTHMSZ)
+                const dateObj = new Date(event.date);
+                const endDateObj = new Date(dateObj.getTime() + 60*60*1000); // add 1 hour
+                
+                const fmtDate = (d) => d.toISOString().replace(/-|:|\.\d\d\d/g,"");
+                const dates = `${fmtDate(dateObj)}/${fmtDate(endDateObj)}`;
+                
+                const gcalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(event.title)}&dates=${dates}&details=${encodeURIComponent(event.description)}`;
+
+                card.innerHTML = `
+                    <div class="event-title">${event.title}</div>
+                    <div class="event-date">${dateObj.toLocaleString()}</div>
+                    <div>${event.description}</div>
+                    <br>
+                    <a href="${gcalUrl}" target="_blank" class="add-btn">Add to Google Calendar</a>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        fetchEvents();
+    </script>
+</body>
+</html>

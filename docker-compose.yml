@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  ai-helper:
+    build: .
+    container_name: ai_helper
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - EMAIL_HOST=${EMAIL_HOST}
+      - EMAIL_USER=${EMAIL_USER}
+      - EMAIL_PASS=${EMAIL_PASS}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - ./data:/app/data
