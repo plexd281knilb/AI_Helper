@@ -5,32 +5,108 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Calendar Helper</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f9; }
-        .container { max-width: 800px; margin: auto; }
+        body { font-family: Arial, sans-serif; margin: 0; background-color: #f4f4f9; }
+        .nav { background-color: #333; overflow: hidden; }
+        .nav button { float: left; display: block; color: #f2f2f2; text-align: center; padding: 14px 16px; text-decoration: none; border: none; background: none; cursor: pointer; font-size: 16px; }
+        .nav button:hover { background-color: #ddd; color: black; }
+        .nav button.active { background-color: #4285F4; color: white; }
+        
+        .container { max-width: 800px; margin: 20px auto; padding: 0 20px; }
         .event-card { background: white; padding: 15px; margin-bottom: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         .event-title { font-size: 1.2em; font-weight: bold; margin-bottom: 5px; }
         .event-date { color: #555; font-size: 0.9em; margin-bottom: 10px; }
         .add-btn { background-color: #4285F4; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; }
         .add-btn:hover { background-color: #357ae8; }
+        
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+        .form-group input { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        .save-btn { background-color: #4CAF50; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        .save-btn:hover { background-color: #45a049; }
+        
+        .view { display: none; }
+        .view.active { display: block; }
+        
+        .error { color: red; font-weight: bold; margin-bottom: 15px; }
+        .success { color: green; font-weight: bold; margin-bottom: 15px; }
     </style>
 </head>
 <body>
+    <div class="nav">
+        <button class="tab-link active" onclick="openTab('dashboard', event)">Dashboard</button>
+        <button class="tab-link" onclick="openTab('settings', event)">Settings</button>
+    </div>
+
     <div class="container">
-        <h1>AI Calendar Helper</h1>
-        <p>Events extracted from your emails:</p>
-        <div id="events-container">
-            Loading events...
+        <!-- Dashboard View -->
+        <div id="dashboard" class="view active">
+            <h1>AI Calendar Helper</h1>
+            <p>Events extracted from your emails:</p>
+            <div id="dashboard-msg"></div>
+            <div id="events-container">
+                Loading events...
+            </div>
+        </div>
+
+        <!-- Settings View -->
+        <div id="settings" class="view">
+            <h1>Settings</h1>
+            <div id="settings-msg"></div>
+            <div class="form-group">
+                <label for="email_user">Gmail Address</label>
+                <input type="email" id="email_user" placeholder="e.g. you@gmail.com">
+            </div>
+            <div class="form-group">
+                <label for="email_pass">Gmail App Password</label>
+                <input type="password" id="email_pass" placeholder="16-character app password">
+                <small style="color: #666; display: block; margin-top: 5px;">Required for IMAP access. Go to Google Account Security -> App Passwords.</small>
+            </div>
+            <div class="form-group">
+                <label for="gemini_api_key">Gemini API Key</label>
+                <input type="password" id="gemini_api_key" placeholder="Your Gemini API Key">
+            </div>
+            <button class="save-btn" onclick="saveSettings()">Save Settings</button>
         </div>
     </div>
 
     <script>
+        function openTab(tabName, event) {
+            document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-link').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabName).classList.add('active');
+            
+            if (event) {
+                event.currentTarget.classList.add('active');
+            } else {
+                document.querySelector(`.tab-link[onclick*="${tabName}"]`).classList.add('active');
+            }
+            
+            if (tabName === 'dashboard') {
+                fetchEvents();
+            } else if (tabName === 'settings') {
+                loadSettings();
+            }
+        }
+
         async function fetchEvents() {
+            const container = document.getElementById('events-container');
+            const msgBox = document.getElementById('dashboard-msg');
+            container.innerHTML = 'Loading events... This may take a moment.';
+            msgBox.innerHTML = '';
+            
             try {
                 const response = await fetch('/api/events');
-                const events = await response.json();
-                renderEvents(events);
+                const data = await response.json();
+                
+                if (data.error) {
+                    container.innerHTML = '';
+                    msgBox.innerHTML = `<div class="error">${data.error}</div>`;
+                    return;
+                }
+                renderEvents(data);
             } catch (error) {
-                document.getElementById('events-container').innerText = 'Error loading events.';
+                container.innerHTML = '';
+                msgBox.innerHTML = '<div class="error">Error loading events. Check server logs.</div>';
             }
         }
 
@@ -39,7 +115,7 @@
             container.innerHTML = '';
             
             if (events.length === 0) {
-                container.innerText = 'No events found.';
+                container.innerText = 'No events found in recent emails.';
                 return;
             }
 
@@ -47,9 +123,8 @@
                 const card = document.createElement('div');
                 card.className = 'event-card';
                 
-                // Format date for Google Calendar link (YMDTHMSZ)
                 const dateObj = new Date(event.date);
-                const endDateObj = new Date(dateObj.getTime() + 60*60*1000); // add 1 hour
+                const endDateObj = new Date(dateObj.getTime() + 60*60*1000); 
                 
                 const fmtDate = (d) => d.toISOString().replace(/-|:|\.\d\d\d/g,"");
                 const dates = `${fmtDate(dateObj)}/${fmtDate(endDateObj)}`;
@@ -67,6 +142,46 @@
             });
         }
 
+        async function loadSettings() {
+            try {
+                const response = await fetch('/api/settings');
+                const settings = await response.json();
+                document.getElementById('email_user').value = settings.email_user || '';
+                document.getElementById('email_pass').value = settings.email_pass || '';
+                document.getElementById('gemini_api_key').value = settings.gemini_api_key || '';
+            } catch(e) {
+                console.error("Failed to load settings", e);
+            }
+        }
+
+        async function saveSettings() {
+            const msgBox = document.getElementById('settings-msg');
+            msgBox.innerHTML = 'Saving...';
+            
+            const payload = {
+                email_user: document.getElementById('email_user').value,
+                email_pass: document.getElementById('email_pass').value,
+                gemini_api_key: document.getElementById('gemini_api_key').value
+            };
+            
+            try {
+                const response = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (response.ok) {
+                    msgBox.innerHTML = '<div class="success">Settings saved successfully!</div>';
+                    setTimeout(() => msgBox.innerHTML = '', 3000);
+                } else {
+                    msgBox.innerHTML = '<div class="error">Failed to save settings.</div>';
+                }
+            } catch(e) {
+                msgBox.innerHTML = '<div class="error">An error occurred while saving.</div>';
+            }
+        }
+
+        // Init
         fetchEvents();
     </script>
 </body>
