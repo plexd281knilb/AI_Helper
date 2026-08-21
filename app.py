@@ -47,7 +47,7 @@ if not any(isinstance(h, RotatingFileHandler) for h in root_logger.handlers):
 logger = logging.getLogger("AIHelper")
 logger.info("Application starting up...")
 
-# --- Database Init & Migration ---
+# --- Database Setup ---
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
@@ -57,6 +57,11 @@ def init_db():
                     password_hash TEXT,
                     settings TEXT
                  )''')
+    c.execute('''CREATE TABLE IF NOT EXISTS sessions (
+                    token TEXT PRIMARY KEY,
+                    user_id TEXT,
+                    expires REAL
+                 )''')
     c.execute('''CREATE TABLE IF NOT EXISTS email_accounts (
                     id TEXT PRIMARY KEY,
                     user_id TEXT,
@@ -64,25 +69,25 @@ def init_db():
                     email_pass TEXT,
                     email_host TEXT
                  )''')
-                 
+    c.execute('''CREATE TABLE IF NOT EXISTS events (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT,
+                    account TEXT,
+                    title TEXT,
+                    date TEXT,
+                    description TEXT,
+                    status TEXT
+                 )''')
     c.execute('''CREATE TABLE IF NOT EXISTS processed_emails_v2 (
                     id TEXT,
                     user_id TEXT,
                     account TEXT,
                     PRIMARY KEY (id, user_id, account)
                  )''')
-                 
+    
+    # Check if we need to migrate processed_emails to processed_emails_v2
     c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='processed_emails'")
     if c.fetchone():
-        try:
-            c.execute("INSERT OR IGNORE INTO processed_emails_v2 SELECT id, user_id, account FROM processed_emails")
-            c.execute("DROP TABLE processed_emails")
-        except: pass
-
-    c.execute('''CREATE TABLE IF NOT EXISTS events (
-                    id TEXT PRIMARY KEY,
-                    user_id TEXT,
-                    email_id TEXT,
                     account TEXT,
                     title TEXT,
                     date TEXT,
