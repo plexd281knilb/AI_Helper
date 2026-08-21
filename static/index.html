@@ -87,13 +87,28 @@
         @media (max-width: 600px) {
             .nav { flex-direction: column; align-items: stretch; }
             .nav-left { flex-direction: row; justify-content: space-around; width: 100%; border-bottom: 1px solid var(--border-color); }
-            .nav-left button { flex: 1; }
+            .nav-left button { flex: 1; padding: 12px 0; }
             .nav > div:last-child { display: flex; justify-content: space-between; padding: 10px; }
             .sync-btn { margin: 0 5px; flex: 1; padding: 12px; font-size: 14px; text-align: center; }
             
             .add-btn, .dismiss-btn { width: 100%; box-sizing: border-box; margin-left: 0; text-align: center; }
             .account-actions { flex-direction: column; gap: 10px; }
             .account-actions button { width: 100%; }
+        }
+        
+        /* Logs Terminal */
+        #log-output {
+            background: #000;
+            color: #0f0;
+            padding: 15px;
+            border-radius: 5px;
+            height: 500px;
+            overflow-y: scroll;
+            font-family: monospace;
+            font-size: 13px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            border: 1px solid #444;
         }
     </style>
 </head>
@@ -117,6 +132,7 @@
             <div class="nav-left">
                 <button class="tab-link active" onclick="openTab('dashboard', event)">Dashboard</button>
                 <button class="tab-link" onclick="openTab('settings', event)">Settings</button>
+                <button class="tab-link" onclick="openTab('logs', event)">Logs</button>
             </div>
             <div>
                 <button class="sync-btn" onclick="fetchEmails()">Fetch New Emails</button>
@@ -218,6 +234,17 @@
                     <button class="save-btn" style="width: 100%;" onclick="saveAISettings()">Save General Settings</button>
                 </div>
             </div>
+
+            <!-- Logs View -->
+            <div id="logs" class="view">
+                <h1>System Logs</h1>
+                <p style="color: #ccc;">Displays the latest system activities, errors, and successes (max 1MB).</p>
+                <div style="margin-bottom: 15px;">
+                    <button onclick="loadLogs()" class="fetch-models-btn" style="margin: 0; padding: 10px 15px;">Refresh Logs</button>
+                </div>
+                <pre id="log-output">Loading logs...</pre>
+            </div>
+            
         </div>
     </div>
 
@@ -351,6 +378,8 @@
                 renderLocalEvents();
             } else if (tabName === 'settings') {
                 loadSettings();
+            } else if (tabName === 'logs') {
+                loadLogs();
             }
         }
         
@@ -376,7 +405,7 @@
                     renderLocalEvents();
                 }
             } catch(e) {
-                if (e.message !== "Unauthorized") msgBox.innerHTML = '<div class="error">Failed to fetch emails.</div>';
+                if (e.message !== "Unauthorized") msgBox.innerHTML = '<div class="error">Failed to fetch emails. Check the Logs tab for details.</div>';
             }
         }
 
@@ -654,7 +683,6 @@
                 
                 document.getElementById('public_url').value = settings.public_url || '';
                 
-                // Set the dynamic redirect URI display
                 const baseUrl = settings.public_url || window.location.origin;
                 document.getElementById('dynamic-redirect-uri').innerText = baseUrl.replace(/\/$/, '') + '/api/auth/google/callback';
                 
@@ -717,7 +745,6 @@
                 await handleApiError(response);
                 if (response.ok) {
                     msgBox.innerHTML = '<div class="success">Settings saved successfully!</div>';
-                    // Update dynamic URL
                     const baseUrl = payload.public_url || window.location.origin;
                     document.getElementById('dynamic-redirect-uri').innerText = baseUrl.replace(/\/$/, '') + '/api/auth/google/callback';
                     setTimeout(() => msgBox.innerHTML = '', 3000);
@@ -726,6 +753,21 @@
                 }
             } catch(e) {
                 if (e.message !== "Unauthorized") msgBox.innerHTML = '<div class="error">An error occurred while saving.</div>';
+            }
+        }
+        
+        async function loadLogs() {
+            const output = document.getElementById('log-output');
+            output.innerText = "Loading logs...";
+            try {
+                const response = await fetch('/api/logs');
+                await handleApiError(response);
+                const data = await response.json();
+                output.innerText = data.logs || "Log file empty.";
+                // Scroll to bottom
+                output.scrollTop = output.scrollHeight;
+            } catch(e) {
+                if (e.message !== "Unauthorized") output.innerText = "Failed to fetch logs.";
             }
         }
 
