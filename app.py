@@ -508,14 +508,66 @@ async def get_models(req: ModelRequest):
         return {"error": str(e)}
     return {"models": models_list}
 
-# --- Webview Link Resolver ---
+# --- Webview & Newsletter Link Resolver ---
+def clean_page_html(html_str: str) -> str:
+    """
+    Strips scripts, styles, navigation bars, menus, and footers from fetched web pages
+    so the AI receives only the actual announcement content and details.
+    """
+    if not html_str:
+        return ""
+    cleaned = re.sub(r'<script.*?</script>', '', html_str, flags=re.DOTALL | re.IGNORECASE)
+    cleaned = re.sub(r'<style.*?</style>', '', cleaned, flags=re.DOTALL | re.IGNORECASE)
+    cleaned = re.sub(r'<head.*?</head>', '', cleaned, flags=re.DOTALL | re.IGNORECASE)
+    cleaned = re.sub(r'<input[^>]*>', '', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'<!--.*?-->', '', cleaned, flags=re.DOTALL)
+    cleaned = re.sub(r'<header.*?</header>', '', cleaned, flags=re.DOTALL | re.IGNORECASE)
+    cleaned = re.sub(r'<nav.*?</nav>', '', cleaned, flags=re.DOTALL | re.IGNORECASE)
+    cleaned = re.sub(r'<footer.*?</footer>', '', cleaned, flags=re.DOTALL | re.IGNORECASE)
+    cleaned = re.sub(r'<aside.*?</aside>', '', cleaned, flags=re.DOTALL | re.IGNORECASE)
+    cleaned = re.sub(r'<br\s*/?>', '\n', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'</?(?:p|div|tr|h1|h2|h3|h4|h5|h6|li|blockquote|table|section|article)[^>]*>', '\n', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'<td[^>]*>', ' ', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'<a\s+[^>]*href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', r'\2 (\1)', cleaned, flags=re.DOTALL | re.IGNORECASE)
+    cleaned = re.sub(r'<[^>]+>', '', cleaned)
+    cleaned = unescape(cleaned)
+    
+    nav_phrases = ['skip to main content', 'close menu', 'open menu', 'mobile search', 'clear search', 'search-form', 'mobile main nav', 'mobile utility', 'mobile cta']
+    lines = []
+    for line in cleaned.split('\n'):
+        l = line.strip()
+        if not l or any(np in l.lower() for np in nav_phrases):
+            continue
+        lines.append(l)
+    return '\n'.join(lines)
+
 def resolve_email_webview_links(text_content: str) -> str:
     """
-    If an email is a notification stub that points to an external webview (e.g. MySchoolApp, Blackbaud,
-    Podium push, newsletter webviews), automatically fetch the page content so the AI and user
-    can read the actual announcement.
+    If an email is a notification stub, eNotice digest, or newsletter that links to online
+    articles (e.g. MySchoolApp, Finalsite, Blackboard, eNotice, Blackbaud), automatically fetches
+    the page content for each linked announcement so the AI extracts all calendar events.
     """
     if not text_content:
+        return text_content
+        
+    found_urls = []
+    paren_urls = re.findall(r'\(\s*(https?://[^\s\)]+)\s*\)', text_content, re.IGNORECASE)
+    raw_urls = re.findall(r'https?://[^\s<>"\'\)]+', text_content, re.IGNORECASE)
+    
+    ignore_domains = ['instagram.com', 'facebook.com', 'twitter.com', 'x.com', 'linkedin.com', 'youtube.com', 'youtu.be']
+    
+    for u in (paren_urls + raw_urls):
+        u_clean = u.rstrip('.,;()')
+        if any(ign in u_clean.lower() for ign in ['unsubscribe', 'optout', 'privacy', 'manage-preferences']):
+            continue
+        if any(dom in u_clean.lower() for dom in ignore_domains):
+            continue
+        if u_clean.endswith(('.png', '.jpg', '.jpeg', '.gif', '.css', '.js', '.ico')):
+            continue
+        if u_clean not in found_urls:
+            found_urls.append(u_clean)
+            
+    if not found_urls:
         return text_content
         
     stub_patterns = [
@@ -524,70 +576,49 @@ def resolve_email_webview_links(text_content: str) -> str:
         r"view this email in (?:your )?browser",
         r"view in (?:web )?browser",
         r"view online",
-        r"podium/push/default\.aspx",
+        r"myenotice\.com",
+        r"podium/push",
         r"pushpage",
         r"having trouble viewing this email"
     ]
     
-    is_stub = any(re.search(pat, text_content, re.IGNORECASE) for pat in stub_patterns)
-    if not is_stub and len(text_content.strip()) > 350:
+    is_stub_or_digest = any(re.search(pat, text_content, re.IGNORECASE) for pat in stub_patterns)
+    if not is_stub_or_digest and len(text_content.strip()) > 600:
         return text_content
         
-    found_urls = []
-    paren_urls = re.findall(r'\(\s*(https?://[^\s\)]+)\s*\)', text_content, re.IGNORECASE)
-    for u in paren_urls:
-        if "unsubscribe" not in u.lower():
-            found_urls.append(u)
-            
-    if not found_urls:
-        all_urls = re.findall(r'https?://[^\s<>"\')]+', text_content, re.IGNORECASE)
-        for u in all_urls:
-            u_clean = u.rstrip('.,;()')
-            if "unsubscribe" not in u_clean.lower() and not u_clean.endswith(('.png', '.jpg', '.jpeg', '.gif', '.css', '.js')):
-                found_urls.append(u_clean)
+    fetched_sections = []
+    # Follow up to 5 article links per email
+    for target_url in found_urls[:5]:
+        try:
+            req = urllib.request.Request(
+                target_url,
+                headers={
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+                }
+            )
+            with urllib.request.urlopen(req, timeout=10) as response:
+                html_bytes = response.read(250000)
+                charset = response.headers.get_content_charset() or 'utf-8'
+                html_text = html_bytes.decode(charset, errors='replace')
                 
-    if not found_urls:
-        return text_content
-        
-    target_url = found_urls[0]
-    
-    try:
-        req = urllib.request.Request(
-            target_url,
-            headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-            }
-        )
-        with urllib.request.urlopen(req, timeout=12) as response:
-            html_bytes = response.read(250000)
-            charset = response.headers.get_content_charset() or 'utf-8'
-            html_text = html_bytes.decode(charset, errors='replace')
+            title_m = re.search(r'<title>(.*?)</title>', html_text, re.IGNORECASE | re.DOTALL)
+            page_title = title_m.group(1).strip() if title_m else ''
+            page_title = re.sub(r'\s*\|\s*.*$', '', page_title).strip()
             
-        title_m = re.search(r'<title>(.*?)</title>', html_text, re.IGNORECASE | re.DOTALL)
-        page_title = title_m.group(1).strip() if title_m else ''
+            body_text = clean_page_html(html_text)
+            if len(body_text.strip()) > 30:
+                header_line = f"=== [FETCHED ANNOUNCEMENT: {page_title}] ===" if page_title else "=== [FETCHED ANNOUNCEMENT] ==="
+                fetched_sections.append(f"{header_line}\nSource: {target_url}\n\n{body_text}")
+                logger.info(f"Auto-fetched announcement from {target_url} ({len(body_text)} chars)")
+        except Exception as e:
+            logger.warning(f"Could not auto-fetch link {target_url}: {e}")
+            
+    if fetched_sections:
+        return text_content + "\n\n" + "\n\n".join(fetched_sections)
         
-        cleaned = re.sub(r'<script.*?</script>', '', html_text, flags=re.DOTALL | re.IGNORECASE)
-        cleaned = re.sub(r'<style.*?</style>', '', cleaned, flags=re.DOTALL | re.IGNORECASE)
-        cleaned = re.sub(r'<head.*?</head>', '', cleaned, flags=re.DOTALL | re.IGNORECASE)
-        cleaned = re.sub(r'<input[^>]*>', '', cleaned, flags=re.IGNORECASE)
-        cleaned = re.sub(r'<br\s*/?>', '\n', cleaned, flags=re.IGNORECASE)
-        cleaned = re.sub(r'</?(?:p|div|tr|h1|h2|h3|h4|h5|h6|li|blockquote|table|section|article)[^>]*>', '\n', cleaned, flags=re.IGNORECASE)
-        cleaned = re.sub(r'<td[^>]*>', ' ', cleaned, flags=re.IGNORECASE)
-        cleaned = re.sub(r'<[^>]+>', '', cleaned)
-        cleaned = unescape(cleaned)
-        
-        lines = [line.strip() for line in cleaned.split('\n')]
-        body_text = '\n'.join(l for l in lines if l)
-        
-        if len(body_text.strip()) > 40:
-            header_line = f"=== [FETCHED WEBVIEW ANNOUNCEMENT: {page_title}] ===" if page_title else "=== [FETCHED WEBVIEW ANNOUNCEMENT] ==="
-            enriched_content = f"{text_content}\n\n{header_line}\nSource: {target_url}\n\n{body_text}"
-            logger.info(f"Auto-fetched webview content from {target_url} ({len(body_text)} chars)")
-            return enriched_content
-    except Exception as e:
-        logger.warning(f"Could not auto-fetch webview link {target_url}: {e}")
-        
+    return text_content
+
 # --- HTML to Clean Text Converter ---
 def html_to_clean_text(html_str: str) -> str:
     """
