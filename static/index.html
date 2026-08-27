@@ -811,6 +811,24 @@
             renderHistory();
         }
 
+        function formatEmailBodyHtml(rawBody) {
+            if (!rawBody || !rawBody.trim()) {
+                return '<span style="color:#777; font-style:italic;">No full email body was captured for this entry (processed prior to update). Click "Delete Memory" and fetch again to re-process and view full email content.</span>';
+            }
+            
+            // Clean up any literal HTML linebreaks
+            let cleaned = rawBody.replace(/<br\s*\/?>/gi, '\n');
+            let escaped = escapeHtml(cleaned);
+            
+            // Auto-convert URLs into clickable hyperlinks
+            escaped = escaped.replace(/(https?:\/\/[^\s<>"'\)]+)/gi, '<a href="$1" target="_blank" rel="noopener noreferrer" style="color: #60a5fa; text-decoration: underline; word-break: break-all;">$1</a>');
+            
+            // Highlight fetched webview announcement headers
+            escaped = escaped.replace(/(=== \[FETCHED WEBVIEW ANNOUNCEMENT(?:: ([^\]]+))?\] ===)/gi, '<div style="background: rgba(96, 165, 250, 0.15); border: 1px solid #3b82f6; border-radius: 6px; padding: 8px 12px; margin: 15px 0 10px 0; color: #93c5fd; font-weight: bold; display: flex; align-items: center; gap: 8px;">🌐 $1</div>');
+            
+            return escaped;
+        }
+
         function renderHistory() {
             const container = document.getElementById('history-container');
             const searchInput = document.getElementById('history-search');
@@ -868,12 +886,7 @@
                 const reasonIcon = isAdded ? '🟢' : 'ℹ️';
                 const reasonTitle = isAdded ? 'Events Added to Calendar' : 'Not Added to Calendar';
 
-                let emailBodyHtml = '';
-                if (bodyText && bodyText.trim()) {
-                    emailBodyHtml = escapeHtml(bodyText);
-                } else {
-                    emailBodyHtml = '<span style="color:#777; font-style:italic;">No full email body was captured for this entry (processed prior to update). Click "Delete Memory" and fetch again to re-process and view full email content.</span>';
-                }
+                const emailBodyHtml = formatEmailBodyHtml(bodyText);
 
                 card.innerHTML = `
                     <div class="history-header">

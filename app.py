@@ -5,6 +5,9 @@ import uuid
 import secrets
 import hashlib
 import logging
+import re
+import urllib.request
+from html import unescape
 from logging.handlers import RotatingFileHandler
 from datetime import datetime, timedelta
 from typing import List, Optional
@@ -433,6 +436,88 @@ async def get_models(req: ModelRequest):
         return {"error": str(e)}
     return {"models": models_list}
 
+# --- Webview Link Resolver ---
+def resolve_email_webview_links(text_content: str) -> str:
+    """
+    If an email is a notification stub that points to an external webview (e.g. MySchoolApp, Blackbaud,
+    Podium push, newsletter webviews), automatically fetch the page content so the AI and user
+    can read the actual announcement.
+    """
+    if not text_content:
+        return text_content
+        
+    stub_patterns = [
+        r"to view the contents of this message",
+        r"click on the following link",
+        r"view this email in (?:your )?browser",
+        r"view in (?:web )?browser",
+        r"view online",
+        r"podium/push/default\.aspx",
+        r"pushpage",
+        r"having trouble viewing this email"
+    ]
+    
+    is_stub = any(re.search(pat, text_content, re.IGNORECASE) for pat in stub_patterns)
+    if not is_stub and len(text_content.strip()) > 350:
+        return text_content
+        
+    found_urls = []
+    paren_urls = re.findall(r'\(\s*(https?://[^\s\)]+)\s*\)', text_content, re.IGNORECASE)
+    for u in paren_urls:
+        if "unsubscribe" not in u.lower():
+            found_urls.append(u)
+            
+    if not found_urls:
+        all_urls = re.findall(r'https?://[^\s<>"\')]+', text_content, re.IGNORECASE)
+        for u in all_urls:
+            u_clean = u.rstrip('.,;()')
+            if "unsubscribe" not in u_clean.lower() and not u_clean.endswith(('.png', '.jpg', '.jpeg', '.gif', '.css', '.js')):
+                found_urls.append(u_clean)
+                
+    if not found_urls:
+        return text_content
+        
+    target_url = found_urls[0]
+    
+    try:
+        req = urllib.request.Request(
+            target_url,
+            headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+            }
+        )
+        with urllib.request.urlopen(req, timeout=12) as response:
+            html_bytes = response.read(250000)
+            charset = response.headers.get_content_charset() or 'utf-8'
+            html_text = html_bytes.decode(charset, errors='replace')
+            
+        title_m = re.search(r'<title>(.*?)</title>', html_text, re.IGNORECASE | re.DOTALL)
+        page_title = title_m.group(1).strip() if title_m else ''
+        
+        cleaned = re.sub(r'<script.*?</script>', '', html_text, flags=re.DOTALL | re.IGNORECASE)
+        cleaned = re.sub(r'<style.*?</style>', '', cleaned, flags=re.DOTALL | re.IGNORECASE)
+        cleaned = re.sub(r'<head.*?</head>', '', cleaned, flags=re.DOTALL | re.IGNORECASE)
+        cleaned = re.sub(r'<input[^>]*>', '', cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r'<br\s*/?>', '\n', cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r'</?(?:p|div|tr|h1|h2|h3|h4|h5|h6|li|blockquote|table|section|article)[^>]*>', '\n', cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r'<td[^>]*>', ' ', cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r'<[^>]+>', '', cleaned)
+        cleaned = unescape(cleaned)
+        
+        lines = [line.strip() for line in cleaned.split('\n')]
+        body_text = '\n'.join(l for l in lines if l)
+        
+        if len(body_text.strip()) > 40:
+            header_line = f"=== [FETCHED WEBVIEW ANNOUNCEMENT: {page_title}] ===" if page_title else "=== [FETCHED WEBVIEW ANNOUNCEMENT] ==="
+            enriched_content = f"{text_content}\n\n{header_line}\nSource: {target_url}\n\n{body_text}"
+            logger.info(f"Auto-fetched webview content from {target_url} ({len(body_text)} chars)")
+            return enriched_content
+    except Exception as e:
+        logger.warning(f"Could not auto-fetch webview link {target_url}: {e}")
+        
+    return text_content
+
 # --- AI Parsing ---
 def extract_event(text: str, date: datetime, subject: str, settings: dict) -> dict:
     custom_instructions = settings.get("custom_prompt", "")
@@ -569,6 +654,9 @@ async def process_user_emails(user_id: str):
                     text_content = msg.text or msg.html or ''
                     subject_str = msg.subject or 'No Subject'
                     date_iso = msg.date.isoformat() if msg.date else ""
+                    
+                    # Auto-resolve link-only webview stubs (e.g. MySchoolApp, Blackbaud, Podium push)
+                    text_content = resolve_email_webview_links(text_content)
                     
                     if text_content and len(text_content.strip()) > 10:
                         try:
