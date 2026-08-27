@@ -136,23 +136,62 @@ def init_db():
 
 init_db()
 
-# --- Authentication Logic ---
-SESSIONS = {} 
+# --- Authentication & Persistent Session Logic ---
+SESSION_CACHE = {} # In-memory cache for high performance: token -> (user_id, expires_timestamp)
 
 class AuthRequest(BaseModel):
     username: str
     password: str
 
+def get_user_id_from_token(token: Optional[str]) -> Optional[str]:
+    if not token:
+        return None
+    now_ts = datetime.now().timestamp()
+    
+    # 1. Check fast memory cache
+    cached = SESSION_CACHE.get(token)
+    if cached:
+        user_id, expires = cached
+        if expires and expires > now_ts:
+            return user_id
+        else:
+            del SESSION_CACHE[token]
+            
+    # 2. Check persistent SQLite database
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        c = conn.cursor()
+        c.execute("SELECT user_id, expires FROM sessions WHERE token=?", (token,))
+        row = c.fetchone()
+        if row:
+            user_id, expires = row[0], row[1]
+            if expires and expires > now_ts:
+                SESSION_CACHE[token] = (user_id, expires)
+                conn.close()
+                return user_id
+            else:
+                # Clean up expired token
+                c.execute("DELETE FROM sessions WHERE token=?", (token,))
+                conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.error(f"Error querying session token from database: {e}")
+        
+    return None
+
 def verify_auth(request: Request):
     token = request.cookies.get("session_token")
-    if token not in SESSIONS:
+    user_id = get_user_id_from_token(token)
+    if not user_id:
         raise HTTPException(status_code=401, detail="Unauthorized")
-    return SESSIONS[token]
+    return user_id
 
 @app.get("/api/auth/status")
 async def auth_status(request: Request):
     token = request.cookies.get("session_token")
-    logged_in = token in SESSIONS
+    user_id = get_user_id_from_token(token)
+    logged_in = user_id is not None
+    
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("SELECT COUNT(*) FROM users")
@@ -186,23 +225,55 @@ async def auth_login(req: AuthRequest, response: Response):
     c = conn.cursor()
     c.execute("SELECT id FROM users WHERE username=? AND password_hash=?", (req.username, req_hash))
     user = c.fetchone()
-    conn.close()
     if not user:
+        conn.close()
         logger.warning(f"Failed login attempt for username: {req.username}")
         return {"error": "Invalid username or password"}
+        
+    user_id = user[0]
     token = secrets.token_hex(32)
-    SESSIONS[token] = user[0]
-    response.set_cookie(key="session_token", value=token, httponly=True, max_age=86400*30)
-    logger.info(f"User {req.username} logged in successfully.")
+    # 90-day session expiration
+    expires_ts = (datetime.now() + timedelta(days=90)).timestamp()
+    
+    try:
+        c.execute("INSERT OR REPLACE INTO sessions (token, user_id, expires) VALUES (?, ?, ?)", (token, user_id, expires_ts))
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Failed to persist session token to database: {e}")
+    finally:
+        conn.close()
+        
+    SESSION_CACHE[token] = (user_id, expires_ts)
+    
+    # Set persistent cookie for 90 days with root path
+    response.set_cookie(
+        key="session_token",
+        value=token,
+        httponly=True,
+        max_age=86400 * 90,
+        expires=86400 * 90,
+        samesite="lax",
+        path="/"
+    )
+    logger.info(f"User {req.username} logged in successfully (session cached in DB for 90 days).")
     return {"status": "success"}
 
 @app.post("/api/auth/logout")
 async def auth_logout(request: Request, response: Response):
     token = request.cookies.get("session_token")
-    if token in SESSIONS:
-        del SESSIONS[token]
-        logger.info("A user logged out.")
-    response.delete_cookie("session_token")
+    if token:
+        SESSION_CACHE.pop(token, None)
+        try:
+            conn = sqlite3.connect(DB_FILE)
+            c = conn.cursor()
+            c.execute("DELETE FROM sessions WHERE token=?", (token,))
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            logger.error(f"Error removing session from database: {e}")
+            
+    response.delete_cookie("session_token", path="/")
+    logger.info("A user logged out.")
     return {"status": "success"}
 
 # --- User Management ---
@@ -271,6 +342,7 @@ async def delete_user(target_user_id: str, current_user: str = Depends(verify_au
     c.execute("DELETE FROM email_accounts WHERE user_id=?", (target_user_id,))
     c.execute("DELETE FROM events WHERE user_id=?", (target_user_id,))
     c.execute("DELETE FROM processed_emails_v2 WHERE user_id=?", (target_user_id,))
+    c.execute("DELETE FROM sessions WHERE user_id=?", (target_user_id,))
     conn.commit()
     conn.close()
     return {"status": "success"}
