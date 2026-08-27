@@ -280,12 +280,15 @@ class AccountSave(BaseModel):
     email_host: str = "imap.gmail.com"
 
 class SettingsSave(BaseModel):
-    ai_provider: str
-    ai_model: str
-    gemini_api_key: str = ""
-    openai_api_key: str = ""
-    public_url: str = ""
-    custom_prompt: str = ""
+    ai_provider: Optional[str] = "gemini"
+    ai_model: Optional[str] = "gemini-1.5-flash"
+    gemini_api_key: Optional[str] = ""
+    openai_api_key: Optional[str] = ""
+    public_url: Optional[str] = ""
+    custom_prompt: Optional[str] = ""
+    fetch_interval_minutes: Optional[int] = 60
+    lookback_days: Optional[int] = 7
+    email_fetch_limit: Optional[int] = 20
 
 @app.get("/api/settings")
 async def read_settings(user_id: str = Depends(verify_auth)):
@@ -307,6 +310,10 @@ async def read_settings(user_id: str = Depends(verify_auth)):
         "openai_api_key": settings.get("openai_api_key", ""),
         "public_url": settings.get("public_url", ""),
         "custom_prompt": settings.get("custom_prompt", ""),
+        "fetch_interval_minutes": int(settings.get("fetch_interval_minutes", 60)),
+        "lookback_days": int(settings.get("lookback_days", 7)),
+        "email_fetch_limit": int(settings.get("email_fetch_limit", 20)),
+        "last_scan_time": settings.get("last_scan_time", None),
         "google_auth_ready": os.path.exists(CLIENT_SECRETS_FILE),
         "google_connected": os.path.exists(token_file)
     }
@@ -318,11 +325,11 @@ async def save_ai_settings(s: SettingsSave, user_id: str = Depends(verify_auth))
     c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
     row = c.fetchone()
     current = json.loads(row[0]) if row and row[0] else {}
-    current.update(s.dict())
+    current.update({k: v for k, v in s.dict().items() if v is not None})
     c.execute("UPDATE users SET settings=? WHERE id=?", (json.dumps(current), user_id))
     conn.commit()
     conn.close()
-    logger.info(f"User {user_id} saved AI settings.")
+    logger.info(f"User {user_id} saved settings (job interval: {s.fetch_interval_minutes}m, lookback: {s.lookback_days}d).")
     return {"status": "success"}
 
 @app.post("/api/accounts")
@@ -541,6 +548,8 @@ async def process_user_emails(user_id: str):
         return {"error": "No email accounts configured.", "new_events": 0}
         
     total_events_found = 0
+    lookback_days = int(settings.get("lookback_days", 7) or 7)
+    email_fetch_limit = int(settings.get("email_fetch_limit", 20) or 20)
     
     for account in accounts:
         email_user = account['email_user']
@@ -549,8 +558,8 @@ async def process_user_emails(user_id: str):
         
         try:
             with MailBox(email_host).login(email_user, email_pass) as mailbox:
-                date_limit = (datetime.now() - timedelta(days=7)).date()
-                messages = mailbox.fetch(AND(date_gte=date_limit), limit=20, reverse=True)
+                date_limit = (datetime.now() - timedelta(days=lookback_days)).date()
+                messages = mailbox.fetch(AND(date_gte=date_limit), limit=email_fetch_limit, reverse=True)
                 
                 for msg in messages:
                     c.execute("SELECT id FROM processed_emails_v2 WHERE id=? AND user_id=? AND account=?", (msg.uid, user_id, email_user))
@@ -644,30 +653,69 @@ async def process_user_emails(user_id: str):
             conn.close()
             return {"error": f"Email connection failed for {email_user}. Check password/host.", "new_events": total_events_found}
             
+    # Record last scan time in user settings
+    try:
+        settings["last_scan_time"] = datetime.now().isoformat()
+        c.execute("UPDATE users SET settings=? WHERE id=?", (json.dumps(settings), user_id))
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error updating last_scan_time for user {user_id}: {e}")
+
     conn.close()
     return {"status": "success", "new_events": total_events_found}
+
+# In-memory timestamp tracking for user job runs
+USER_LAST_SCAN = {}
 
 @app.get("/api/fetch_emails")
 async def fetch_emails_endpoint(user_id: str = Depends(verify_auth)):
     logger.info(f"User {user_id} triggered manual email fetch.")
+    USER_LAST_SCAN[user_id] = datetime.now().timestamp()
     return await process_user_emails(user_id)
 
 # --- Background Task Scheduler ---
 async def scheduled_email_fetch():
+    logger.info("Background job scheduler initialized.")
     while True:
-        await asyncio.sleep(3600)  # Sleep for 1 hour
-        logger.info("Running scheduled hourly email fetch for all users...")
         try:
             conn = sqlite3.connect(DB_FILE)
+            conn.row_factory = sqlite3.Row
             c = conn.cursor()
-            c.execute("SELECT DISTINCT user_id FROM email_accounts")
-            users = [r[0] for r in c.fetchall()]
+            c.execute("SELECT id, settings FROM users")
+            users = c.fetchall()
             conn.close()
-            
-            for user_id in users:
-                await process_user_emails(user_id)
+
+            now_ts = datetime.now().timestamp()
+            for u in users:
+                user_id = u["id"]
+                s = json.loads(u["settings"] or "{}")
+                interval_minutes = int(s.get("fetch_interval_minutes", 60))
+                
+                # If interval is 0 or negative, auto-fetch is disabled
+                if interval_minutes <= 0:
+                    continue
+                    
+                interval_seconds = interval_minutes * 60
+                last_scan = USER_LAST_SCAN.get(user_id)
+                if last_scan is None:
+                    last_scan_str = s.get("last_scan_time")
+                    if last_scan_str:
+                        try:
+                            last_scan = datetime.fromisoformat(last_scan_str).timestamp()
+                        except Exception:
+                            last_scan = 0
+                    else:
+                        last_scan = 0
+                    USER_LAST_SCAN[user_id] = last_scan
+                
+                if (now_ts - last_scan) >= interval_seconds:
+                    logger.info(f"Triggering scheduled background email scan for user {user_id} (frequency: every {interval_minutes}m)...")
+                    USER_LAST_SCAN[user_id] = now_ts
+                    await process_user_emails(user_id)
         except Exception as e:
-            logger.error(f"Error in background fetch scheduler: {e}")
+            logger.error(f"Error in background job scheduler: {e}")
+
+        await asyncio.sleep(30) # Poll every 30 seconds
 
 @app.on_event("startup")
 async def startup_event():

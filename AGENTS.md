@@ -112,8 +112,10 @@ All tables are initialized and automatically migrated on startup in `init_db()` 
 ### 2. Email Ingestion (`process_user_emails`)
 - Loops through all configured `email_accounts` for a user.
 - Connects via IMAP (`MailBox.login`).
-- Fetches messages from the past 7 days (`AND(date_gte=...)`, limit 20 per account).
+- Reads user-configured `lookback_days` (default 7 days) and `email_fetch_limit` (default 20 per account).
+- Fetches messages (`AND(date_gte=...)`, reverse order).
 - Checks `processed_emails_v2` to skip already-analyzed emails.
+- Persists `last_scan_time` in user settings upon scan completion.
 
 ### 3. AI Extraction & Reasoning (`extract_event`)
 - Formulates a structured prompt including custom user instructions (if configured).
@@ -137,8 +139,13 @@ All tables are initialized and automatically migrated on startup in `init_db()` 
   - Category filters: **All**, **Events Added**, and **No Events**.
   - Single and bulk deletion of memory items (to allow re-processing if needed).
 
-### 6. Background Worker
-- An `asyncio` task (`scheduled_email_fetch`) triggers hourly background scans across all configured users and accounts.
+### 6. Background Worker & Job Scheduling (`scheduled_email_fetch`)
+- An `asyncio` background task polls every 30 seconds to check if any user is due for an automated email scan.
+- Each user can customize:
+  - **Auto-Fetch Frequency**: Every 15m, 30m, 1h (default), 2h, 4h, 8h, 12h, 24h, custom minutes, or disabled (manual only).
+  - **Lookback Window**: Past 1, 3, 7 (default), 14, or 30 days.
+  - **Batch Limit**: Max 10, 20 (default), 50, or 100 emails per account per run.
+- Real-time status badge and next-run countdown display in the Settings tab.
 
 ---
 

@@ -476,6 +476,76 @@
                 
                 <!-- No reset history button here anymore -->
 
+                <!-- Scheduled Jobs & Automation Section -->
+                <h3 class="section-title">
+                    Job Frequency &amp; Automation
+                    <span id="automation-status-badge" class="badge-green">Auto-Scan Active</span>
+                </h3>
+                <div class="account-box">
+                    <div id="job-settings-msg"></div>
+                    
+                    <div class="form-group">
+                        <label for="fetch_interval_select">Email Ingestion &amp; Auto-Fetch Frequency</label>
+                        <select id="fetch_interval_select" onchange="onIntervalSelectChange()">
+                            <option value="15">Every 15 Minutes</option>
+                            <option value="30">Every 30 Minutes</option>
+                            <option value="60">Every 1 Hour (Default)</option>
+                            <option value="120">Every 2 Hours</option>
+                            <option value="240">Every 4 Hours</option>
+                            <option value="480">Every 8 Hours</option>
+                            <option value="720">Every 12 Hours</option>
+                            <option value="1440">Once a Day (Every 24 Hours)</option>
+                            <option value="0">Disabled (Manual Only)</option>
+                            <option value="custom">Custom (Specify in minutes)...</option>
+                        </select>
+                        <small style="color:#888;">Controls how often the background service automatically scans your inboxes for upcoming calendar events and deadlines.</small>
+                    </div>
+
+                    <div class="form-group" id="custom_interval_group" style="display: none;">
+                        <label for="custom_interval_input">Custom Frequency (in Minutes)</label>
+                        <input type="number" id="custom_interval_input" min="5" max="10080" placeholder="e.g. 45">
+                        <small style="color:#888;">Enter scan interval in minutes (minimum 5 minutes recommended).</small>
+                    </div>
+
+                    <div class="form-group" style="margin-top: 20px;">
+                        <label for="lookback_days">Email Scan Lookback Window</label>
+                        <select id="lookback_days">
+                            <option value="1">Past 1 Day (24 Hours)</option>
+                            <option value="3">Past 3 Days</option>
+                            <option value="7">Past 7 Days (Default)</option>
+                            <option value="14">Past 14 Days (2 Weeks)</option>
+                            <option value="30">Past 30 Days (1 Month)</option>
+                        </select>
+                        <small style="color:#888;">How far back into your inbox the scanner will search for messages during each run.</small>
+                    </div>
+
+                    <div class="form-group" style="margin-top: 20px;">
+                        <label for="email_fetch_limit">Max Emails per Account per Scan</label>
+                        <select id="email_fetch_limit">
+                            <option value="10">10 Emails</option>
+                            <option value="20">20 Emails (Default)</option>
+                            <option value="50">50 Emails</option>
+                            <option value="100">100 Emails</option>
+                        </select>
+                        <small style="color:#888;">Limits the number of incoming emails analyzed per IMAP account in a single batch.</small>
+                    </div>
+
+                    <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 14px 16px; margin-top: 20px; font-size: 13.5px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                            <div>
+                                <strong style="color: #fff;">Last Automated Scan:</strong> 
+                                <span id="last-scan-display" style="color: #a0a5b1; margin-left: 5px;">Never / Awaiting scan</span>
+                            </div>
+                            <div>
+                                <strong style="color: #fff;">Next Run Estimate:</strong> 
+                                <span id="next-scan-display" style="color: #60a5fa; margin-left: 5px;">Calculating...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button class="save-btn" style="width: 100%; margin-top: 20px;" onclick="saveJobSettings()">Save Job &amp; Schedule Settings</button>
+                </div>
+
                 <!-- General Settings Section -->
                 <h3 class="section-title">General & AI Configuration</h3>
                 <div class="account-box" style="margin-bottom: 30px;">
@@ -1413,6 +1483,108 @@
             }
         }
 
+        let lastLoadedScanTime = null;
+
+        function onIntervalSelectChange() {
+            const selectVal = document.getElementById('fetch_interval_select').value;
+            const customGroup = document.getElementById('custom_interval_group');
+            if (selectVal === 'custom') {
+                customGroup.style.display = 'block';
+            } else {
+                customGroup.style.display = 'none';
+            }
+            updateAutomationStatusPreview(lastLoadedScanTime);
+        }
+
+        function getSelectedIntervalMinutes() {
+            const selectVal = document.getElementById('fetch_interval_select').value;
+            if (selectVal === 'custom') {
+                const customVal = parseInt(document.getElementById('custom_interval_input').value, 10);
+                return isNaN(customVal) || customVal < 1 ? 60 : customVal;
+            }
+            return parseInt(selectVal, 10) || 0;
+        }
+
+        function updateAutomationStatusPreview(lastScanIso = null) {
+            const intervalMin = getSelectedIntervalMinutes();
+            const badge = document.getElementById('automation-status-badge');
+            const lastScanEl = document.getElementById('last-scan-display');
+            const nextScanEl = document.getElementById('next-scan-display');
+
+            if (!badge || !nextScanEl) return;
+
+            if (intervalMin <= 0) {
+                badge.className = 'badge-red';
+                badge.innerText = 'Disabled (Manual Only)';
+                nextScanEl.innerText = 'Disabled (Manual Fetch Only)';
+                nextScanEl.style.color = '#ff5252';
+            } else {
+                badge.className = 'badge-green';
+                const formatted = intervalMin >= 60 ? (intervalMin % 60 === 0 ? `${intervalMin/60}h` : `${intervalMin}m`) : `${intervalMin}m`;
+                badge.innerText = `Auto-Scan Active (Every ${formatted})`;
+                
+                if (lastScanIso) {
+                    const lastDate = new Date(lastScanIso);
+                    if (lastScanEl) lastScanEl.innerText = lastDate.toLocaleString();
+
+                    const nextTimeMs = lastDate.getTime() + (intervalMin * 60 * 1000);
+                    const nowMs = Date.now();
+                    const diffMin = Math.round((nextTimeMs - nowMs) / 60000);
+
+                    if (diffMin <= 0) {
+                        nextScanEl.innerText = 'Due momentarily';
+                        nextScanEl.style.color = '#10b981';
+                    } else {
+                        nextScanEl.innerText = `In ~${diffMin} min (${new Date(nextTimeMs).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})})`;
+                        nextScanEl.style.color = '#60a5fa';
+                    }
+                } else {
+                    if (lastScanEl) lastScanEl.innerText = 'Never (Awaiting first scan)';
+                    nextScanEl.innerText = `In ~${intervalMin} min`;
+                    nextScanEl.style.color = '#60a5fa';
+                }
+            }
+        }
+
+        function collectFullSettingsPayload() {
+            return {
+                ai_provider: document.getElementById('ai_provider').value,
+                ai_model: document.getElementById('ai_model').value,
+                gemini_api_key: document.getElementById('gemini_api_key').value,
+                openai_api_key: document.getElementById('openai_api_key').value,
+                public_url: document.getElementById('public_url').value,
+                custom_prompt: document.getElementById('custom_prompt').value,
+                fetch_interval_minutes: getSelectedIntervalMinutes(),
+                lookback_days: parseInt(document.getElementById('lookback_days').value, 10) || 7,
+                email_fetch_limit: parseInt(document.getElementById('email_fetch_limit').value, 10) || 20
+            };
+        }
+
+        async function saveJobSettings() {
+            const msgBox = document.getElementById('job-settings-msg');
+            msgBox.innerHTML = '<span style="color: #aaa;">Saving schedule settings...</span>';
+
+            const payload = collectFullSettingsPayload();
+            
+            try {
+                const response = await fetch('/api/settings/ai', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                await handleApiError(response);
+                if (response.ok) {
+                    msgBox.innerHTML = '<div class="success">Job automation settings saved successfully!</div>';
+                    updateAutomationStatusPreview(lastLoadedScanTime);
+                    setTimeout(() => msgBox.innerHTML = '', 3000);
+                } else {
+                    msgBox.innerHTML = '<div class="error">Failed to save job settings.</div>';
+                }
+            } catch(e) {
+                if (e.message !== "Unauthorized") msgBox.innerHTML = '<div class="error">An error occurred while saving.</div>';
+            }
+        }
+
         async function loadSettings() {
             try {
                 const response = await fetch('/api/settings');
@@ -1429,6 +1601,33 @@
                 document.getElementById('openai_api_key').value = settings.openai_api_key || '';
                 document.getElementById('custom_prompt').value = settings.custom_prompt || '';
                 savedModelSelection = settings.ai_model || '';
+
+                // Job Schedule settings
+                const intervalMinutes = settings.fetch_interval_minutes !== undefined ? settings.fetch_interval_minutes : 60;
+                const standardIntervals = [0, 15, 30, 60, 120, 240, 480, 720, 1440];
+                const intervalSelect = document.getElementById('fetch_interval_select');
+                const customGroup = document.getElementById('custom_interval_group');
+                const customInput = document.getElementById('custom_interval_input');
+                
+                if (standardIntervals.includes(intervalMinutes)) {
+                    intervalSelect.value = String(intervalMinutes);
+                    customGroup.style.display = 'none';
+                    customInput.value = '';
+                } else {
+                    intervalSelect.value = 'custom';
+                    customGroup.style.display = 'block';
+                    customInput.value = intervalMinutes;
+                }
+
+                if (settings.lookback_days) {
+                    document.getElementById('lookback_days').value = String(settings.lookback_days);
+                }
+                if (settings.email_fetch_limit) {
+                    document.getElementById('email_fetch_limit').value = String(settings.email_fetch_limit);
+                }
+
+                lastLoadedScanTime = settings.last_scan_time || null;
+                updateAutomationStatusPreview(lastLoadedScanTime);
 
                 const accContainer = document.getElementById('accounts-container');
                 accContainer.innerHTML = '';
@@ -1467,14 +1666,7 @@
             const msgBox = document.getElementById('settings-msg');
             msgBox.innerHTML = 'Saving...';
 
-            const payload = {
-                ai_provider: document.getElementById('ai_provider').value,
-                ai_model: document.getElementById('ai_model').value,
-                gemini_api_key: document.getElementById('gemini_api_key').value,
-                openai_api_key: document.getElementById('openai_api_key').value,
-                public_url: document.getElementById('public_url').value,
-                custom_prompt: document.getElementById('custom_prompt').value
-            };
+            const payload = collectFullSettingsPayload();
             
             try {
                 const response = await fetch('/api/settings/ai', {
@@ -1489,6 +1681,7 @@
                     msgBox.innerHTML = '<div class="success">Settings saved successfully!</div>';
                     const baseUrl = payload.public_url || window.location.origin;
                     document.getElementById('dynamic-redirect-uri').innerText = baseUrl.replace(/\/$/, '') + '/api/auth/google/callback';
+                    updateAutomationStatusPreview(lastLoadedScanTime);
                     setTimeout(() => msgBox.innerHTML = '', 3000);
                 } else {
                     msgBox.innerHTML = '<div class="error">Failed to save settings.</div>';
