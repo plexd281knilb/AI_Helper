@@ -516,7 +516,54 @@ def resolve_email_webview_links(text_content: str) -> str:
     except Exception as e:
         logger.warning(f"Could not auto-fetch webview link {target_url}: {e}")
         
-    return text_content
+# --- HTML to Clean Text Converter ---
+def html_to_clean_text(html_str: str) -> str:
+    """
+    Converts raw HTML email bodies into clean, human-readable text while preserving
+    structural line breaks, headings, lists, and hyperlinks.
+    """
+    if not html_str:
+        return ""
+    cleaned = re.sub(r'<script.*?</script>', '', html_str, flags=re.DOTALL | re.IGNORECASE)
+    cleaned = re.sub(r'<style.*?</style>', '', cleaned, flags=re.DOTALL | re.IGNORECASE)
+    cleaned = re.sub(r'<head.*?</head>', '', cleaned, flags=re.DOTALL | re.IGNORECASE)
+    cleaned = re.sub(r'<input[^>]*>', '', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'<!--.*?-->', '', cleaned, flags=re.DOTALL)
+    cleaned = re.sub(r'<br\s*/?>', '\n', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'</?(?:p|div|tr|h1|h2|h3|h4|h5|h6|li|blockquote|table|section|article)[^>]*>', '\n', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'<td[^>]*>', ' ', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'<a\s+[^>]*href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', r'\2 (\1)', cleaned, flags=re.DOTALL | re.IGNORECASE)
+    cleaned = re.sub(r'<[^>]+>', '', cleaned)
+    cleaned = unescape(cleaned)
+    lines = [line.strip() for line in cleaned.split('\n')]
+    return '\n'.join(l for l in lines if l)
+
+def extract_email_text(msg) -> str:
+    """
+    Intelligently extracts the most complete email body between plain text and HTML.
+    Handles newsletters/eNotice emails that leave plain text as dummy placeholders (e.g. '<!--placeholder-->')
+    or empty stubs while having rich HTML bodies.
+    """
+    plain_text = (getattr(msg, 'text', '') or '').strip()
+    html_raw = getattr(msg, 'html', '') or ''
+    html_text = html_to_clean_text(html_raw) if html_raw else ""
+    
+    placeholder_patterns = [
+        r"^<!--.*?-->$",
+        r"<!--placeholder-->",
+        r"^placeholder$",
+        r"^loading\.{0,3}$"
+    ]
+    is_placeholder = any(re.search(pat, plain_text, re.IGNORECASE) for pat in placeholder_patterns)
+    
+    if is_placeholder or not plain_text:
+        content = html_text or plain_text
+    elif html_text and len(html_text) > len(plain_text) * 1.5 and len(html_text) > 50:
+        content = html_text
+    else:
+        content = plain_text
+        
+    return resolve_email_webview_links(content)
 
 # --- AI Parsing ---
 def extract_event(text: str, date: datetime, subject: str, settings: dict) -> dict:
@@ -651,12 +698,9 @@ async def process_user_emails(user_id: str):
                     if c.fetchone(): continue
                         
                     sender = getattr(msg, 'from_', '') or ''
-                    text_content = msg.text or msg.html or ''
+                    text_content = extract_email_text(msg)
                     subject_str = msg.subject or 'No Subject'
                     date_iso = msg.date.isoformat() if msg.date else ""
-                    
-                    # Auto-resolve link-only webview stubs (e.g. MySchoolApp, Blackbaud, Podium push)
-                    text_content = resolve_email_webview_links(text_content)
                     
                     if text_content and len(text_content.strip()) > 10:
                         try:
