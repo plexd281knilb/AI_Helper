@@ -120,6 +120,198 @@
         }
         
         /* Logs Terminal */
+        /* History View Styles */
+        .history-card {
+            border: 1px solid var(--border-color);
+            padding: 18px 20px;
+            border-radius: var(--radius-lg);
+            margin-bottom: 14px;
+            background: var(--container-bg);
+            box-shadow: var(--shadow-sm);
+            transition: border-color 0.2s, transform 0.15s, box-shadow 0.2s, background 0.2s;
+            cursor: pointer;
+        }
+        .history-card:hover {
+            border-color: #3b82f6;
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
+        .history-card.expanded {
+            border-color: #4285F4;
+            background: #1c2029;
+        }
+        .history-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 15px;
+        }
+        .history-header-left {
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            flex: 1;
+            min-width: 0;
+        }
+        .history-subject {
+            font-weight: 700;
+            font-size: 16px;
+            color: #fff;
+            line-height: 1.35;
+            word-break: break-word;
+        }
+        .history-meta {
+            color: #8b949e;
+            font-size: 13.5px;
+            margin-top: 5px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px 12px;
+            align-items: center;
+        }
+        .history-meta span {
+            display: inline-flex;
+            align-items: center;
+        }
+        .history-reason-preview {
+            margin-top: 8px;
+            font-size: 13px;
+            color: #94a3b8;
+            background: rgba(0, 0, 0, 0.25);
+            padding: 6px 10px;
+            border-radius: var(--radius-sm);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+            word-break: break-word;
+        }
+        .history-badge {
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 11.5px;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            white-space: nowrap;
+            letter-spacing: 0.2px;
+        }
+        .badge-added {
+            background: rgba(16, 185, 129, 0.18);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.4);
+        }
+        .badge-no-event {
+            background: rgba(148, 163, 184, 0.12);
+            color: #cbd5e1;
+            border: 1px solid rgba(148, 163, 184, 0.25);
+        }
+        .history-expand-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: #7a8290;
+            font-size: 12.5px;
+            margin-top: 6px;
+            font-weight: 500;
+        }
+        .history-card:hover .history-expand-indicator {
+            color: var(--accent);
+        }
+        .history-details {
+            display: none;
+            margin-top: 18px;
+            padding-top: 18px;
+            border-top: 1px solid var(--border-color);
+            cursor: default;
+        }
+        .history-details.show {
+            display: block;
+            animation: fadeIn 0.25s ease;
+        }
+        .reason-box {
+            padding: 16px 18px;
+            border-radius: var(--radius-md);
+            margin-bottom: 18px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .reason-box-added {
+            background: rgba(16, 185, 129, 0.08);
+            border-left: 4px solid #10b981;
+            border-top: 1px solid rgba(16, 185, 129, 0.2);
+            border-right: 1px solid rgba(16, 185, 129, 0.2);
+            border-bottom: 1px solid rgba(16, 185, 129, 0.2);
+            color: #e2e4e9;
+        }
+        .reason-box-no-event {
+            background: rgba(59, 130, 246, 0.08);
+            border-left: 4px solid #3b82f6;
+            border-top: 1px solid rgba(59, 130, 246, 0.2);
+            border-right: 1px solid rgba(59, 130, 246, 0.2);
+            border-bottom: 1px solid rgba(59, 130, 246, 0.2);
+            color: #e2e4e9;
+        }
+        .email-viewer {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: var(--radius-md);
+            overflow: hidden;
+        }
+        .email-viewer-header {
+            background: #161b22;
+            padding: 12px 16px;
+            border-bottom: 1px solid #30363d;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .email-viewer-body {
+            padding: 18px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, monospace, sans-serif;
+            font-size: 13.5px;
+            line-height: 1.65;
+            white-space: pre-wrap;
+            word-break: break-word;
+            color: #c9d1d9;
+            max-height: 450px;
+            overflow-y: auto;
+            user-select: text;
+        }
+        .filter-chip {
+            background: #222630;
+            border: 1px solid var(--border-color);
+            color: #a0a5b1;
+            padding: 7px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .filter-chip:hover:not(.active) {
+            background: #2e3442;
+            color: #fff;
+        }
+        .filter-chip.active {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+        }
+        .copy-btn {
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #c9d1d9;
+            padding: 5px 12px;
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        /* Logs Terminal */
         #log-output {
             background: #0d1117;
             color: #10b981;
@@ -190,16 +382,26 @@
             <!-- History View -->
             <div id="history" class="view">
                 <h1>Email Processing History</h1>
-                <p style="color: #ccc;">Manage which emails the AI has already processed.</p>
+                <p style="color: #ccc;">Click on any email to view the full message and inspect why events were or were not added to your calendar.</p>
                 <div id="history-msg"></div>
                 
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; margin-top: 20px;">
-                    <h3 class="section-title" style="margin: 0;">Recently Processed Emails</h3>
-                    <div>
-                        <input type="checkbox" id="selectAllHistory" onchange="toggleSelectAll('history-checkbox')" style="transform: scale(1.2); cursor: pointer;">
-                        <label for="selectAllHistory" style="margin-left: 5px; margin-right: 15px; cursor: pointer; color: #ccc;">Select All</label>
-                        <button class="remove-btn" onclick="bulkDeleteHistory()" style="padding: 6px 12px; font-size: 14px;">Delete Selected Memory</button>
+                <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; margin-top: 20px; margin-bottom: 16px;">
+                    <div style="flex: 1; min-width: 260px;">
+                        <input type="text" id="history-search" placeholder="🔍 Search history by subject, sender, or reason..." oninput="filterHistory()" style="width: 100%; padding: 12px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--input-bg); color: #fff; font-size: 14px; box-sizing: border-box;">
                     </div>
+                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                        <button class="filter-chip active" id="filter-all" onclick="setHistoryFilter('all')">All (<span id="count-all">0</span>)</button>
+                        <button class="filter-chip" id="filter-added" onclick="setHistoryFilter('added')">Events Added (<span id="count-added">0</span>)</button>
+                        <button class="filter-chip" id="filter-no-event" onclick="setHistoryFilter('no_event')">No Events (<span id="count-no-event">0</span>)</button>
+                    </div>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; background: rgba(255,255,255,0.03); padding: 12px 16px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                    <div style="display: flex; align-items: center;">
+                        <input type="checkbox" id="selectAllHistory" onchange="toggleSelectAll('history-checkbox')" style="transform: scale(1.2); cursor: pointer;">
+                        <label for="selectAllHistory" style="margin-left: 8px; cursor: pointer; color: #ccc; font-size: 14px; font-weight: 500;">Select All</label>
+                    </div>
+                    <button class="remove-btn" onclick="bulkDeleteHistory()" style="padding: 6px 14px; font-size: 13px; margin: 0;">Delete Selected Memory</button>
                 </div>
                 <div id="history-container">
                     Loading history...
@@ -478,45 +680,230 @@
         }
         
         // --- HISTORY LOGIC ---
+        let allHistoryItems = [];
+        let currentHistoryFilter = 'all'; // 'all', 'added', 'no_event'
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return String(text)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
         async function loadHistory() {
             const container = document.getElementById('history-container');
-            container.innerHTML = 'Loading history...';
+            container.innerHTML = '<div style="color:#aaa; text-align:center; padding:20px;">Loading history...</div>';
             try {
                 const response = await fetch('/api/history');
                 await handleApiError(response);
-                const history = await response.json();
+                allHistoryItems = await response.json();
                 
-                if (history.length === 0) {
-                    container.innerHTML = '<div style="color:#aaa; text-align:center; padding:20px;">No history found.</div>';
-                    return;
-                }
-                
-                container.innerHTML = '';
-                history.forEach(item => {
-                    const div = document.createElement('div');
-                    div.className = 'account-box';
-                    div.style.display = 'flex';
-                    div.style.justifyContent = 'space-between';
-                    div.style.alignItems = 'center';
-                    
-                    const dateStr = item.date ? new Date(item.date).toLocaleString() : 'Unknown Date';
-                    const subject = item.subject || 'No Subject';
-                    
-                    div.innerHTML = `
-                        <div style="display: flex; align-items: center;">
-                            <input type="checkbox" class="history-checkbox" value='{"account":"${item.account}","id":"${item.id}"}' style="margin-right: 15px; transform: scale(1.2); cursor: pointer;">
-                            <div>
-                                <div style="font-weight:bold; font-size:16px;">${subject}</div>
-                                <div style="color:#888; font-size:14px; margin-top:5px;">From: ${item.account} &nbsp;&bull;&nbsp; Date: ${dateStr} &nbsp;&bull;&nbsp; UID: ${item.id}</div>
-                            </div>
-                        </div>
-                        <button class="remove-btn" style="margin-left:20px; flex-shrink:0;" onclick="deleteHistoryItem('${item.account}', '${item.id}')">Delete Memory</button>
-                    `;
-                    container.appendChild(div);
-                });
+                updateHistoryCounts();
+                renderHistory();
             } catch(e) {
                 if (e.message !== "Unauthorized") container.innerHTML = '<div class="error">Failed to load history.</div>';
             }
+        }
+
+        function isItemAdded(item) {
+            if (item.status === 'added') return true;
+            if (item.status === 'no_event') return false;
+            const r = (item.reason || '').toLowerCase();
+            return r.includes('extracted') || r.includes('auto-synced') || r.includes('added to calendar');
+        }
+
+        function updateHistoryCounts() {
+            const total = allHistoryItems.length;
+            const added = allHistoryItems.filter(item => isItemAdded(item)).length;
+            const noEvent = total - added;
+
+            const cAll = document.getElementById('count-all');
+            const cAdded = document.getElementById('count-added');
+            const cNoEvent = document.getElementById('count-no-event');
+
+            if (cAll) cAll.innerText = total;
+            if (cAdded) cAdded.innerText = added;
+            if (cNoEvent) cNoEvent.innerText = noEvent;
+        }
+
+        function setHistoryFilter(filter) {
+            currentHistoryFilter = filter;
+            document.querySelectorAll('.filter-chip').forEach(btn => btn.classList.remove('active'));
+            const activeBtn = document.getElementById(`filter-${filter === 'no_event' ? 'no-event' : filter}`);
+            if (activeBtn) activeBtn.classList.add('active');
+            renderHistory();
+        }
+
+        function filterHistory() {
+            renderHistory();
+        }
+
+        function renderHistory() {
+            const container = document.getElementById('history-container');
+            const searchInput = document.getElementById('history-search');
+            const searchTerm = (searchInput ? searchInput.value : '').toLowerCase().trim();
+
+            let items = allHistoryItems;
+
+            // Apply category filter
+            if (currentHistoryFilter === 'added') {
+                items = items.filter(item => isItemAdded(item));
+            } else if (currentHistoryFilter === 'no_event') {
+                items = items.filter(item => !isItemAdded(item));
+            }
+
+            // Apply search term
+            if (searchTerm) {
+                items = items.filter(item => {
+                    const subj = (item.subject || '').toLowerCase();
+                    const acc = (item.account || '').toLowerCase();
+                    const sender = (item.sender || '').toLowerCase();
+                    const reason = (item.reason || '').toLowerCase();
+                    const body = (item.body || '').toLowerCase();
+                    return subj.includes(searchTerm) || acc.includes(searchTerm) || sender.includes(searchTerm) || reason.includes(searchTerm) || body.includes(searchTerm);
+                });
+            }
+
+            if (items.length === 0) {
+                if (allHistoryItems.length === 0) {
+                    container.innerHTML = '<div style="color:#aaa; text-align:center; padding:30px; border: 1px dashed #333; border-radius: 8px;">No email history recorded yet. When you fetch emails, processed emails will appear here.</div>';
+                } else {
+                    container.innerHTML = '<div style="color:#aaa; text-align:center; padding:30px; border: 1px dashed #333; border-radius: 8px;">No emails matching your search or filter.</div>';
+                }
+                return;
+            }
+
+            container.innerHTML = '';
+            items.forEach((item, idx) => {
+                const isAdded = isItemAdded(item);
+                const dateStr = item.date ? new Date(item.date).toLocaleString() : 'Unknown Date';
+                const subject = item.subject || '(No Subject)';
+                const sender = item.sender ? item.sender : item.account;
+                const reasonText = item.reason || (isAdded ? 'Calendar events were detected and added.' : 'No calendar events or deadlines detected.');
+                const bodyText = item.body;
+
+                const card = document.createElement('div');
+                card.className = 'history-card';
+                card.id = `history-card-${idx}`;
+                card.onclick = (e) => toggleHistoryCard(idx, e);
+
+                const badgeHtml = isAdded 
+                    ? `<span class="history-badge badge-added">✓ Events Added</span>`
+                    : `<span class="history-badge badge-no-event">○ No Events Added</span>`;
+
+                const reasonBoxClass = isAdded ? 'reason-box reason-box-added' : 'reason-box reason-box-no-event';
+                const reasonIcon = isAdded ? '🟢' : 'ℹ️';
+                const reasonTitle = isAdded ? 'Events Added to Calendar' : 'Not Added to Calendar';
+
+                let emailBodyHtml = '';
+                if (bodyText && bodyText.trim()) {
+                    emailBodyHtml = escapeHtml(bodyText);
+                } else {
+                    emailBodyHtml = '<span style="color:#777; font-style:italic;">No full email body was captured for this entry (processed prior to update). Click "Delete Memory" and fetch again to re-process and view full email content.</span>';
+                }
+
+                card.innerHTML = `
+                    <div class="history-header">
+                        <div class="history-header-left">
+                            <input type="checkbox" class="history-checkbox" value='{"account":"${escapeHtml(item.account)}","id":"${escapeHtml(item.id)}"}' onclick="event.stopPropagation()" style="margin-top: 4px; transform: scale(1.2); cursor: pointer; flex-shrink: 0;">
+                            <div style="flex: 1; min-width: 0;">
+                                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                    <span class="history-subject">${escapeHtml(subject)}</span>
+                                    ${badgeHtml}
+                                </div>
+                                <div class="history-meta">
+                                    <span><strong>From:</strong>&nbsp;${escapeHtml(sender)}</span>
+                                    <span>&bull;</span>
+                                    <span><strong>Inbox:</strong>&nbsp;${escapeHtml(item.account)}</span>
+                                    <span>&bull;</span>
+                                    <span><strong>Date:</strong>&nbsp;${escapeHtml(dateStr)}</span>
+                                    <span>&bull;</span>
+                                    <span><strong>UID:</strong>&nbsp;${escapeHtml(item.id)}</span>
+                                </div>
+                                <div class="history-reason-preview">
+                                    <span style="font-weight: 600; color: #60a5fa; flex-shrink: 0;">AI Reason:</span>
+                                    <span style="color: #cbd5e1;">${escapeHtml(reasonText)}</span>
+                                </div>
+                                <div class="history-expand-indicator">
+                                    <span id="expand-icon-${idx}">▼</span>
+                                    <span id="expand-text-${idx}">Click to view full email &amp; AI reasoning</span>
+                                </div>
+                            </div>
+                        </div>
+                        <button class="remove-btn" style="margin: 0; flex-shrink: 0;" onclick="event.stopPropagation(); deleteHistoryItem('${escapeHtml(item.account)}', '${escapeHtml(item.id)}')">Delete Memory</button>
+                    </div>
+
+                    <div class="history-details" id="history-details-${idx}" onclick="event.stopPropagation()">
+                        <!-- AI Reason Box -->
+                        <div class="${reasonBoxClass}">
+                            <div style="font-weight: 700; font-size: 15px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px;">
+                                <span>${reasonIcon}</span>
+                                <span>${reasonTitle}</span>
+                            </div>
+                            <div style="margin-top: 4px; font-size: 13.5px;">
+                                <strong>Reason / Details:</strong> ${escapeHtml(reasonText)}
+                            </div>
+                        </div>
+
+                        <!-- Full Email Message Box -->
+                        <div class="email-viewer">
+                            <div class="email-viewer-header">
+                                <div>
+                                    <strong style="color: #fff; font-size: 14px;">✉️ Full Email Message</strong>
+                                </div>
+                                <div>
+                                    ${bodyText ? `<button class="copy-btn" onclick="copyEmailBody(${idx}, this)">📋 Copy Full Email</button>` : ''}
+                                </div>
+                            </div>
+                            <div style="background: #11141a; padding: 10px 16px; border-bottom: 1px solid #2a2e38; font-size: 12.5px; color: #8b949e; line-height: 1.6;">
+                                <div><strong style="color: #bbb;">Subject:</strong> ${escapeHtml(subject)}</div>
+                                <div><strong style="color: #bbb;">From:</strong> ${escapeHtml(sender)} &nbsp;|&nbsp; <strong style="color: #bbb;">To:</strong> ${escapeHtml(item.account)} &nbsp;|&nbsp; <strong style="color: #bbb;">Date:</strong> ${escapeHtml(dateStr)}</div>
+                            </div>
+                            <div class="email-viewer-body" id="email-body-${idx}">${emailBodyHtml}</div>
+                        </div>
+                    </div>
+                `;
+
+                container.appendChild(card);
+            });
+        }
+
+        function toggleHistoryCard(idx, event) {
+            const details = document.getElementById(`history-details-${idx}`);
+            const card = document.getElementById(`history-card-${idx}`);
+            const icon = document.getElementById(`expand-icon-${idx}`);
+            const text = document.getElementById(`expand-text-${idx}`);
+
+            if (!details) return;
+
+            const isShown = details.classList.contains('show');
+            if (isShown) {
+                details.classList.remove('show');
+                card.classList.remove('expanded');
+                if (icon) icon.innerText = '▼';
+                if (text) text.innerText = 'Click to view full email & AI reasoning';
+            } else {
+                details.classList.add('show');
+                card.classList.add('expanded');
+                if (icon) icon.innerText = '▲';
+                if (text) text.innerText = 'Click to collapse full email';
+            }
+        }
+
+        function copyEmailBody(idx, btn) {
+            const bodyEl = document.getElementById(`email-body-${idx}`);
+            if (!bodyEl) return;
+            const text = bodyEl.innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                const orig = btn.innerText;
+                btn.innerText = "✓ Copied!";
+                setTimeout(() => btn.innerText = orig, 2000);
+            }).catch(err => {
+                alert("Could not copy text: " + err);
+            });
         }
         
         function toggleSelectAll(className) {

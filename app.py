@@ -95,9 +95,33 @@ def init_db():
         
     try:
         c.execute("ALTER TABLE processed_emails_v2 ADD COLUMN subject TEXT")
+    except sqlite3.OperationalError:
+        pass # Column already exists
+
+    try:
         c.execute("ALTER TABLE processed_emails_v2 ADD COLUMN date TEXT")
     except sqlite3.OperationalError:
-        pass # Columns already exist
+        pass # Column already exists
+
+    try:
+        c.execute("ALTER TABLE processed_emails_v2 ADD COLUMN body TEXT")
+    except sqlite3.OperationalError:
+        pass # Column already exists
+
+    try:
+        c.execute("ALTER TABLE processed_emails_v2 ADD COLUMN sender TEXT")
+    except sqlite3.OperationalError:
+        pass # Column already exists
+
+    try:
+        c.execute("ALTER TABLE processed_emails_v2 ADD COLUMN reason TEXT")
+    except sqlite3.OperationalError:
+        pass # Column already exists
+
+    try:
+        c.execute("ALTER TABLE processed_emails_v2 ADD COLUMN status TEXT")
+    except sqlite3.OperationalError:
+        pass # Column already exists
         
     try:
         c.execute("ALTER TABLE events ADD COLUMN location TEXT")
@@ -339,7 +363,7 @@ async def get_history(user_id: str = Depends(verify_auth)):
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
-    c.execute("SELECT id, account, subject, date FROM processed_emails_v2 WHERE user_id=? ORDER BY date DESC LIMIT 100", (user_id,))
+    c.execute("SELECT id, account, subject, date, body, sender, reason, status FROM processed_emails_v2 WHERE user_id=? ORDER BY date DESC LIMIT 100", (user_id,))
     rows = c.fetchall()
     conn.close()
     return [dict(r) for r in rows]
@@ -403,20 +427,26 @@ async def get_models(req: ModelRequest):
     return {"models": models_list}
 
 # --- AI Parsing ---
-def extract_event(text: str, date: datetime, subject: str, settings: dict) -> List[dict]:
+def extract_event(text: str, date: datetime, subject: str, settings: dict) -> dict:
     custom_instructions = settings.get("custom_prompt", "")
     custom_prompt_text = f"\n    USER CUSTOM INSTRUCTIONS: {custom_instructions}\n" if custom_instructions.strip() else ""
     
+    date_str = date.isoformat() if date else "Unknown"
     prompt = f"""
     Analyze the following email to see if it contains one or more clear calendar events, appointments, meetings, flights, dinners, deadlines, assignment due dates, or scheduled tasks.
     Email Subject: {subject}
-    Email Date: {date.isoformat()}
+    Email Date: {date_str}
     {custom_prompt_text}
-    If it does NOT contain any scheduled events or deadlines (or if the event violates the USER CUSTOM INSTRUCTIONS), return EXACTLY the string "NO_EVENT".
-    If it DOES contain valid events or deadlines, return a JSON ARRAY of objects, where each object has the keys: "title", "date" (ISO 8601), "description", and "location". 
-    Create a separate event object for EVERY distinct scheduled time mentioned (e.g., Departure time, Event time, Return time). 
-    Extract the physical address, room number, or place name and put it strictly in the "location" field (leave it blank if none is found).
-    For assignments or deadlines without a specific time, default the time to 09:00:00 local time.
+    Return your response strictly as a JSON object with two fields:
+    1. "reason": A concise, clear explanation (1-2 sentences) of why events were extracted OR why no events were added to the calendar (for example: "Extracted dental appointment on Oct 14 at 2 PM", "No specific dates, meetings, or deadlines mentioned in this newsletter", "Ignored grade event per custom instructions", "Order confirmation receipt without calendar deadlines").
+    2. "events": A JSON array of event objects. If there are no valid calendar events or deadlines (or if they violate the USER CUSTOM INSTRUCTIONS), return an empty array [].
+       Each object in the array must have the following keys:
+       - "title": Title of the event (string)
+       - "date": Date and time in ISO 8601 format (e.g. "2026-10-15T14:00:00"). For assignments or deadlines without a specific time, default the time to 09:00:00 local time.
+       - "description": Summary or notes (string)
+       - "location": Physical address, room number, or place name (leave blank "" if none found)
+       Create a separate event object for EVERY distinct scheduled time mentioned (e.g., Departure time, Event time, Return time).
+
     Email Content:
     {text[:15000]}
     """
@@ -425,7 +455,7 @@ def extract_event(text: str, date: datetime, subject: str, settings: dict) -> Li
     if not model_name:
         model_name = "gemini-1.5-flash"
         
-    result = "NO_EVENT"
+    result = ""
     try:
         if provider == "gemini":
             genai.configure(api_key=settings.get("gemini_api_key"))
@@ -436,24 +466,64 @@ def extract_event(text: str, date: datetime, subject: str, settings: dict) -> Li
             response = client.chat.completions.create(model=model_name, messages=[{"role": "user", "content": prompt}], temperature=0.2)
             result = response.choices[0].message.content.strip()
             
-        if "NO_EVENT" in result: return None
-        if result.startswith("```json"): result = result[7:-3].strip()
-        elif result.startswith("```"): result = result[3:-3].strip()
+        clean_result = result
+        if clean_result.startswith("```json"):
+            clean_result = clean_result[7:]
+        elif clean_result.startswith("```"):
+            clean_result = clean_result[3:]
+        if clean_result.endswith("```"):
+            clean_result = clean_result[:-3]
+        clean_result = clean_result.strip()
+
+        if clean_result == "NO_EVENT" or (clean_result.startswith("NO_EVENT") and not clean_result.startswith("{")):
+            return {"events": [], "reason": "No calendar events or deadlines detected in email."}
             
-        parsed_data = json.loads(result)
+        parsed_data = None
+        try:
+            parsed_data = json.loads(clean_result)
+        except Exception:
+            start_b = clean_result.find('{')
+            end_b = clean_result.rfind('}')
+            if start_b != -1 and end_b != -1 and end_b > start_b:
+                parsed_data = json.loads(clean_result[start_b:end_b+1])
+            else:
+                start_arr = clean_result.find('[')
+                end_arr = clean_result.rfind(']')
+                if start_arr != -1 and end_arr != -1 and end_arr > start_arr:
+                    parsed_data = json.loads(clean_result[start_arr:end_arr+1])
+
+        events_list = []
+        reason = ""
+        
         if isinstance(parsed_data, dict):
-            parsed_data = [parsed_data]
+            if "events" in parsed_data:
+                events_list = parsed_data.get("events") or []
+                reason = parsed_data.get("reason", "")
+            elif "title" in parsed_data and "date" in parsed_data:
+                events_list = [parsed_data]
+                reason = parsed_data.get("reason", f"Extracted event: {parsed_data.get('title')}")
+            else:
+                reason = parsed_data.get("reason", "No calendar events or deadlines detected.")
+        elif isinstance(parsed_data, list):
+            events_list = parsed_data
+            reason = f"Extracted {len(events_list)} event(s)." if events_list else "No calendar events or deadlines detected."
             
         valid_events = []
-        for e in parsed_data:
-            if all(k in e for k in ("title", "date", "description")):
-                valid_events.append(e)
+        if isinstance(events_list, list):
+            for e in events_list:
+                if isinstance(e, dict) and all(k in e for k in ("title", "date", "description")):
+                    valid_events.append(e)
+                    
+        if not reason:
+            if valid_events:
+                reason = f"Extracted {len(valid_events)} event(s): " + ", ".join(e.get("title", "Event") for e in valid_events)
+            else:
+                reason = "No calendar events or deadlines detected in email."
                 
-        return valid_events if valid_events else None
+        return {"events": valid_events, "reason": reason}
     except Exception as e:
         logger.error(f"AI extraction error ({provider} - {model_name}): {e}")
         raise ValueError(f"AI API Error: {str(e)}") 
-    return None
 
 async def process_user_emails(user_id: str):
     conn = sqlite3.connect(DB_FILE)
@@ -486,16 +556,24 @@ async def process_user_emails(user_id: str):
                     c.execute("SELECT id FROM processed_emails_v2 WHERE id=? AND user_id=? AND account=?", (msg.uid, user_id, email_user))
                     if c.fetchone(): continue
                         
-                    text_content = msg.text or msg.html
-                    if text_content and len(text_content) > 10:
+                    sender = getattr(msg, 'from_', '') or ''
+                    text_content = msg.text or msg.html or ''
+                    subject_str = msg.subject or 'No Subject'
+                    date_iso = msg.date.isoformat() if msg.date else ""
+                    
+                    if text_content and len(text_content.strip()) > 10:
                         try:
-                            event_data_list = extract_event(text_content, msg.date, msg.subject, settings)
+                            ai_result = extract_event(text_content, msg.date, subject_str, settings)
+                            event_data_list = ai_result.get("events", [])
+                            base_reason = ai_result.get("reason", "")
                             
                             # Gemini Free Tier limit is 15 RPM (1 request every 4 seconds)
                             if settings.get("ai_provider", "gemini") == "gemini":
                                 await asyncio.sleep(4.1)
                                 
                             if event_data_list:
+                                email_status = "added"
+                                sync_details = []
                                 for event_data in event_data_list:
                                     event_id = str(uuid.uuid4())
                                     c.execute("INSERT INTO events (id, user_id, account, title, date, description, location, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')", 
@@ -532,19 +610,34 @@ async def process_user_emails(user_id: str):
                                                 service.events().insert(calendarId='primary', body=gcal_event).execute()
                                                 c.execute("UPDATE events SET status='added' WHERE id=?", (event_id,))
                                                 logger.info(f"Background auto-synced event '{event_data['title']}' for {user_id}")
+                                                sync_details.append(f"Auto-synced '{event_data['title']}' to Google Calendar")
                                             except Exception as date_err:
                                                 logger.error(f"Failed to auto-sync event {event_data['title']} (bad date format?): {date_err}")
+                                                sync_details.append(f"Saved to Dashboard (sync error: {date_err})")
                                         except Exception as e:
                                             logger.error(f"Background auto-sync failed for {user_id}: {e}")
+                                            sync_details.append(f"Saved to Dashboard (Google Calendar error)")
+                                    else:
+                                        sync_details.append(f"Saved to Dashboard for review / manual sync")
                                     
                                     total_events_found += 1
+                                    
+                                final_reason = base_reason
+                                if sync_details:
+                                    final_reason += " (" + "; ".join(sync_details) + ")"
+                            else:
+                                email_status = "no_event"
+                                final_reason = base_reason or "No calendar events or deadlines detected in email."
                         except ValueError as ve:
                             logger.error(f"AI API Error on {email_user}: {str(ve)}")
                             # Skip this email for now without marking it processed if the API failed
                             continue
+                    else:
+                        email_status = "no_event"
+                        final_reason = "Email content was empty or too short to contain calendar events."
                     
-                    c.execute("INSERT INTO processed_emails_v2 (id, user_id, account, subject, date) VALUES (?, ?, ?, ?, ?)", 
-                        (msg.uid, user_id, email_user, msg.subject, msg.date.isoformat() if msg.date else ""))
+                    c.execute("INSERT INTO processed_emails_v2 (id, user_id, account, subject, date, body, sender, reason, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", 
+                        (msg.uid, user_id, email_user, subject_str, date_iso, text_content, sender, final_reason, email_status))
                     conn.commit()
         except Exception as e:
             logger.error(f"Error fetching emails for {email_user}: {e}")
