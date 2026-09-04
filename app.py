@@ -767,6 +767,50 @@ def extract_event(text: str, date: datetime, subject: str, settings: dict) -> di
         logger.error(f"AI extraction error ({provider} - {model_name}): {e}")
         raise ValueError(f"AI API Error: {str(e)}") 
 
+# --- Google Calendar Event Pusher & Duplicate Prevention ---
+def push_event_to_gcal(service, title: str, description: str, date_str: str, location: str = ""):
+    """
+    Pushes an event to Google Calendar, with duplicate prevention by checking
+    events around the same time window (+/- 2 hours) on the user's primary calendar.
+    """
+    start_time = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+    if start_time.tzinfo is None:
+        start_time = start_time.replace(tzinfo=datetime.now().astimezone().tzinfo)
+    end_time = start_time + timedelta(hours=1)
+    
+    # Check Google Calendar for existing events in a +/- 2 hour window
+    try:
+        time_min = (start_time - timedelta(hours=2)).isoformat()
+        time_max = (end_time + timedelta(hours=2)).isoformat()
+        existing = service.events().list(
+            calendarId='primary',
+            timeMin=time_min,
+            timeMax=time_max,
+            singleEvents=True,
+            maxResults=25
+        ).execute()
+        
+        norm_title = (title or "").strip().lower()
+        for item in existing.get('items', []):
+            item_summary = (item.get('summary') or "").strip().lower()
+            if item_summary == norm_title or (len(norm_title) > 4 and norm_title in item_summary):
+                logger.info(f"Duplicate check: Event '{title}' already exists on Google Calendar around {start_time.isoformat()}. Skipping insertion.")
+                return {"status": "already_exists", "event_id": item.get("id")}
+    except Exception as check_err:
+        logger.warning(f"Google Calendar duplicate check skipped due to notice: {check_err}")
+
+    gcal_event = {
+        'summary': title,
+        'description': description,
+        'start': {'dateTime': start_time.isoformat()},
+        'end': {'dateTime': end_time.isoformat()}
+    }
+    if location and location.strip():
+        gcal_event['location'] = location.strip()
+        
+    created = service.events().insert(calendarId='primary', body=gcal_event).execute()
+    return {"status": "created", "event_id": created.get("id")}
+
 async def process_user_emails(user_id: str):
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
@@ -791,10 +835,12 @@ async def process_user_emails(user_id: str):
         email_pass = account['email_pass']
         email_host = account['email_host']
         
+        logger.info(f"Fetching emails for user {user_id} ({email_user}) from {email_host} (lookback: {lookback_days}d, limit: {email_fetch_limit})...")
         try:
             with MailBox(email_host).login(email_user, email_pass) as mailbox:
-                date_limit = (datetime.now() - timedelta(days=lookback_days)).date()
-                messages = mailbox.fetch(AND(date_gte=date_limit), limit=email_fetch_limit, reverse=True)
+                since_date = (datetime.now() - timedelta(days=lookback_days)).date()
+                messages = list(mailbox.fetch(AND(date_gte=since_date), limit=email_fetch_limit, reverse=True))
+                logger.info(f"Retrieved {len(messages)} messages for {email_user}.")
                 
                 for msg in messages:
                     c.execute("SELECT id FROM processed_emails_v2 WHERE id=? AND user_id=? AND account=?", (msg.uid, user_id, email_user))
@@ -836,25 +882,20 @@ async def process_user_emails(user_id: str):
                                             creds = Credentials.from_authorized_user_file(token_file, SCOPES)
                                             service = build('calendar', 'v3', credentials=creds)
                                             try:
-                                                start_time = datetime.fromisoformat(event_data['date'].replace("Z", "+00:00"))
-                                                if start_time.tzinfo is None:
-                                                    start_time = start_time.replace(tzinfo=datetime.now().astimezone().tzinfo)
-                                                end_time = start_time + timedelta(hours=1)
-                                                gcal_event = {
-                                                  'summary': event_data['title'],
-                                                  'description': event_data['description'],
-                                                  'start': {'dateTime': start_time.isoformat()},
-                                                  'end': {'dateTime': end_time.isoformat()}
-                                                }
-                                                
-                                                loc = event_data.get("location", "")
-                                                if loc and loc.strip():
-                                                    gcal_event['location'] = loc.strip()
-                                                    
-                                                service.events().insert(calendarId='primary', body=gcal_event).execute()
+                                                res = push_event_to_gcal(
+                                                    service,
+                                                    event_data.get("title", "Untitled"),
+                                                    event_data.get("description", ""),
+                                                    event_data.get("date", ""),
+                                                    event_data.get("location", "")
+                                                )
                                                 c.execute("UPDATE events SET status='added' WHERE id=?", (event_id,))
-                                                logger.info(f"Background auto-synced event '{event_data['title']}' for {user_id}")
-                                                sync_details.append(f"Auto-synced '{event_data['title']}' to Google Calendar")
+                                                if res.get("status") == "already_exists":
+                                                    logger.info(f"Background: event '{event_data['title']}' already on Google Calendar for {user_id}")
+                                                    sync_details.append(f"Already on Google Calendar '{event_data['title']}'")
+                                                else:
+                                                    logger.info(f"Background auto-synced event '{event_data['title']}' for {user_id}")
+                                                    sync_details.append(f"Auto-synced '{event_data['title']}' to Google Calendar")
                                             except Exception as date_err:
                                                 err_str = str(date_err)
                                                 if "invalid_grant" in err_str:
@@ -1059,31 +1100,14 @@ async def sync_event(event_id: str, user_id: str = Depends(verify_auth)):
         raise HTTPException(status_code=400, detail="Google Calendar not connected. Please connect in Settings.")
         
     try:
-        start_dt = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
-        if start_dt.tzinfo is None:
-            start_dt = start_dt.replace(tzinfo=datetime.now().astimezone().tzinfo)
-            
-        end_dt = start_dt + timedelta(hours=1)
-        
         creds = Credentials.from_authorized_user_file(token_file, SCOPES)
         service = build('calendar', 'v3', credentials=creds)
-        
-        gcal_event = {
-            'summary': title,
-            'description': description,
-            'start': {'dateTime': start_dt.isoformat()},
-            'end': {'dateTime': end_dt.isoformat()}
-        }
-        
-        if location and location.strip():
-            gcal_event['location'] = location.strip()
-            
-        service.events().insert(calendarId='primary', body=gcal_event).execute()
+        res = push_event_to_gcal(service, title, description, date_str, location)
         
         c.execute("UPDATE events SET status='added' WHERE id=?", (event_id,))
         conn.commit()
         conn.close()
-        return {"status": "success"}
+        return {"status": "success", "gcal_status": res["status"]}
     except Exception as e:
         conn.close()
         err_str = str(e)
@@ -1102,6 +1126,50 @@ async def dismiss_event(event_id: str, user_id: str = Depends(verify_auth)):
 
 class BulkEventAction(BaseModel):
     event_ids: List[str]
+
+@app.post("/api/events/bulk_sync", dependencies=[Depends(verify_auth)])
+async def bulk_sync_events(req: BulkEventAction, user_id: str = Depends(verify_auth)):
+    if not req.event_ids:
+        return {"status": "success", "synced": 0}
+        
+    token_file = os.path.join(DATA_DIR, f"token_{user_id}.json")
+    if not os.path.exists(token_file):
+        raise HTTPException(status_code=400, detail="Google Calendar not connected. Please connect in Settings.")
+        
+    try:
+        creds = Credentials.from_authorized_user_file(token_file, SCOPES)
+        service = build('calendar', 'v3', credentials=creds)
+    except Exception as e:
+        err_str = str(e)
+        if "invalid_grant" in err_str:
+            raise HTTPException(status_code=400, detail="Google Calendar token has expired or was revoked. Please reconnect Google Calendar in Settings.")
+        raise HTTPException(status_code=500, detail=f"Failed to authenticate with Google: {err_str}")
+        
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    placeholders = ','.join('?' * len(req.event_ids))
+    c.execute(f"SELECT id, title, date, description, location FROM events WHERE user_id=? AND id IN ({placeholders})", (user_id, *req.event_ids))
+    rows = c.fetchall()
+    
+    synced_count = 0
+    errors = []
+    for row in rows:
+        event_id, title, date_str, description, location = row
+        try:
+            res = push_event_to_gcal(service, title, description, date_str, location)
+            c.execute("UPDATE events SET status='added' WHERE id=?", (event_id,))
+            synced_count += 1
+        except Exception as e:
+            err_str = str(e)
+            if "invalid_grant" in err_str:
+                conn.commit()
+                conn.close()
+                raise HTTPException(status_code=400, detail="Google Calendar token has expired or was revoked. Please reconnect Google Calendar in Settings.")
+            errors.append(f"Failed to sync '{title}': {err_str}")
+            
+    conn.commit()
+    conn.close()
+    return {"status": "success", "synced": synced_count, "errors": errors}
 
 @app.post("/api/events/bulk_dismiss")
 async def bulk_dismiss_events(req: BulkEventAction, user_id: str = Depends(verify_auth)):

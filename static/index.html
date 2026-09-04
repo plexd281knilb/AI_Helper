@@ -365,12 +365,15 @@
                 <h1>Extracted Calendar Events</h1>
                 <p style="color: #ccc;">Upcoming events extracted from your emails, sorted by closest to now. Synced events are marked in green.</p>
                 
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
                     <div>
                         <input type="checkbox" id="selectAllEvents" onchange="toggleSelectAll('event-checkbox')" style="transform: scale(1.2); cursor: pointer;">
                         <label for="selectAllEvents" style="margin-left: 5px; cursor: pointer; color: #ccc;">Select All</label>
                     </div>
-                    <button class="remove-btn" onclick="bulkDismissEvents()" style="padding: 6px 12px; font-size: 14px;">Dismiss Selected</button>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button class="add-btn" onclick="bulkSyncEvents()" style="padding: 6px 14px; font-size: 13.5px; margin: 0; background: #2563eb;">⚡ Push Selected to Calendar</button>
+                        <button class="remove-btn" onclick="bulkDismissEvents()" style="padding: 6px 12px; font-size: 13.5px; margin: 0;">Dismiss Selected</button>
+                    </div>
                 </div>
 
                 <div id="dashboard-msg"></div>
@@ -1156,6 +1159,10 @@
                 window.location.reload(); 
                 throw new Error("Unauthorized");
             }
+            if (!response.ok) {
+                const data = await response.json().catch(() => ({}));
+                throw new Error(data.detail || data.error || `Request failed with status ${response.status}`);
+            }
             return response;
         }
         
@@ -1173,7 +1180,7 @@
                     renderLocalEvents();
                 }
             } catch(e) {
-                if (e.message !== "Unauthorized") msgBox.innerHTML = '<div class="error">Failed to fetch emails. Check the Logs tab for details.</div>';
+                if (e.message !== "Unauthorized") msgBox.innerHTML = `<div class="error">${e.message || 'Failed to fetch emails. Check the Logs tab for details.'}</div>`;
             }
         }
         
@@ -1218,13 +1225,16 @@
                     if (event.status === 'added') {
                         buttonsHtml = `<span style="color: #4CAF50; font-weight: bold; margin-right: 15px;">✓ Synced to Google Calendar</span>`;
                     } else if (googleConnected) {
-                        buttonsHtml = `<button onclick="syncEvent('${event.id}')" class="add-btn">Auto-Sync to Google Calendar</button>`;
+                        buttonsHtml = `<button onclick="syncEvent('${event.id}', this)" class="add-btn" style="background: #2563eb; font-weight: 600;">⚡ Push to Google Calendar</button>`;
                     } else {
                         const endDateObj = new Date(dateObj.getTime() + 60*60*1000); 
                         const fmtDate = (d) => d.toISOString().replace(/-|:|\.\d\d\d/g,"");
                         const dates = `${fmtDate(dateObj)}/${fmtDate(endDateObj)}`;
                         const gcalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(event.title)}&dates=${dates}&details=${encodeURIComponent(event.description)}`;
-                        buttonsHtml = `<a href="${gcalUrl}" target="_blank" class="add-btn" onclick="dismissEvent('${event.id}')">Manual Add to Calendar</a>`;
+                        buttonsHtml = `
+                            <button onclick="syncEvent('${event.id}', this)" class="add-btn" style="background: #2563eb; font-weight: 600;">⚡ Push to Google Calendar</button>
+                            <a href="${gcalUrl}" target="_blank" class="add-btn" onclick="dismissEvent('${event.id}')" style="background: #475569;">📅 Manual Add</a>
+                        `;
                     }
                     buttonsHtml += `<button onclick="dismissEvent('${event.id}')" class="dismiss-btn">Dismiss</button>`;
 
@@ -1238,7 +1248,7 @@
                                 <div class="event-date">${dateObj.toLocaleString()}</div>
                                 <div style="color: #ddd; margin-bottom: 5px;">${event.description.replace(/\n/g, '<br>')}</div>
                                 ${locationHtml}
-                                <div>${buttonsHtml}</div>
+                                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px;">${buttonsHtml}</div>
                             </div>
                         </div>
                     `;
@@ -1248,6 +1258,36 @@
                 if (error.message !== "Unauthorized") {
                     container.innerHTML = '';
                     msgBox.innerHTML = '<div class="error">Error loading events from database.</div>';
+                }
+            }
+        }
+
+        async function bulkSyncEvents() {
+            const selected = Array.from(document.querySelectorAll('.event-checkbox:checked')).map(cb => cb.value);
+            if (selected.length === 0) return alert("Please select at least one event to push to Google Calendar.");
+            
+            const msgBox = document.getElementById('dashboard-msg');
+            msgBox.innerHTML = '<span style="color: #60a5fa;">Pushing selected events to Google Calendar...</span>';
+            
+            try {
+                const response = await fetch('/api/events/bulk_sync', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({event_ids: selected})
+                });
+                await handleApiError(response);
+                const data = await response.json();
+                if (data.status === 'success') {
+                    msgBox.innerHTML = `<div class="success">Successfully pushed ${data.synced} event(s) to Google Calendar!</div>`;
+                    document.getElementById('selectAllEvents').checked = false;
+                    renderLocalEvents();
+                    setTimeout(() => msgBox.innerHTML = '', 4000);
+                } else {
+                    msgBox.innerHTML = `<div class="error">${data.error || 'Failed to sync events.'}</div>`;
+                }
+            } catch(e) {
+                if (e.message !== "Unauthorized") {
+                    msgBox.innerHTML = `<div class="error">${e.message || 'Error pushing events. Make sure Google Calendar is connected in Settings.'}</div>`;
                 }
             }
         }
@@ -1271,25 +1311,37 @@
             }
         }
         
-        async function syncEvent(id) {
+        async function syncEvent(id, btn) {
             const card = document.getElementById(`event-${id}`);
-            card.style.opacity = '0.5';
+            const origText = btn ? btn.innerText : '';
+            if (btn) btn.innerText = "Pushing...";
+            if (card) card.style.opacity = '0.5';
+            
             try {
                 const response = await fetch(`/api/events/${id}/sync`, {method: 'POST'});
                 await handleApiError(response);
                 const data = await response.json();
                 if (data.status === 'success') {
-                    card.remove();
-                    if(document.querySelectorAll('.event-card').length === 0) {
-                        renderLocalEvents(); // Show the big fetch button
+                    const msgBox = document.getElementById('dashboard-msg');
+                    const msg = data.gcal_status === 'already_exists' 
+                        ? 'Event was already present on your Google Calendar! Marked as synced.' 
+                        : 'Successfully pushed event to Google Calendar!';
+                    if (msgBox) {
+                        msgBox.innerHTML = `<div class="success">${msg}</div>`;
+                        setTimeout(() => msgBox.innerHTML = '', 4000);
                     }
+                    renderLocalEvents();
                 } else {
-                    alert("Sync failed: " + data.error);
-                    card.style.opacity = '1';
+                    alert("Sync failed: " + (data.error || "Unknown error"));
+                    if (card) card.style.opacity = '1';
+                    if (btn) btn.innerText = origText;
                 }
             } catch(e) {
-                if (e.message !== "Unauthorized") alert("Network error.");
-                card.style.opacity = '1';
+                if (e.message !== "Unauthorized") {
+                    alert(e.message || "Failed to push event. Make sure Google Calendar is connected in Settings.");
+                }
+                if (card) card.style.opacity = '1';
+                if (btn) btn.innerText = origText;
             }
         }
         
