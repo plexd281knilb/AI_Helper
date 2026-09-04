@@ -431,6 +431,133 @@
         .store-card:hover {
             border-color: #3b82f6;
         }
+
+        /* Deal Feed & Comparison Styles */
+        .deal-card {
+            background: #161b22;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+        .deal-card:hover {
+            border-color: #3b82f6;
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+        .deal-card.feedback-dismissed {
+            opacity: 0;
+            transform: scale(0.9);
+            transition: all 0.3s ease;
+            pointer-events: none;
+        }
+        .item-thumb-container {
+            width: 68px;
+            height: 68px;
+            min-width: 68px;
+            background: #0d1117;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.08);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        .item-thumb {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            padding: 4px;
+            box-sizing: border-box;
+            transition: transform 0.2s;
+        }
+        .item-thumb:hover {
+            transform: scale(1.1);
+        }
+        .item-avatar-fallback {
+            font-size: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            user-select: none;
+        }
+        .comp-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 9px;
+            border-radius: 6px;
+            font-size: 11.5px;
+            font-weight: 600;
+            line-height: 1.3;
+            margin-top: 6px;
+            width: fit-content;
+        }
+        .comp-pill-green {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.4);
+        }
+        .comp-pill-red {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.4);
+        }
+        .comp-pill-neutral {
+            background: rgba(148, 163, 184, 0.12);
+            color: #cbd5e1;
+            border: 1px solid rgba(148, 163, 184, 0.25);
+        }
+        .deal-feedback-btn {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            color: #94a3b8;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11.5px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .deal-feedback-btn:hover {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            border-color: rgba(255,255,255,0.2);
+        }
+        .deal-feedback-btn.active-up {
+            background: rgba(16, 185, 129, 0.2);
+            color: #34d399;
+            border-color: #10b981;
+        }
+        .tag-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #e2e8f0;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            margin: 3px;
+        }
+        .tag-chip-remove {
+            cursor: pointer;
+            color: #94a3b8;
+            font-weight: bold;
+            margin-left: 3px;
+        }
+        .tag-chip-remove:hover {
+            color: #ef4444;
+        }
     </style>
 </head>
 <body>
@@ -527,16 +654,75 @@
                         <p style="color: #ccc; margin: 0;">Compare prices across Kroger, HEB, Tom Thumb, Costco, Sprouts, Whole Foods, and Walmart, and build smart grocery lists.</p>
                     </div>
                     <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                        <button class="filter-chip active" id="groc-tab-deals" onclick="switchGrocerySubTab('deals')">🔍 Deal &amp; Price Finder</button>
-                        <button class="filter-chip" id="groc-tab-lists" onclick="switchGrocerySubTab('lists')">📝 My Grocery Lists</button>
+                        <button class="filter-chip active" id="groc-tab-feed" onclick="switchGrocerySubTab('feed')">🔥 My Deals</button>
+                        <button class="filter-chip" id="groc-tab-lists" onclick="switchGrocerySubTab('lists')">🛒 My Grocery Lists</button>
+                        <button class="filter-chip" id="groc-tab-deals" onclick="switchGrocerySubTab('deals')">🔍 Deal &amp; Price Finder</button>
                         <button class="filter-chip" id="groc-tab-stores" onclick="switchGrocerySubTab('stores')">🏪 Store Ads &amp; Circulars</button>
                     </div>
                 </div>
 
                 <div id="groceries-msg"></div>
 
+                <!-- SUB-SECTION 0: Personalized Deal Feed -->
+                <div id="grocery-section-feed" class="grocery-sub-section">
+                    <div class="account-box" style="margin-bottom: 20px; background: linear-gradient(135deg, rgba(239,68,68,0.12), rgba(245,158,11,0.1)); border: 1px solid rgba(239,68,68,0.3); padding: 18px 22px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+                            <div>
+                                <h2 style="margin: 0 0 4px 0; color: #fff; display: flex; align-items: center; gap: 8px; font-size: 19px;">
+                                    <span>🔥</span> My Personalized Deals Feed
+                                </h2>
+                                <p style="color: #cbd5e1; font-size: 13.5px; margin: 0; line-height: 1.4;">
+                                    Curated weekly supermarket specials ranked for you. Includes live <strong>cross-store price comparisons</strong> (🟢 Best Local Price vs 🔴 Cheaper Elsewhere).
+                                </p>
+                            </div>
+                            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                                <button class="filter-chip" id="feed-best-only-btn" onclick="toggleFeedBestOnly()" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border-color: rgba(16, 185, 129, 0.4);">
+                                    🟢 Best Prices Only
+                                </button>
+                                <button class="save-btn" onclick="openDealPreferencesModal()" style="margin: 0; padding: 9px 16px; font-size: 13.5px; background: #374151; color: #fff; display: flex; align-items: center; gap: 6px;">
+                                    <span>⚙️</span> Deal Preferences
+                                </button>
+                                <button class="save-btn" onclick="loadPersonalizedDealsFeed()" style="margin: 0; padding: 9px 16px; font-size: 13.5px; background: #2563eb; display: flex; align-items: center; gap: 6px;">
+                                    <span>🔄</span> Refresh Feed
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Category Filter Chips & Live Search -->
+                    <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px;">
+                        <div style="flex: 1; min-width: 250px;">
+                            <input type="text" id="feed-search-input" placeholder="🔍 Search deals (e.g. ribeye, brisket, chicken, bacon, salmon, eggs)..." oninput="debounceFeedSearch()" style="width: 100%; box-sizing: border-box; margin-bottom: 0; padding: 10px 14px; font-size: 14px;">
+                        </div>
+                        <div id="feed-category-chips" style="display: flex; gap: 6px; flex-wrap: wrap;">
+                            <button class="filter-chip active" onclick="setFeedCategoryFilter('all', this)">🔥 All Deals</button>
+                            <button class="filter-chip" onclick="setFeedCategoryFilter('Meat & Seafood', this)">🥩 Meat &amp; Seafood</button>
+                            <button class="filter-chip" onclick="setFeedCategoryFilter('Produce', this)">🥑 Produce</button>
+                            <button class="filter-chip" onclick="setFeedCategoryFilter('Dairy & Eggs', this)">🧀 Dairy &amp; Eggs</button>
+                            <button class="filter-chip" onclick="setFeedCategoryFilter('Bakery & Deli', this)">🍞 Bakery &amp; Deli</button>
+                            <button class="filter-chip" onclick="setFeedCategoryFilter('Frozen', this)">❄️ Frozen</button>
+                            <button class="filter-chip" onclick="setFeedCategoryFilter('Beverages', this)">☕ Beverages</button>
+                            <button class="filter-chip" onclick="setFeedCategoryFilter('Snacks', this)">🍿 Snacks</button>
+                        </div>
+                    </div>
+
+                    <!-- Deal Target List Selector Header -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; font-size: 13px; color: #aaa; flex-wrap: wrap; gap: 10px;">
+                        <span id="feed-deals-count-label">Loading your personalized deals...</span>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <label for="feed-target-list-select" style="color: #888;">Add to list:</label>
+                            <select id="feed-target-list-select" style="padding: 5px 10px; font-size: 13px; border-radius: 4px; background: var(--input-bg); color: #fff; border: 1px solid var(--border-color);"></select>
+                        </div>
+                    </div>
+
+                    <!-- Deal Cards Grid Container -->
+                    <div id="my-deals-feed-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px;">
+                        Loading personalized feed...
+                    </div>
+                </div>
+
                 <!-- SUB-SECTION 1: AI Deal & Price Finder -->
-                <div id="grocery-section-deals" class="grocery-sub-section">
+                <div id="grocery-section-deals" class="grocery-sub-section" style="display: none;">
                     <div class="account-box" style="margin-bottom: 25px;">
                         <h3 style="margin-top: 0; margin-bottom: 8px; color: #fff; display: flex; align-items: center; gap: 8px;">
                             <span>✨</span> Ask AI to Find Best Prices &amp; Deals
@@ -843,6 +1029,75 @@
                     <div style="display: flex; justify-content: flex-end; gap: 10px;">
                         <button class="remove-btn" onclick="closePasteDealsModal()" style="margin: 0; background: #374151; color: #e5e7eb;">Cancel</button>
                         <button class="save-btn" id="paste-modal-submit-btn" onclick="submitPasteDeals()" style="margin: 0; background: #2563eb;">🤖 Extract Deals with AI</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Deal Preferences Modal -->
+            <div id="deal-preferences-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center; padding: 20px;">
+                <div class="account-box" style="width: 95%; max-width: 680px; max-height: 90vh; display: flex; flex-direction: column; background: #161b22; border: 1px solid #30363d; border-radius: var(--radius-md); padding: 24px; box-shadow: 0 12px 35px rgba(0,0,0,0.7); overflow-y: auto;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
+                        <div>
+                            <h2 style="margin: 0 0 4px 0; color: #fff; display: flex; align-items: center; gap: 8px; font-size: 18px;">
+                                <span>⚙️</span> Deal Feed &amp; Food Preferences
+                            </h2>
+                            <div style="font-size: 13px; color: #94a3b8;">Customize what items and categories you want to see most in your personalized feed.</div>
+                        </div>
+                        <button class="remove-btn" onclick="closeDealPreferencesModal()" style="margin: 0; padding: 6px 12px; font-size: 14px;">✕</button>
+                    </div>
+
+                    <!-- Quick Preset -->
+                    <div style="background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); padding: 12px 16px; border-radius: var(--radius-sm); margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                        <div>
+                            <strong style="color: #fb7185; font-size: 13.5px;">🥩 Meat &amp; Essentials Family Preset</strong>
+                            <div style="font-size: 12.5px; color: #cbd5e1;">Prioritizes beef, steak, chicken, pork, salmon, eggs, and produce while hiding furniture, patio items, and canned soup.</div>
+                        </div>
+                        <button class="add-btn" onclick="applyMeatLoverPreset()" style="margin: 0; padding: 6px 14px; font-size: 12.5px; background: #e11d48; white-space: nowrap;">⚡ Apply Preset</button>
+                    </div>
+
+                    <!-- Favorite Categories -->
+                    <div style="margin-bottom: 18px;">
+                        <label style="font-weight: 700; color: #34d399; font-size: 13.5px; display: block; margin-bottom: 8px;">
+                            ⭐ Favorite Categories (Boosted in Feed)
+                        </label>
+                        <div id="pref-fav-cats-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px;"></div>
+                    </div>
+
+                    <!-- Ignored Categories -->
+                    <div style="margin-bottom: 18px;">
+                        <label style="font-weight: 700; color: #f87171; font-size: 13.5px; display: block; margin-bottom: 8px;">
+                            🚫 Ignored Categories (Hidden from Feed)
+                        </label>
+                        <div id="pref-ign-cats-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px;"></div>
+                    </div>
+
+                    <!-- Liked Keywords -->
+                    <div style="margin-bottom: 18px;">
+                        <label style="font-weight: 700; color: #60a5fa; font-size: 13.5px; display: block; margin-bottom: 6px;">
+                            👍 Liked Keywords (e.g. steak, ribeye, brisket, salmon, bacon, eggs)
+                        </label>
+                        <div id="pref-liked-tags" style="display: flex; flex-wrap: wrap; margin-bottom: 8px;"></div>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" id="pref-new-liked-kw" placeholder="Add keyword (e.g. ribeye, brisket, chicken breast)..." onkeypress="if(event.key === 'Enter') addLikedKeywordTag()" style="margin-bottom: 0; font-size: 13px;">
+                            <button class="add-btn" onclick="addLikedKeywordTag()" style="margin: 0; padding: 8px 14px; font-size: 13px;">Add</button>
+                        </div>
+                    </div>
+
+                    <!-- Disliked Keywords -->
+                    <div style="margin-bottom: 20px;">
+                        <label style="font-weight: 700; color: #f87171; font-size: 13.5px; display: block; margin-bottom: 6px;">
+                            👎 Disliked Keywords (e.g. patio, chair, canned soup, furniture)
+                        </label>
+                        <div id="pref-disliked-tags" style="display: flex; flex-wrap: wrap; margin-bottom: 8px;"></div>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" id="pref-new-disliked-kw" placeholder="Add disliked keyword (e.g. patio, chair, furniture)..." onkeypress="if(event.key === 'Enter') addDislikedKeywordTag()" style="margin-bottom: 0; font-size: 13px;">
+                            <button class="remove-btn" onclick="addDislikedKeywordTag()" style="margin: 0; padding: 8px 14px; font-size: 13px;">Add</button>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border-color); padding-top: 14px;">
+                        <button class="remove-btn" onclick="closeDealPreferencesModal()" style="margin: 0; background: #374151; color: #e5e7eb;">Cancel</button>
+                        <button class="save-btn" id="pref-save-btn" onclick="saveDealPreferences()" style="margin: 0; background: #10b981;">💾 Save Preferences</button>
                     </div>
                 </div>
             </div>
@@ -2467,19 +2722,40 @@
         // =====================================================================
         // --- GROCERY DEALS & SMART LISTS JAVASCRIPT ---
         // =====================================================================
-        let currentGrocerySubTab = 'deals'; // 'deals', 'lists', 'stores'
+        let currentGrocerySubTab = 'feed'; // 'feed', 'lists', 'deals', 'stores'
         let currentGroceryGrouping = 'category'; // 'category' or 'store'
+        let currentFeedCategory = 'all';
+        let currentFeedSearch = '';
+        let feedBestOnly = false;
+        let feedSearchTimeout = null;
+        let currentPreferences = null;
         let activeGroceryListId = null;
         let allGroceryLists = [];
         let allGroceryStores = [];
         let latestRecommendedDeals = [];
 
+        function getCategoryEmoji(category) {
+            const c = (category || '').toLowerCase();
+            if (c.includes('meat') || c.includes('seafood') || c.includes('beef') || c.includes('steak') || c.includes('chicken') || c.includes('pork') || c.includes('fish') || c.includes('salmon') || c.includes('shrimp')) return '🥩';
+            if (c.includes('produce') || c.includes('fruit') || c.includes('vegetable') || c.includes('apple') || c.includes('berry') || c.includes('salad')) return '🥑';
+            if (c.includes('dairy') || c.includes('egg') || c.includes('milk') || c.includes('cheese') || c.includes('butter')) return '🧀';
+            if (c.includes('bakery') || c.includes('bread') || c.includes('deli') || c.includes('cake') || c.includes('croissant')) return '🍞';
+            if (c.includes('frozen') || c.includes('ice cream') || c.includes('pizza')) return '❄️';
+            if (c.includes('beverage') || c.includes('drink') || c.includes('coffee') || c.includes('water') || c.includes('soda')) return '☕';
+            if (c.includes('snack') || c.includes('chip') || c.includes('candy') || c.includes('nuts')) return '🍿';
+            if (c.includes('canned') || c.includes('soup') || c.includes('broth')) return '🥫';
+            if (c.includes('furniture') || c.includes('patio') || c.includes('chair') || c.includes('table')) return '🪑';
+            if (c.includes('household') || c.includes('personal') || c.includes('paper') || c.includes('towel') || c.includes('detergent')) return '🧼';
+            return '🛒';
+        }
+
         function initGroceriesTab() {
-            const savedSubTab = localStorage.getItem('ai_helper_grocery_subtab') || 'deals';
+            const savedSubTab = localStorage.getItem('ai_helper_grocery_subtab') || 'feed';
             switchGrocerySubTab(savedSubTab);
             loadGroceryStores();
             loadGroceryLists().then(() => {
-                if (currentGrocerySubTab === 'lists') loadActiveListItems();
+                if (currentGrocerySubTab === 'feed') loadPersonalizedDealsFeed();
+                else if (currentGrocerySubTab === 'lists') loadActiveListItems();
             });
         }
 
@@ -2495,7 +2771,9 @@
             const section = document.getElementById(`grocery-section-${tab}`);
             if (section) section.style.display = 'block';
 
-            if (tab === 'lists') {
+            if (tab === 'feed') {
+                loadPersonalizedDealsFeed();
+            } else if (tab === 'lists') {
                 loadActiveListItems();
             } else if (tab === 'stores') {
                 loadGroceryStores();
@@ -2510,7 +2788,439 @@
             }
         }
 
-        // --- Store Management ---
+        // =====================================================================
+        // --- 1. PERSONALIZED DEAL FEED & PREFERENCES ---
+        // =====================================================================
+        function setFeedCategoryFilter(cat, btn) {
+            currentFeedCategory = cat;
+            if (btn && btn.parentElement) {
+                btn.parentElement.querySelectorAll('.filter-chip').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+            }
+            loadPersonalizedDealsFeed();
+        }
+
+        function debounceFeedSearch() {
+            clearTimeout(feedSearchTimeout);
+            feedSearchTimeout = setTimeout(() => {
+                const input = document.getElementById('feed-search-input');
+                currentFeedSearch = input ? input.value.trim() : '';
+                loadPersonalizedDealsFeed();
+            }, 300);
+        }
+
+        function toggleFeedBestOnly() {
+            feedBestOnly = !feedBestOnly;
+            const btn = document.getElementById('feed-best-only-btn');
+            if (btn) {
+                btn.classList.toggle('active', feedBestOnly);
+                btn.style.background = feedBestOnly ? '#10b981' : 'rgba(16, 185, 129, 0.15)';
+                btn.style.color = feedBestOnly ? '#fff' : '#34d399';
+            }
+            loadPersonalizedDealsFeed();
+        }
+
+        function updateFeedTargetListDropdown() {
+            const select = document.getElementById('feed-target-list-select');
+            if (!select) return;
+            select.innerHTML = allGroceryLists.map(l => `<option value="${l.id}" ${l.id === activeGroceryListId ? 'selected' : ''}>${escapeHtml(l.title)}</option>`).join('');
+        }
+
+        async function loadPersonalizedDealsFeed() {
+            const container = document.getElementById('my-deals-feed-container');
+            const countLabel = document.getElementById('feed-deals-count-label');
+            if (!container) return;
+
+            container.innerHTML = `
+                <div style="grid-column: 1 / -1; text-align: center; color: #888; padding: 40px;">
+                    <div style="font-size: 28px; margin-bottom: 10px;">⏳</div>
+                    <div style="color: #fff; font-weight: 600;">Curating your personalized deals & price comparisons...</div>
+                </div>
+            `;
+
+            try {
+                const params = new URLSearchParams();
+                if (currentFeedCategory && currentFeedCategory !== 'all') params.append('category', currentFeedCategory);
+                if (currentFeedSearch) params.append('search', currentFeedSearch);
+                if (feedBestOnly) params.append('best_only', 'true');
+
+                const response = await fetch(`/api/groceries/feed?${params.toString()}`);
+                await handleApiError(response);
+                const data = await response.json();
+
+                currentPreferences = data.preferences || null;
+                const deals = data.deals || [];
+
+                if (countLabel) {
+                    countLabel.innerHTML = `Showing <strong style="color:#fff;">${deals.length}</strong> top-matched deals (from ${data.total_available || 0} local circular items)`;
+                }
+
+                updateFeedTargetListDropdown();
+
+                if (deals.length === 0) {
+                    container.innerHTML = `
+                        <div style="grid-column: 1 / -1; text-align: center; color: #aaa; padding: 50px 20px; border: 1px dashed var(--border-color); border-radius: var(--radius-md); background: rgba(0,0,0,0.15);">
+                            <div style="font-size: 32px; margin-bottom: 10px;">🛒</div>
+                            <h3 style="color: #fff; margin-top: 0;">No Matching Deals Found</h3>
+                            <p style="max-width: 500px; margin: 0 auto 15px auto; font-size: 13.5px; color: #94a3b8;">
+                                ${currentFeedSearch ? `No sales matched "${escapeHtml(currentFeedSearch)}". Try clearing your search.` : 'Click <strong>Store Ads &amp; Circulars</strong> to auto-fetch your local weekly store circulars or click <strong>⚙️ Deal Preferences</strong> to tune your favorites!'}
+                            </p>
+                            <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+                                <button class="save-btn" onclick="openDealPreferencesModal()" style="margin:0; padding: 8px 18px; font-size: 13px; background: #374151;">⚙️ Tune Preferences</button>
+                                <button class="save-btn" onclick="switchGrocerySubTab('stores')" style="margin:0; padding: 8px 18px; font-size: 13px; background: #2563eb;">🏪 Sync Store Circulars</button>
+                            </div>
+                        </div>
+                    `;
+                    return;
+                }
+
+                renderPersonalizedDealsFeed(deals);
+
+            } catch(e) {
+                if (e.message !== "Unauthorized") {
+                    container.innerHTML = `<div style="grid-column: 1 / -1;" class="error">Failed to load personalized deals feed.</div>`;
+                }
+            }
+        }
+
+        function renderPersonalizedDealsFeed(deals) {
+            const container = document.getElementById('my-deals-feed-container');
+            if (!container) return;
+
+            container.innerHTML = deals.map((deal, idx) => {
+                const pillClass = getStorePillClass(deal.store);
+                const emoji = getCategoryEmoji(deal.category);
+                const comp = deal.comparison || {};
+                
+                let compPillHtml = '';
+                if (comp.badge_type === 'green') {
+                    compPillHtml = `<div class="comp-pill comp-pill-green" title="${escapeHtml(comp.summary || '')}">${escapeHtml(comp.summary || '✓ Best Price Found')}</div>`;
+                } else if (comp.badge_type === 'red') {
+                    compPillHtml = `<div class="comp-pill comp-pill-red" title="${escapeHtml(comp.summary || '')}">${escapeHtml(comp.summary || '⚠️ Cheaper at other store')}</div>`;
+                } else if (comp.badge_type === 'neutral' && comp.has_match) {
+                    compPillHtml = `<div class="comp-pill comp-pill-neutral">⚪ ${escapeHtml(comp.summary || 'Store Special')}</div>`;
+                }
+
+                const imageTag = deal.image_url ? `
+                    <img src="${escapeHtml(deal.image_url)}" alt="${escapeHtml(deal.item)}" class="item-thumb" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    <div class="item-avatar-fallback" style="display:none;">${emoji}</div>
+                ` : `<div class="item-avatar-fallback">${emoji}</div>`;
+
+                const safeItemName = escapeHtml(deal.item).replace(/'/g, "\\'");
+                const safeStoreName = escapeHtml(deal.store).replace(/'/g, "\\'");
+                const safePrice = escapeHtml(deal.price || '').replace(/'/g, "\\'");
+                const safeCategory = escapeHtml(deal.category || 'General').replace(/'/g, "\\'");
+                const safeImageUrl = escapeHtml(deal.image_url || '').replace(/'/g, "\\'");
+
+                return `
+                    <div class="deal-card" id="deal-card-${idx}">
+                        <div>
+                            <div style="display: flex; gap: 12px; align-items: flex-start; margin-bottom: 10px;">
+                                <div class="item-thumb-container">
+                                    ${imageTag}
+                                </div>
+                                <div style="flex: 1; min-width: 0;">
+                                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; flex-wrap: wrap;">
+                                        <span class="store-pill ${pillClass}">${escapeHtml(deal.store)}</span>
+                                        ${deal.price ? `<span class="price-pill" style="font-size: 14px; font-weight: 800; color: #34d399;">${escapeHtml(deal.price)}</span>` : ''}
+                                    </div>
+                                    <div style="font-weight: 700; color: #fff; font-size: 14.5px; margin-top: 5px; line-height: 1.35; word-break: break-word;">
+                                        ${escapeHtml(deal.item)}
+                                    </div>
+                                    <div style="display: flex; gap: 6px; align-items: center; margin-top: 4px;">
+                                        <span class="category-pill" style="font-size: 11px;">${escapeHtml(deal.category)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            ${deal.notes ? `<div style="font-size: 12px; color: #94a3b8; line-height: 1.35; margin-bottom: 8px; background: rgba(0,0,0,0.25); padding: 5px 8px; border-radius: 4px;">${escapeHtml(deal.notes)}</div>` : ''}
+                            
+                            ${compPillHtml}
+                        </div>
+
+                        <div style="margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 10px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                            <div style="display: flex; gap: 5px; align-items: center;">
+                                <button class="deal-feedback-btn" onclick="submitDealFeedback('${safeItemName}', '${safeCategory}', 'more', this, ${idx})" title="Show more deals like this item">
+                                    👍 More
+                                </button>
+                                <button class="deal-feedback-btn" onclick="submitDealFeedback('${safeItemName}', '${safeCategory}', 'less', this, ${idx})" title="Show less deals like this item">
+                                    👎 Less
+                                </button>
+                                <button class="deal-feedback-btn" onclick="submitDealFeedback('${safeItemName}', '${safeCategory}', 'hide_category', this, ${idx})" title="Hide this category completely">
+                                    🚫 Hide
+                                </button>
+                            </div>
+                            <button class="add-btn" onclick="addFeedDealToList('${safeItemName}', '${safeStoreName}', '${safePrice}', '${safeCategory}', '${safeImageUrl}', this)" style="margin: 0; padding: 6px 12px; font-size: 12.5px; background: #2563eb;">
+                                + Add to List
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function submitDealFeedback(itemName, category, action, btn, cardIdx) {
+            const card = document.getElementById(`deal-card-${cardIdx}`);
+            
+            if (action === 'more') {
+                if (btn) btn.classList.add('active-up');
+                showGroceryMsg(`👍 Added "${itemName}" to your liked preferences!`, "success");
+            } else if (action === 'less') {
+                if (card) card.classList.add('feedback-dismissed');
+                setTimeout(() => { if (card) card.remove(); }, 300);
+                showGroceryMsg(`👎 Deprioritized "${itemName}".`, "info");
+            } else if (action === 'hide_category') {
+                if (!confirm(`Hide all "${category}" deals from your feed?`)) return;
+                if (card) card.classList.add('feedback-dismissed');
+                setTimeout(() => loadPersonalizedDealsFeed(), 400);
+                showGroceryMsg(`🚫 Hidden "${category}" category.`, "info");
+            }
+
+            try {
+                const response = await fetch('/api/groceries/preferences/feedback', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({item_name: itemName, category: category, action: action})
+                });
+                await handleApiError(response);
+                const data = await response.json();
+                currentPreferences = data.preferences;
+            } catch(e) {
+                if (e.message !== "Unauthorized") console.error("Error submitting feedback", e);
+            }
+        }
+
+        async function addFeedDealToList(itemName, storeName, priceNotes, category, imageUrl, btn) {
+            const listSelect = document.getElementById('feed-target-list-select');
+            const targetListId = (listSelect ? listSelect.value : null) || activeGroceryListId;
+            if (!targetListId) return alert("Please select or create a grocery list first.");
+
+            const origText = btn ? btn.innerText : '';
+            if (btn) btn.innerText = "Adding...";
+
+            try {
+                const response = await fetch(`/api/groceries/lists/${targetListId}/items`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        list_id: targetListId,
+                        item_name: itemName,
+                        store_name: storeName || 'Any',
+                        price_notes: priceNotes || '',
+                        category: category || 'General',
+                        image_url: imageUrl || ''
+                    })
+                });
+                await handleApiError(response);
+                if (btn) {
+                    btn.innerText = "✓ Added!";
+                    btn.style.background = "#10b981";
+                    setTimeout(() => {
+                        btn.innerText = origText;
+                        btn.style.background = "#2563eb";
+                    }, 2000);
+                }
+                if (currentGrocerySubTab === 'lists') loadActiveListItems();
+            } catch(e) {
+                if (e.message !== "Unauthorized") alert(e.message || "Failed to add item.");
+                if (btn) btn.innerText = origText;
+            }
+        }
+
+        // --- Preferences Modal Logic ---
+        const ALL_AVAILABLE_CATEGORIES = [
+            'Meat & Seafood', 'Produce', 'Dairy & Eggs', 'Bakery & Deli',
+            'Frozen', 'Beverages', 'Snacks', 'Pantry & Dry Goods',
+            'Household & Personal', 'Canned Goods & Soups', 'Furniture & Patio'
+        ];
+
+        let modalLikedKeywords = [];
+        let modalDislikedKeywords = [];
+
+        async function openDealPreferencesModal() {
+            try {
+                const response = await fetch('/api/groceries/preferences');
+                await handleApiError(response);
+                currentPreferences = await response.json();
+            } catch(e) {
+                currentPreferences = {
+                    favorite_categories: ['Meat & Seafood', 'Produce'],
+                    ignored_categories: ['Furniture & Patio', 'Canned Goods & Soups'],
+                    liked_keywords: ['steak', 'ribeye', 'brisket', 'beef', 'chicken', 'bacon', 'salmon', 'pork', 'wings', 'eggs'],
+                    disliked_keywords: ['patio', 'chair', 'canned soup', 'furniture']
+                };
+            }
+
+            modalLikedKeywords = [...(currentPreferences.liked_keywords || [])];
+            modalDislikedKeywords = [...(currentPreferences.disliked_keywords || [])];
+
+            renderPreferencesCategories();
+            renderPreferencesTags();
+
+            document.getElementById('deal-preferences-modal').style.display = 'flex';
+        }
+
+        function closeDealPreferencesModal() {
+            document.getElementById('deal-preferences-modal').style.display = 'none';
+        }
+
+        function renderPreferencesCategories() {
+            const favContainer = document.getElementById('pref-fav-cats-container');
+            const ignContainer = document.getElementById('pref-ign-cats-container');
+            
+            const favs = new Set(currentPreferences.favorite_categories || []);
+            const igns = new Set(currentPreferences.ignored_categories || []);
+
+            if (favContainer) {
+                favContainer.innerHTML = ALL_AVAILABLE_CATEGORIES.map(cat => `
+                    <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #fff; cursor: pointer; background: #0d1117; padding: 6px 10px; border-radius: 4px; border: 1px solid var(--border-color);">
+                        <input type="checkbox" value="${escapeHtml(cat)}" ${favs.has(cat) ? 'checked' : ''} onchange="toggleModalCategory('fav', '${escapeHtml(cat)}', this.checked)" style="cursor: pointer;">
+                        <span>${getCategoryEmoji(cat)} ${escapeHtml(cat)}</span>
+                    </label>
+                `).join('');
+            }
+
+            if (ignContainer) {
+                ignContainer.innerHTML = ALL_AVAILABLE_CATEGORIES.map(cat => `
+                    <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #fff; cursor: pointer; background: #0d1117; padding: 6px 10px; border-radius: 4px; border: 1px solid var(--border-color);">
+                        <input type="checkbox" value="${escapeHtml(cat)}" ${igns.has(cat) ? 'checked' : ''} onchange="toggleModalCategory('ign', '${escapeHtml(cat)}', this.checked)" style="cursor: pointer;">
+                        <span>${getCategoryEmoji(cat)} ${escapeHtml(cat)}</span>
+                    </label>
+                `).join('');
+            }
+        }
+
+        function toggleModalCategory(type, cat, isChecked) {
+            if (!currentPreferences) return;
+            if (type === 'fav') {
+                let favs = new Set(currentPreferences.favorite_categories || []);
+                if (isChecked) {
+                    favs.add(cat);
+                    // Remove from ignored
+                    let igns = new Set(currentPreferences.ignored_categories || []);
+                    igns.delete(cat);
+                    currentPreferences.ignored_categories = Array.from(igns);
+                } else {
+                    favs.delete(cat);
+                }
+                currentPreferences.favorite_categories = Array.from(favs);
+            } else if (type === 'ign') {
+                let igns = new Set(currentPreferences.ignored_categories || []);
+                if (isChecked) {
+                    igns.add(cat);
+                    // Remove from favorites
+                    let favs = new Set(currentPreferences.favorite_categories || []);
+                    favs.delete(cat);
+                    currentPreferences.favorite_categories = Array.from(favs);
+                } else {
+                    igns.delete(cat);
+                }
+                currentPreferences.ignored_categories = Array.from(igns);
+            }
+            renderPreferencesCategories();
+        }
+
+        function renderPreferencesTags() {
+            const likedBox = document.getElementById('pref-liked-tags');
+            const dislikedBox = document.getElementById('pref-disliked-tags');
+
+            if (likedBox) {
+                likedBox.innerHTML = modalLikedKeywords.map((kw, i) => `
+                    <span class="tag-chip" style="background: rgba(37, 99, 235, 0.2); border-color: rgba(37, 99, 235, 0.4); color: #93c5fd;">
+                        ${escapeHtml(kw)}
+                        <span class="tag-chip-remove" onclick="removeLikedKeyword(${i})">&times;</span>
+                    </span>
+                `).join('');
+            }
+
+            if (dislikedBox) {
+                dislikedBox.innerHTML = modalDislikedKeywords.map((kw, i) => `
+                    <span class="tag-chip" style="background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.4); color: #fca5a5;">
+                        ${escapeHtml(kw)}
+                        <span class="tag-chip-remove" onclick="removeDislikedKeyword(${i})">&times;</span>
+                    </span>
+                `).join('');
+            }
+        }
+
+        function addLikedKeywordTag() {
+            const input = document.getElementById('pref-new-liked-kw');
+            const val = input ? input.value.trim().toLowerCase() : '';
+            if (val && !modalLikedKeywords.includes(val)) {
+                modalLikedKeywords.push(val);
+                modalDislikedKeywords = modalDislikedKeywords.filter(k => k !== val);
+                input.value = '';
+                renderPreferencesTags();
+            }
+        }
+
+        function removeLikedKeyword(index) {
+            modalLikedKeywords.splice(index, 1);
+            renderPreferencesTags();
+        }
+
+        function addDislikedKeywordTag() {
+            const input = document.getElementById('pref-new-disliked-kw');
+            const val = input ? input.value.trim().toLowerCase() : '';
+            if (val && !modalDislikedKeywords.includes(val)) {
+                modalDislikedKeywords.push(val);
+                modalLikedKeywords = modalLikedKeywords.filter(k => k !== val);
+                input.value = '';
+                renderPreferencesTags();
+            }
+        }
+
+        function removeDislikedKeyword(index) {
+            modalDislikedKeywords.splice(index, 1);
+            renderPreferencesTags();
+        }
+
+        function applyMeatLoverPreset() {
+            currentPreferences.favorite_categories = ['Meat & Seafood', 'Produce'];
+            currentPreferences.ignored_categories = ['Furniture & Patio', 'Canned Goods & Soups'];
+            modalLikedKeywords = ['steak', 'ribeye', 'brisket', 'beef', 'chicken', 'bacon', 'salmon', 'pork', 'wings', 'eggs', 'ground beef'];
+            modalDislikedKeywords = ['patio', 'chair', 'canned soup', 'furniture', 'umbrella'];
+            renderPreferencesCategories();
+            renderPreferencesTags();
+            showGroceryMsg("Applied Meat & Essentials Preset! Click Save to activate.", "info");
+        }
+
+        async function saveDealPreferences() {
+            const btn = document.getElementById('pref-save-btn');
+            const orig = btn.innerText;
+            btn.innerText = "Saving...";
+            btn.disabled = true;
+
+            const payload = {
+                favorite_categories: currentPreferences.favorite_categories,
+                ignored_categories: currentPreferences.ignored_categories,
+                liked_keywords: modalLikedKeywords,
+                disliked_keywords: modalDislikedKeywords
+            };
+
+            try {
+                const response = await fetch('/api/groceries/preferences', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                await handleApiError(response);
+                const data = await response.json();
+                currentPreferences = data.preferences;
+                closeDealPreferencesModal();
+                showGroceryMsg("✓ Preferences saved successfully!", "success");
+                loadPersonalizedDealsFeed();
+            } catch(e) {
+                if (e.message !== "Unauthorized") alert(e.message || "Failed to save preferences.");
+            } finally {
+                btn.innerText = orig;
+                btn.disabled = false;
+            }
+        }
+
+        // =====================================================================
+        // --- 2. STORE MANAGEMENT & CIRCULAR BROWSING ---
+        // =====================================================================
         function getStorePillClass(storeName) {
             const s = (storeName || '').toLowerCase().replace(/[^a-z0-9]/g, '-');
             if (s.includes('heb')) return 'store-pill-heb';
@@ -2536,7 +3246,6 @@
                 await handleApiError(response);
                 allGroceryStores = await response.json();
                 
-                // Populate Store Grid in Tab 3
                 if (container) {
                     if (allGroceryStores.length === 0) {
                         container.innerHTML = `
@@ -2589,7 +3298,6 @@
                     }
                 }
 
-                // Update Deal Query Store Pills
                 if (toggleContainer) {
                     if (allGroceryStores.length > 0) {
                         toggleContainer.innerHTML = `
@@ -2601,7 +3309,6 @@
                     }
                 }
 
-                // Update Quick Add Item Store Dropdown
                 if (itemStoreSelect && allGroceryStores.length > 0) {
                     const currentVal = itemStoreSelect.value;
                     itemStoreSelect.innerHTML = `<option value="Any">Any Store</option>` + 
@@ -2643,6 +3350,7 @@
                     showGroceryMsg(`✓ Auto-fetched ${data.total_deals || 0} weekly deals across ${data.stores_count || 0} local supermarkets for zip ${data.postal_code}!`, "success");
                 }
                 await loadGroceryStores();
+                if (currentGrocerySubTab === 'feed') loadPersonalizedDealsFeed();
             } catch(e) {
                 if (e.message !== "Unauthorized") alert(e.message || "Failed to auto-fetch weekly deals.");
             } finally {
@@ -2694,7 +3402,6 @@
             const searchInput = document.getElementById('browse-modal-search');
             if (searchInput) searchInput.value = '';
 
-            // Update Target list dropdown
             const listSelect = document.getElementById('browse-modal-target-list');
             if (listSelect) {
                 listSelect.innerHTML = allGroceryLists.map(l => `<option value="${l.id}" ${l.id === activeGroceryListId ? 'selected' : ''}>${escapeHtml(l.title)}</option>`).join('');
@@ -2786,61 +3493,46 @@
                 return;
             }
 
-            container.innerHTML = filtered.map((deal, idx) => `
-                <div style="background: #0d1117; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px 14px; display: flex; flex-direction: column; justify-content: space-between;">
-                    <div>
-                        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; margin-bottom: 6px;">
-                            <span class="category-pill" style="font-size: 11px;">${escapeHtml(deal.category || 'General')}</span>
-                            ${deal.price ? `<span class="price-pill" style="font-size: 13px; font-weight: bold;">${escapeHtml(deal.price)}</span>` : ''}
+            container.innerHTML = filtered.map((deal) => {
+                const emoji = getCategoryEmoji(deal.category);
+                const imageTag = deal.image_url ? `
+                    <img src="${escapeHtml(deal.image_url)}" alt="${escapeHtml(deal.item)}" class="item-thumb" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    <div class="item-avatar-fallback" style="display:none; font-size: 20px;">${emoji}</div>
+                ` : `<div class="item-avatar-fallback" style="font-size: 20px;">${emoji}</div>`;
+
+                const safeItem = escapeHtml(deal.item).replace(/'/g, "\\'");
+                const safeStore = escapeHtml(currentBrowseStore.name).replace(/'/g, "\\'");
+                const safePrice = escapeHtml(deal.price || '').replace(/'/g, "\\'");
+                const safeCat = escapeHtml(deal.category || 'General').replace(/'/g, "\\'");
+                const safeImg = escapeHtml(deal.image_url || '').replace(/'/g, "\\'");
+
+                return `
+                    <div style="background: #0d1117; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px 14px; display: flex; flex-direction: column; justify-content: space-between;">
+                        <div>
+                            <div style="display: flex; gap: 10px; align-items: flex-start; margin-bottom: 8px;">
+                                <div style="width: 48px; height: 48px; min-width: 48px; background: #161b22; border-radius: 6px; display: flex; align-items: center; justify-content: center; overflow: hidden; border: 1px solid rgba(255,255,255,0.06);">
+                                    ${imageTag}
+                                </div>
+                                <div style="flex: 1; min-width: 0;">
+                                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 4px;">
+                                        <span class="category-pill" style="font-size: 11px;">${escapeHtml(deal.category || 'General')}</span>
+                                        ${deal.price ? `<span class="price-pill" style="font-size: 13px; font-weight: bold;">${escapeHtml(deal.price)}</span>` : ''}
+                                    </div>
+                                    <div style="font-weight: 600; color: #fff; font-size: 13.5px; margin-top: 4px; line-height: 1.35;">
+                                        ${escapeHtml(deal.item)}
+                                    </div>
+                                </div>
+                            </div>
+                            ${deal.notes ? `<div style="font-size: 12px; color: #94a3b8; margin-bottom: 8px; line-height: 1.3;">${escapeHtml(deal.notes)}</div>` : ''}
                         </div>
-                        <div style="font-weight: 600; color: #fff; font-size: 13.5px; margin-bottom: 6px; line-height: 1.35;">
-                            ${escapeHtml(deal.item)}
+                        <div style="display: flex; justify-content: flex-end; margin-top: 8px; border-top: 1px dashed rgba(255,255,255,0.08); padding-top: 8px;">
+                            <button class="add-btn" onclick="addFeedDealToList('${safeItem}', '${safeStore}', '${safePrice}', '${safeCat}', '${safeImg}', this)" style="margin: 0; padding: 4px 10px; font-size: 12px; background: #2563eb;">
+                                + Add to List
+                            </button>
                         </div>
-                        ${deal.notes ? `<div style="font-size: 12px; color: #94a3b8; margin-bottom: 8px; line-height: 1.3;">${escapeHtml(deal.notes)}</div>` : ''}
                     </div>
-                    <div style="display: flex; justify-content: flex-end; margin-top: 8px; border-top: 1px dashed rgba(255,255,255,0.08); padding-top: 8px;">
-                        <button class="add-btn" onclick="addDealToTargetList('${escapeHtml(deal.item).replace(/'/g, "\\'")}', '${escapeHtml(currentBrowseStore.name).replace(/'/g, "\\'")}', '${escapeHtml(deal.price || '').replace(/'/g, "\\'")}', '${escapeHtml(deal.category || 'General').replace(/'/g, "\\'")}', this)" style="margin: 0; padding: 4px 10px; font-size: 12px; background: #2563eb;">
-                            + Add to List
-                        </button>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        async function addDealToTargetList(itemName, storeName, priceNotes, category, btn) {
-            const listSelect = document.getElementById('browse-modal-target-list');
-            const targetListId = (listSelect ? listSelect.value : null) || activeGroceryListId;
-            if (!targetListId) return alert("Please select or create a grocery list first.");
-
-            const origText = btn ? btn.innerText : '';
-            if (btn) btn.innerText = "Adding...";
-
-            try {
-                const response = await fetch(`/api/groceries/lists/${targetListId}/items`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        list_id: targetListId,
-                        item_name: itemName,
-                        store_name: storeName || 'Any',
-                        price_notes: priceNotes || '',
-                        category: category || 'General'
-                    })
-                });
-                await handleApiError(response);
-                if (btn) {
-                    btn.innerText = "✓ Added!";
-                    btn.style.background = "#10b981";
-                    setTimeout(() => {
-                        btn.innerText = origText;
-                        btn.style.background = "#2563eb";
-                    }, 2000);
-                }
-                if (currentGrocerySubTab === 'lists') loadActiveListItems();
-            } catch(e) {
-                if (e.message !== "Unauthorized") alert(e.message || "Failed to add item.");
-                if (btn) btn.innerText = origText;
-            }
+                `;
+            }).join('');
         }
 
         let currentPasteStoreId = null;
@@ -2881,6 +3573,7 @@
                 closePasteDealsModal();
                 alert(`✓ Successfully extracted ${data.deals_found || 0} deals!`);
                 loadGroceryStores();
+                if (currentGrocerySubTab === 'feed') loadPersonalizedDealsFeed();
             } catch(e) {
                 if (e.message !== "Unauthorized") alert(e.message || "Failed to extract deals.");
             } finally {
@@ -2960,6 +3653,7 @@
                     showGroceryMsg(`Extracted ${data.deals_found} weekly deals!`, "success");
                 }
                 loadGroceryStores();
+                if (currentGrocerySubTab === 'feed') loadPersonalizedDealsFeed();
             } catch(e) {
                 if (e.message !== "Unauthorized") alert(e.message || "Failed to scan store ads. Verify the URL or check the Logs tab.");
                 if (btn) btn.innerText = orig;
@@ -2982,6 +3676,7 @@
                 const data = await response.json();
                 msgBox.innerHTML = '<div class="success">Completed scan across all stores!</div>';
                 loadGroceryStores();
+                if (currentGrocerySubTab === 'feed') loadPersonalizedDealsFeed();
                 setTimeout(() => msgBox.innerHTML = '', 4000);
             } catch(e) {
                 if (e.message !== "Unauthorized") msgBox.innerHTML = `<div class="error">${e.message || 'Error scanning store ads.'}</div>`;
@@ -2993,7 +3688,9 @@
             }
         }
 
-        // --- AI Deal Finder & Comparison ---
+        // =====================================================================
+        // --- 3. AI DEAL FINDER & COMPARISON QUERY ---
+        // =====================================================================
         async function runDealQuery() {
             const queryInput = document.getElementById('deal-search-query');
             const query = queryInput.value.trim();
@@ -3027,11 +3724,9 @@
                     return;
                 }
 
-                // Render markdown text
                 let formattedMd = formatSimpleMarkdown(data.analysis_markdown || 'No analysis returned.');
                 mdContainer.innerHTML = formattedMd;
 
-                // Render recommended items
                 latestRecommendedDeals = data.items || [];
                 updateDealTargetListDropdown();
 
@@ -3062,15 +3757,11 @@
 
         function formatSimpleMarkdown(mdText) {
             let escaped = escapeHtml(mdText);
-            // Headers
             escaped = escaped.replace(/^### (.*$)/gim, '<h3 style="color:#60a5fa; margin: 15px 0 8px 0;">$1</h3>');
             escaped = escaped.replace(/^## (.*$)/gim, '<h2 style="color:#93c5fd; margin: 18px 0 10px 0;">$1</h2>');
             escaped = escaped.replace(/^# (.*$)/gim, '<h1 style="color:#fff; margin: 20px 0 12px 0;">$1</h1>');
-            // Bold
             escaped = escaped.replace(/\*\*(.*?)\*\*/g, '<strong style="color:#fff;">$1</strong>');
-            // Bullet points
             escaped = escaped.replace(/^\s*-\s+(.*$)/gim, '<li style="margin-left: 20px; color:#e2e8f0;">$1</li>');
-            // Line breaks
             escaped = escaped.replace(/\n/g, '<br>');
             return escaped;
         }
@@ -3123,7 +3814,8 @@
                         item_name: item.item_name,
                         store_name: item.store_name || "Any",
                         price_notes: item.price_notes || "",
-                        category: item.category || "General"
+                        category: item.category || "General",
+                        image_url: item.image_url || ""
                     })
                 });
                 await handleApiError(response);
@@ -3136,7 +3828,9 @@
             }
         }
 
-        // --- Grocery Lists & Items ---
+        // =====================================================================
+        // --- 4. GROCERY LISTS & LIVE CROSS-STORE COMPARISON ---
+        // =====================================================================
         async function loadGroceryLists() {
             const select = document.getElementById('active-grocery-list-select');
             try {
@@ -3154,6 +3848,7 @@
                     }
                 }
                 updateDealTargetListDropdown();
+                updateFeedTargetListDropdown();
             } catch(e) {
                 if (e.message !== "Unauthorized") console.error("Error loading grocery lists", e);
             }
@@ -3165,6 +3860,7 @@
                 activeGroceryListId = select.value;
                 loadActiveListItems();
                 updateDealTargetListDropdown();
+                updateFeedTargetListDropdown();
             }
         }
 
@@ -3235,7 +3931,7 @@
                     container.innerHTML = `
                         <div style="color: #aaa; text-align: center; padding: 35px; border: 1px dashed var(--border-color); border-radius: var(--radius-md);">
                             <h3 style="color: #fff; margin-top: 0;">Your Grocery List is Empty</h3>
-                            <p>Add items using the quick form above, ask the Deal Finder for sale recommendations, or click <strong>🤖 Generate with AI</strong> to build a meal plan!</p>
+                            <p>Add items using the quick form above, browse <strong>🔥 My Deals</strong> for personalized specials, or click <strong>🤖 Generate with AI</strong> to build a meal plan!</p>
                         </div>
                     `;
                     return;
@@ -3264,16 +3960,35 @@
                                 ${groupItems.map(item => {
                                     const isChecked = item.is_checked === 1;
                                     const pillClass = getStorePillClass(item.store_name);
+                                    const emoji = getCategoryEmoji(item.category);
+                                    const comp = item.comparison || {};
+                                    
+                                    let compPillHtml = '';
+                                    if (comp.badge_type === 'green') {
+                                        compPillHtml = `<span class="comp-pill comp-pill-green" style="font-size: 11px; padding: 2px 7px; margin-top: 0;" title="${escapeHtml(comp.summary || '')}">🟢 ${escapeHtml(comp.summary || 'Best Price')}</span>`;
+                                    } else if (comp.badge_type === 'red') {
+                                        compPillHtml = `<span class="comp-pill comp-pill-red" style="font-size: 11px; padding: 2px 7px; margin-top: 0;" title="${escapeHtml(comp.summary || '')}">🔴 ${escapeHtml(comp.summary || 'Cheaper elsewhere')}</span>`;
+                                    }
+
+                                    const imageTag = item.image_url ? `
+                                        <img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.item_name)}" style="width: 44px; height: 44px; object-fit: contain; padding: 2px; box-sizing: border-box;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                        <div class="item-avatar-fallback" style="display:none; font-size: 20px;">${emoji}</div>
+                                    ` : `<div class="item-avatar-fallback" style="font-size: 20px;">${emoji}</div>`;
+
                                     return `
                                         <div class="grocery-item-row ${isChecked ? 'checked' : ''}" id="grocery-item-${item.id}">
                                             <div style="display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0;">
                                                 <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleGroceryItemChecked('${item.id}', this.checked)" style="transform: scale(1.3); cursor: pointer; flex-shrink: 0;">
+                                                <div style="width: 44px; height: 44px; min-width: 44px; background: #0d1117; border-radius: 6px; display: flex; align-items: center; justify-content: center; overflow: hidden; border: 1px solid rgba(255,255,255,0.06);">
+                                                    ${imageTag}
+                                                </div>
                                                 <div style="flex: 1; min-width: 0;">
-                                                    <span class="grocery-item-title" style="font-size: 14.5px; font-weight: 500; color: #fff;">${escapeHtml(item.item_name)}</span>
+                                                    <span class="grocery-item-title" style="font-size: 14.5px; font-weight: 600; color: #fff;">${escapeHtml(item.item_name)}</span>
                                                     <div style="display: flex; gap: 6px; align-items: center; margin-top: 4px; flex-wrap: wrap;">
                                                         ${currentGroceryGrouping !== 'store' ? `<span class="store-pill ${pillClass}">${escapeHtml(item.store_name || 'Any')}</span>` : ''}
                                                         ${currentGroceryGrouping !== 'category' && item.category ? `<span class="category-pill">${escapeHtml(item.category)}</span>` : ''}
                                                         ${item.price_notes ? `<span class="price-pill">${escapeHtml(item.price_notes)}</span>` : ''}
+                                                        ${compPillHtml}
                                                     </div>
                                                 </div>
                                             </div>

@@ -174,8 +174,14 @@ def init_db():
                     store_name TEXT,
                     price_notes TEXT,
                     category TEXT,
-                    is_checked INTEGER DEFAULT 0
+                    is_checked INTEGER DEFAULT 0,
+                    image_url TEXT
                  )''')
+                 
+    try:
+        c.execute("ALTER TABLE grocery_list_items ADD COLUMN image_url TEXT")
+    except sqlite3.OperationalError:
+        pass # Column already exists
         
     conn.commit()
     conn.close()
@@ -1512,6 +1518,7 @@ class GroceryItemSave(BaseModel):
     price_notes: Optional[str] = ""
     category: Optional[str] = "General"
     is_checked: Optional[int] = 0
+    image_url: Optional[str] = ""
 
 class GroceryBatchItemsSave(BaseModel):
     list_id: str
@@ -1529,23 +1536,66 @@ class AIGroceryListRequest(BaseModel):
 class AutoFetchDealsRequest(BaseModel):
     postal_code: Optional[str] = "76262"
 
+class PreferencesUpdateRequest(BaseModel):
+    favorite_categories: Optional[List[str]] = None
+    ignored_categories: Optional[List[str]] = None
+    liked_keywords: Optional[List[str]] = None
+    disliked_keywords: Optional[List[str]] = None
+
+class FeedbackActionRequest(BaseModel):
+    item_name: str
+    category: Optional[str] = ""
+    action: str # "more", "less", "hide_category"
+
+DEFAULT_DEAL_PREFERENCES = {
+    "favorite_categories": ["Meat & Seafood", "Produce"],
+    "ignored_categories": ["Furniture & Patio", "Canned Goods & Soups"],
+    "liked_keywords": ["steak", "ribeye", "brisket", "beef", "chicken", "bacon", "salmon", "pork", "wings", "eggs"],
+    "disliked_keywords": ["patio", "chair", "canned soup", "furniture", "umbrella"]
+}
+
+def get_user_deal_preferences(settings: dict) -> dict:
+    prefs = settings.get("deal_preferences")
+    if not isinstance(prefs, dict):
+        return {k: list(v) for k, v in DEFAULT_DEAL_PREFERENCES.items()}
+    return {
+        "favorite_categories": list(prefs.get("favorite_categories", DEFAULT_DEAL_PREFERENCES["favorite_categories"])),
+        "ignored_categories": list(prefs.get("ignored_categories", DEFAULT_DEAL_PREFERENCES["ignored_categories"])),
+        "liked_keywords": list(prefs.get("liked_keywords", DEFAULT_DEAL_PREFERENCES["liked_keywords"])),
+        "disliked_keywords": list(prefs.get("disliked_keywords", DEFAULT_DEAL_PREFERENCES["disliked_keywords"]))
+    }
+
 def guess_deal_category(item_name: str) -> str:
     name = (item_name or '').lower()
-    if any(w in name for w in ['beef', 'steak', 'chicken', 'pork', 'rib', 'roast', 'bacon', 'salmon', 'fish', 'shrimp', 'lobster', 'crab', 'turkey', 'sausage', 'chop', 'wings', 'meat', 'patty', 'patties', 'frank', 'hot dog', 'ground chuck', 'ground round']):
+    # Meat & Seafood (prioritized)
+    if any(w in name for w in ['beef', 'steak', 'chicken', 'pork', 'rib', 'roast', 'bacon', 'salmon', 'fish', 'shrimp', 'lobster', 'crab', 'turkey', 'sausage', 'chop', 'wings', 'meat', 'patty', 'patties', 'frank', 'hot dog', 'ground chuck', 'ground round', 'brisket', 'sirloin', 'ribeye', 'tenderloin', 't-bone', 'drumstick', 'thigh', 'tender', 'cod', 'tilapia', 'halibut', 'tuna', 'ham', 'lamb', 'veal', 'loin', 'filet', 'brats', 'bratwurst', 'meatballs', 't-bone', 'strip']):
         return 'Meat & Seafood'
-    if any(w in name for w in ['apple', 'berry', 'berries', 'grape', 'banana', 'peach', 'melon', 'watermelon', 'cantaloupe', 'salad', 'lettuce', 'tomato', 'potato', 'onion', 'avocado', 'zucchini', 'vegetable', 'fruit', 'lemon', 'lime', 'citrus', 'nectarine', 'cherry', 'spinach', 'kale', 'carrot', 'broccoli']):
+    # Furniture & Patio
+    if any(w in name for w in ['patio', 'furniture', 'chair', 'table', 'umbrella', 'gazebo', 'cushion', 'grill tool', 'fire pit', 'outdoor seating', 'recliner', 'bench', 'lounger', 'lawn mower', 'adirondack', 'planter', 'storage box', 'hammock', 'canopy']):
+        return 'Furniture & Patio'
+    # Canned Goods & Soups
+    if any(w in name for w in ['soup', 'campbell', 'progresso', 'canned', 'broth', 'bouillon', 'canned beans', 'canned corn', 'canned tomato', 'spaghetti-o']):
+        return 'Canned Goods & Soups'
+    # Produce
+    if any(w in name for w in ['apple', 'berry', 'berries', 'grape', 'banana', 'peach', 'melon', 'watermelon', 'cantaloupe', 'salad', 'lettuce', 'tomato', 'potato', 'onion', 'avocado', 'zucchini', 'vegetable', 'fruit', 'lemon', 'lime', 'citrus', 'nectarine', 'cherry', 'spinach', 'kale', 'carrot', 'broccoli', 'asparagus', 'cucumber', 'pepper', 'bell pepper', 'squash', 'mango', 'pineapple', 'strawberries', 'blueberries', 'raspberries', 'mushrooms', 'garlic', 'celery']):
         return 'Produce'
-    if any(w in name for w in ['milk', 'cheese', 'yogurt', 'butter', 'cream', 'egg', 'eggs', 'dairy', 'sour cream', 'creamer', 'cheddar', 'mozzarella', 'parmesan']):
+    # Dairy & Eggs
+    if any(w in name for w in ['milk', 'cheese', 'yogurt', 'butter', 'cream', 'egg', 'eggs', 'dairy', 'sour cream', 'creamer', 'cheddar', 'mozzarella', 'parmesan', 'swiss', 'cottage cheese', 'half & half', 'half and half']):
         return 'Dairy & Eggs'
-    if any(w in name for w in ['frozen', 'ice cream', 'pizza', 'novelties', 'fillet', 'waffles', 'popsicle']):
+    # Frozen
+    if any(w in name for w in ['frozen', 'ice cream', 'pizza', 'novelties', 'fillet', 'waffles', 'popsicle', 'icecream', 'gelato', 'tater tots', 'hot pockets']):
         return 'Frozen'
-    if any(w in name for w in ['water', 'soda', 'coke', 'pepsi', 'drink', 'coffee', 'tea', 'juice', 'beer', 'wine', 'gatorade', 'shake', 'beverage', 'seltzer']):
+    # Beverages
+    if any(w in name for w in ['water', 'soda', 'coke', 'pepsi', 'drink', 'coffee', 'tea', 'juice', 'beer', 'wine', 'gatorade', 'shake', 'beverage', 'seltzer', 'dr pepper', 'sprite', 'lemonade', 'sparkling water', 'energy drink']):
         return 'Beverages'
-    if any(w in name for w in ['bread', 'buns', 'bakery', 'cake', 'pie', 'cookie', 'deli', 'croissant', 'tortilla', 'bagel', 'muffin', 'pastry']):
+    # Bakery & Deli
+    if any(w in name for w in ['bread', 'buns', 'bakery', 'cake', 'pie', 'cookie', 'deli', 'croissant', 'tortilla', 'bagel', 'muffin', 'pastry', 'donut', 'cupcake', 'sourdough', 'rolls', 'sub sandwich', 'rotisserie']):
         return 'Bakery & Deli'
-    if any(w in name for w in ['chip', 'snack', 'candy', 'chocolate', 'nuts', 'cracker', 'popcorn', 'pretzels', 'doritos', 'lays']):
+    # Snacks
+    if any(w in name for w in ['chip', 'snack', 'candy', 'chocolate', 'nuts', 'cracker', 'popcorn', 'pretzels', 'doritos', 'lays', 'cheetos', 'tortilla chips', 'trail mix', 'granola bar', 'gummies']):
         return 'Snacks'
-    if any(w in name for w in ['paper', 'towel', 'detergent', 'tide', 'shampoo', 'soap', 'cleaner', 'swiffer', 'bleach', 'tissue', 'foil', 'wipe', 'diaper', 'trash bag']):
+    # Household & Personal
+    if any(w in name for w in ['paper', 'towel', 'detergent', 'tide', 'shampoo', 'soap', 'cleaner', 'swiffer', 'bleach', 'tissue', 'foil', 'wipe', 'diaper', 'trash bag', 'toothpaste', 'deodorant', 'body wash', 'fabric softener', 'dish soap', 'ziploc', 'charcoal']):
         return 'Household & Personal'
     return 'Pantry & Dry Goods'
 
@@ -1569,6 +1619,167 @@ def normalize_grocery_store_name(merchant_raw: str) -> str:
     if 'market street' in ml: return 'Market Street'
     if 'united' in ml: return 'United Supermarkets'
     return m
+
+def parse_numeric_price(price_str: str) -> dict:
+    if not price_str or not isinstance(price_str, str):
+        return {'unit_price': None, 'unit': 'unknown', 'raw': ''}
+    
+    raw = price_str.strip()
+    raw_lower = raw.lower()
+    
+    if 'bogo' in raw_lower or 'buy 1 get 1' in raw_lower or 'buy one get one' in raw_lower:
+        return {'unit_price': None, 'unit': 'bogo', 'raw': raw}
+        
+    m_lb = re.search(r'\$?([0-9]+(?:\.[0-9]{1,2})?)\s*(?:/|\s+per\s+|\s+)?(?:lb|lbs|pound)\b', raw_lower)
+    if m_lb:
+        try:
+            return {'unit_price': float(m_lb.group(1)), 'unit': 'lb', 'raw': raw}
+        except Exception:
+            pass
+            
+    m_multi = re.search(r'(\d+)\s+(?:for|/)\s+\$?([0-9]+(?:\.[0-9]{1,2})?)', raw_lower)
+    if m_multi:
+        try:
+            qty = float(m_multi.group(1))
+            total = float(m_multi.group(2))
+            if qty > 0:
+                return {'unit_price': round(total / qty, 2), 'unit': 'ea', 'raw': raw}
+        except Exception:
+            pass
+            
+    m_simple = re.search(r'\$?([0-9]+(?:\.[0-9]{1,2})?)', raw_lower)
+    if m_simple:
+        try:
+            val = float(m_simple.group(1))
+            unit = 'lb' if ('/lb' in raw_lower or 'per lb' in raw_lower) else 'ea'
+            return {'unit_price': val, 'unit': unit, 'raw': raw}
+        except Exception:
+            pass
+            
+    return {'unit_price': None, 'unit': 'unknown', 'raw': raw}
+
+def normalize_item_tokens(item_name: str) -> set:
+    if not item_name:
+        return set()
+    cleaned = item_name.lower()
+    cleaned = re.sub(r'\b\d+(?:\.\d+)?\s*(?:oz|lb|lbs|ct|pk|pack|count|fl\s*oz|gal|gallon|qt|pt|liter|l|ml|kg|g)\b', ' ', cleaned)
+    cleaned = re.sub(r'\b\d+/\d+\b', ' ', cleaned)
+    cleaned = re.sub(r'[^a-z0-9\s]', ' ', cleaned)
+    
+    stop_words = {
+        'fresh', 'organic', 'usda', 'choice', 'prime', 'select', 'all', 'natural', 'frozen',
+        'great', 'value', 'signature', 'h-e-b', 'heb', 'kroger', 'market', 'pantry',
+        'family', 'pack', 'super', 'size', 'selected', 'varieties', 'brand', 'assorted', 'large',
+        'small', 'medium', 'jumbo', 'grade', 'a', 'aa', 'free', 'range', 'cage', 'wild', 'caught',
+        'farm', 'raised', 'boneless', 'skinless', 'bone', 'in', 'center', 'cut', 'thin', 'sliced',
+        'thick', 'whole', 'half', 'quarter', 'the', 'and', 'or', 'with', 'in', 'for', 'of', 'item', 'lb', 'lbs'
+    }
+    return {w for w in cleaned.split() if len(w) > 2 and w not in stop_words}
+
+def find_cross_store_comparison(current_item_name: str, current_store: str, current_price_str: str, current_category: str, all_stores_deals: list) -> dict:
+    curr_parsed = parse_numeric_price(current_price_str)
+    curr_price_val = curr_parsed.get('unit_price')
+    curr_unit = curr_parsed.get('unit')
+    curr_tokens = normalize_item_tokens(current_item_name)
+    norm_curr_store = normalize_grocery_store_name(current_store).lower()
+
+    matches = []
+    
+    for s in all_stores_deals:
+        s_name = s.get('name', '')
+        if normalize_grocery_store_name(s_name).lower() == norm_curr_store:
+            continue
+            
+        deals = s.get('deals', [])
+        for d in deals:
+            d_name = d.get('item', '')
+            d_cat = d.get('category', '')
+            
+            if current_category and d_cat and current_category not in ['General', ''] and d_cat not in ['General', ''] and current_category != d_cat:
+                continue
+                
+            d_tokens = normalize_item_tokens(d_name)
+            if not curr_tokens or not d_tokens:
+                continue
+                
+            overlap = curr_tokens.intersection(d_tokens)
+            if len(overlap) >= min(2, len(curr_tokens)) and (len(overlap) / max(len(curr_tokens), 1)) >= 0.5:
+                d_parsed = parse_numeric_price(d.get('price', ''))
+                matches.append({
+                    'store': s_name,
+                    'item': d_name,
+                    'price_str': d.get('price', ''),
+                    'parsed': d_parsed,
+                    'overlap_count': len(overlap)
+                })
+
+    if not matches:
+        return {
+            'has_match': False,
+            'is_best': True,
+            'badge_type': 'neutral',
+            'summary': 'Store Special / Great Value',
+            'diff_text': '',
+            'other_prices': []
+        }
+
+    matches_with_price = [m for m in matches if m['parsed']['unit_price'] is not None and (curr_unit == 'unknown' or m['parsed']['unit'] == curr_unit or curr_unit is None)]
+    
+    if curr_price_val is not None and matches_with_price:
+        lowest_other = min(matches_with_price, key=lambda m: m['parsed']['unit_price'])
+        lowest_val = lowest_other['parsed']['unit_price']
+        lowest_store = lowest_other['store']
+        lowest_price_str = lowest_other['price_str']
+        
+        diff = round(curr_price_val - lowest_val, 2)
+        unit_suffix = "/lb" if curr_unit == 'lb' else ""
+        
+        if diff <= -0.10:
+            savings = abs(diff)
+            return {
+                'has_match': True,
+                'is_best': True,
+                'badge_type': 'green',
+                'summary': f"✓ Best Price! Save ${savings:.2f}{unit_suffix} vs {lowest_store} ({lowest_price_str})",
+                'diff_text': f"Cheaper by ${savings:.2f}{unit_suffix}",
+                'best_store': current_store,
+                'lowest_other_store': lowest_store,
+                'lowest_other_price': lowest_price_str,
+                'other_prices': [{'store': m['store'], 'price': m['price_str'], 'item': m['item']} for m in matches[:3]]
+            }
+        elif diff >= 0.10:
+            cheaper_by = diff
+            return {
+                'has_match': True,
+                'is_best': False,
+                'badge_type': 'red',
+                'summary': f"⚠️ Cheaper at {lowest_store} ({lowest_price_str}) — Save ${cheaper_by:.2f}{unit_suffix}",
+                'diff_text': f"{lowest_store} is ${cheaper_by:.2f}{unit_suffix} cheaper",
+                'best_store': lowest_store,
+                'lowest_other_store': lowest_store,
+                'lowest_other_price': lowest_price_str,
+                'other_prices': [{'store': m['store'], 'price': m['price_str'], 'item': m['item']} for m in matches[:3]]
+            }
+        else:
+            return {
+                'has_match': True,
+                'is_best': True,
+                'badge_type': 'green',
+                'summary': f"✓ Matching Lowest Price (also {lowest_price_str} at {lowest_store})",
+                'diff_text': "Matched price",
+                'best_store': current_store,
+                'other_prices': [{'store': m['store'], 'price': m['price_str'], 'item': m['item']} for m in matches[:3]]
+            }
+    else:
+        first_other = matches[0]
+        return {
+            'has_match': True,
+            'is_best': True,
+            'badge_type': 'neutral',
+            'summary': f"Also on sale at {first_other['store']} ({first_other['price_str']})",
+            'diff_text': '',
+            'other_prices': [{'store': m['store'], 'price': m['price_str'], 'item': m['item']} for m in matches[:3]]
+        }
 
 def _fetch_single_flipp_flyer(f: dict, postal_code: str, headers: dict, ctx: ssl.SSLContext, norm_store: str):
     fid = f.get('id')
@@ -1616,12 +1827,14 @@ def _fetch_single_flipp_flyer(f: dict, postal_code: str, headers: dict, ctx: ssl
                     notes_parts.append(f"Brand: {it.get('brand')}")
                     
                 notes_str = " | ".join(notes_parts)
+                img_url = it.get('cutout_image_url') or it.get('clean_image_url') or it.get('clipping_image_url') or it.get('image_url') or it.get('original_image_url') or ''
                 
                 deals.append({
                     'item': clean_name,
                     'price': price_str,
                     'category': guess_deal_category(clean_name),
-                    'notes': notes_str
+                    'notes': notes_str,
+                    'image_url': img_url
                 })
             return norm_store, fid, f, deals
     except Exception as e:
@@ -1737,20 +1950,24 @@ def fetch_flipp_store_deals(postal_code: str = '76262', store_name_filter: Optio
                             s_price = sit.get('current_price')
                             s_sale = sit.get('sale_story')
                             s_price_str = f"${float(s_price):.2f}" if s_price is not None else (s_sale or "")
+                            s_img = sit.get('cutout_image_url') or sit.get('clean_image_url') or sit.get('clipping_image_url') or sit.get('image_url') or sit.get('original_image_url') or ''
                             
                             if s_name.lower() in existing_map:
                                 cur_deal = existing_map[s_name.lower()]
                                 if (cur_deal['price'] == 'Sale' or not cur_deal['price']) and s_price_str:
                                     cur_deal['price'] = s_price_str
-                                if s_sale and s_sale not in cur_deal['notes']:
-                                    cur_deal['notes'] = f"{s_sale} | {cur_deal['notes']}".strip(" |")
+                                if s_sale and s_sale not in cur_deal.get('notes', ''):
+                                    cur_deal['notes'] = f"{s_sale} | {cur_deal.get('notes', '')}".strip(" |")
+                                if not cur_deal.get('image_url') and s_img:
+                                    cur_deal['image_url'] = s_img
                             else:
                                 if s_price_str or s_sale:
                                     new_deal = {
                                         'item': s_name,
                                         'price': s_price_str or "Sale",
                                         'category': guess_deal_category(s_name),
-                                        'notes': s_sale or ""
+                                        'notes': s_sale or "",
+                                        'image_url': s_img
                                     }
                                     store_deals.append(new_deal)
                                     existing_map[s_name.lower()] = new_deal
@@ -2258,6 +2475,199 @@ def query_deals(req: DealQueryRequest, user_id: str = Depends(verify_auth)):
     res = query_ai_deals_and_prices(req.query, store_deals_data, settings)
     return res
 
+# --- Preferences & Personalized Deal Feed Endpoints ---
+@app.get("/api/groceries/preferences")
+def get_grocery_preferences(user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
+    c = conn.cursor()
+    c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
+    s_row = c.fetchone()
+    conn.close()
+    settings = json.loads(s_row['settings']) if s_row and s_row['settings'] else {}
+    return get_user_deal_preferences(settings)
+
+@app.post("/api/groceries/preferences")
+def save_grocery_preferences(req: PreferencesUpdateRequest, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
+    c = conn.cursor()
+    c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
+    s_row = c.fetchone()
+    settings = json.loads(s_row['settings']) if s_row and s_row['settings'] else {}
+    
+    current_prefs = get_user_deal_preferences(settings)
+    if req.favorite_categories is not None:
+        current_prefs["favorite_categories"] = [cat.strip() for cat in req.favorite_categories if cat.strip()]
+    if req.ignored_categories is not None:
+        current_prefs["ignored_categories"] = [cat.strip() for cat in req.ignored_categories if cat.strip()]
+    if req.liked_keywords is not None:
+        current_prefs["liked_keywords"] = [k.strip().lower() for k in req.liked_keywords if k.strip()]
+    if req.disliked_keywords is not None:
+        current_prefs["disliked_keywords"] = [k.strip().lower() for k in req.disliked_keywords if k.strip()]
+        
+    settings["deal_preferences"] = current_prefs
+    c.execute("UPDATE users SET settings=? WHERE id=?", (json.dumps(settings), user_id))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "preferences": current_prefs}
+
+@app.post("/api/groceries/preferences/feedback")
+def submit_deal_feedback(req: FeedbackActionRequest, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
+    c = conn.cursor()
+    c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
+    s_row = c.fetchone()
+    settings = json.loads(s_row['settings']) if s_row and s_row['settings'] else {}
+    
+    prefs = get_user_deal_preferences(settings)
+    action = (req.action or '').lower().strip()
+    item_tokens = list(normalize_item_tokens(req.item_name))
+    
+    if action == "more":
+        for tok in item_tokens:
+            if tok not in prefs["liked_keywords"]:
+                prefs["liked_keywords"].append(tok)
+            if tok in prefs["disliked_keywords"]:
+                prefs["disliked_keywords"].remove(tok)
+        if req.category and req.category not in prefs["favorite_categories"]:
+            prefs["favorite_categories"].append(req.category)
+        if req.category and req.category in prefs["ignored_categories"]:
+            prefs["ignored_categories"].remove(req.category)
+            
+    elif action == "less":
+        for tok in item_tokens[:3]:
+            if tok not in prefs["disliked_keywords"]:
+                prefs["disliked_keywords"].append(tok)
+            if tok in prefs["liked_keywords"]:
+                prefs["liked_keywords"].remove(tok)
+                
+    elif action == "hide_category":
+        if req.category and req.category not in prefs["ignored_categories"]:
+            prefs["ignored_categories"].append(req.category)
+        if req.category and req.category in prefs["favorite_categories"]:
+            prefs["favorite_categories"].remove(req.category)
+            
+    settings["deal_preferences"] = prefs
+    c.execute("UPDATE users SET settings=? WHERE id=?", (json.dumps(settings), user_id))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "action": action, "preferences": prefs}
+
+@app.get("/api/groceries/feed")
+def get_personalized_deals_feed(category: Optional[str] = None, best_only: Optional[bool] = False, search: Optional[str] = None, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
+    c = conn.cursor()
+    c.execute("SELECT id, name, ad_url, cached_deals FROM grocery_stores WHERE user_id=?", (user_id,))
+    rows = c.fetchall()
+    
+    c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
+    s_row = c.fetchone()
+    conn.close()
+    
+    settings = json.loads(s_row['settings']) if s_row and s_row['settings'] else {}
+    prefs = get_user_deal_preferences(settings)
+    
+    fav_cats_set = {cat.lower() for cat in prefs.get("favorite_categories", [])}
+    ign_cats_set = {cat.lower() for cat in prefs.get("ignored_categories", [])}
+    liked_kw_set = {kw.lower() for kw in prefs.get("liked_keywords", [])}
+    disliked_kw_set = {kw.lower() for kw in prefs.get("disliked_keywords", [])}
+    
+    all_stores = []
+    all_raw_deals = []
+    
+    for r in rows:
+        deals = []
+        if r["cached_deals"]:
+            try: deals = json.loads(r["cached_deals"])
+            except Exception: deals = []
+        all_stores.append({
+            "id": r["id"],
+            "name": r["name"],
+            "ad_url": r["ad_url"],
+            "deals": deals
+        })
+        for d in deals:
+            all_raw_deals.append((r["name"], r["ad_url"], d))
+            
+    scored_deals = []
+    search_term = (search or '').strip().lower()
+    cat_filter = (category or '').strip().lower()
+    
+    for store_name, store_ad_url, deal in all_raw_deals:
+        item_name = deal.get("item", "").strip()
+        if not item_name:
+            continue
+            
+        item_lower = item_name.lower()
+        deal_cat = deal.get("category", "Pantry & Dry Goods")
+        deal_cat_lower = deal_cat.lower()
+        price_str = deal.get("price", "")
+        notes_str = deal.get("notes", "")
+        img_url = deal.get("image_url", "")
+        
+        # Category filter
+        if cat_filter and cat_filter != 'all' and cat_filter not in deal_cat_lower and deal_cat_lower not in cat_filter:
+            continue
+            
+        # Search filter
+        if search_term and search_term not in item_lower and search_term not in notes_str.lower() and search_term not in store_name.lower():
+            continue
+            
+        # Hard ignore categories
+        if not cat_filter or cat_filter == 'all':
+            if deal_cat_lower in ign_cats_set:
+                continue
+                
+        # Hard ignore disliked keywords
+        if any(dkw in item_lower for dkw in disliked_kw_set):
+            continue
+            
+        # Calculate Score
+        score = 0
+        if deal_cat_lower in fav_cats_set:
+            score += 60
+            if 'meat' in deal_cat_lower:
+                score += 30
+        else:
+            score += 15
+            
+        matched_liked = [kw for kw in liked_kw_set if kw in item_lower]
+        score += len(matched_liked) * 35
+        
+        if img_url:
+            score += 10
+            
+        comp = find_cross_store_comparison(item_name, store_name, price_str, deal_cat, all_stores)
+        
+        if comp.get('badge_type') == 'green':
+            score += 30
+        elif comp.get('badge_type') == 'red':
+            score -= 15
+            if best_only:
+                continue
+                
+        scored_deals.append({
+            "item": item_name,
+            "store": store_name,
+            "store_ad_url": store_ad_url,
+            "price": price_str,
+            "category": deal_cat,
+            "notes": notes_str,
+            "image_url": img_url,
+            "score": score,
+            "comparison": comp,
+            "matched_keywords": matched_liked
+        })
+        
+    scored_deals.sort(key=lambda d: d["score"], reverse=True)
+    
+    return {
+        "status": "success",
+        "total_available": len(all_raw_deals),
+        "deals_count": len(scored_deals),
+        "preferences": prefs,
+        "deals": scored_deals[:150]
+    }
+
 # --- Grocery Lists & Items Endpoints ---
 @app.get("/api/groceries/lists")
 def get_grocery_lists(user_id: str = Depends(verify_auth)):
@@ -2267,7 +2677,6 @@ def get_grocery_lists(user_id: str = Depends(verify_auth)):
     lists = [dict(r) for r in c.fetchall()]
     
     if not lists:
-        # Create default initial list
         def_id = str(uuid.uuid4())
         now = datetime.now().isoformat()
         c.execute("INSERT INTO grocery_lists (id, user_id, title, created_at, updated_at) VALUES (?, ?, 'Weekly Groceries', ?, ?)",
@@ -2307,9 +2716,31 @@ def delete_grocery_list(list_id: str, user_id: str = Depends(verify_auth)):
 def get_grocery_list_items(list_id: str, user_id: str = Depends(verify_auth)):
     conn = get_db_conn()
     c = conn.cursor()
-    c.execute("SELECT id, list_id, item_name, store_name, price_notes, category, is_checked FROM grocery_list_items WHERE list_id=? AND user_id=? ORDER BY is_checked ASC, category ASC, item_name ASC", (list_id, user_id))
+    c.execute("SELECT id, list_id, item_name, store_name, price_notes, category, is_checked, image_url FROM grocery_list_items WHERE list_id=? AND user_id=? ORDER BY is_checked ASC, category ASC, item_name ASC", (list_id, user_id))
     rows = [dict(r) for r in c.fetchall()]
+    
+    c.execute("SELECT id, name, ad_url, cached_deals FROM grocery_stores WHERE user_id=?", (user_id,))
+    stores_raw = c.fetchall()
     conn.close()
+    
+    all_stores = []
+    for s in stores_raw:
+        deals = []
+        if s["cached_deals"]:
+            try: deals = json.loads(s["cached_deals"])
+            except Exception: deals = []
+        all_stores.append({"name": s["name"], "deals": deals})
+        
+    for item in rows:
+        comp = find_cross_store_comparison(
+            item.get("item_name", ""),
+            item.get("store_name", "Any"),
+            item.get("price_notes", ""),
+            item.get("category", "General"),
+            all_stores
+        )
+        item["comparison"] = comp
+        
     return rows
 
 @app.post("/api/groceries/lists/{list_id}/items")
@@ -2317,8 +2748,8 @@ def add_grocery_item(list_id: str, item: GroceryItemSave, user_id: str = Depends
     conn = get_db_conn()
     c = conn.cursor()
     item_id = item.id or str(uuid.uuid4())
-    c.execute("INSERT INTO grocery_list_items (id, list_id, user_id, item_name, store_name, price_notes, category, is_checked) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-              (item_id, list_id, user_id, item.item_name, item.store_name or "Any", item.price_notes or "", item.category or "General", item.is_checked or 0))
+    c.execute("INSERT INTO grocery_list_items (id, list_id, user_id, item_name, store_name, price_notes, category, is_checked, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+              (item_id, list_id, user_id, item.item_name, item.store_name or "Any", item.price_notes or "", item.category or "General", item.is_checked or 0, item.image_url or ""))
     now = datetime.now().isoformat()
     c.execute("UPDATE grocery_lists SET updated_at=? WHERE id=? AND user_id=?", (now, list_id, user_id))
     conn.commit()
@@ -2339,8 +2770,9 @@ def add_batch_grocery_items(list_id: str, req: GroceryBatchItemsSave, user_id: s
         store = item.get("store_name") or item.get("store") or "Any"
         price = item.get("price_notes") or item.get("price") or ""
         cat = item.get("category") or "General"
-        c.execute("INSERT INTO grocery_list_items (id, list_id, user_id, item_name, store_name, price_notes, category, is_checked) VALUES (?, ?, ?, ?, ?, ?, ?, 0)",
-                  (item_id, list_id, user_id, name, store, price, cat))
+        img = item.get("image_url") or ""
+        c.execute("INSERT INTO grocery_list_items (id, list_id, user_id, item_name, store_name, price_notes, category, is_checked, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)",
+                  (item_id, list_id, user_id, name, store, price, cat, img))
         added_count += 1
     c.execute("UPDATE grocery_lists SET updated_at=? WHERE id=? AND user_id=?", (now, list_id, user_id))
     conn.commit()
@@ -2353,7 +2785,7 @@ def update_grocery_item(item_id: str, payload: dict, user_id: str = Depends(veri
     c = conn.cursor()
     fields = []
     values = []
-    for k in ["item_name", "store_name", "price_notes", "category", "is_checked"]:
+    for k in ["item_name", "store_name", "price_notes", "category", "is_checked", "image_url"]:
         if k in payload:
             fields.append(f"{k}=?")
             values.append(payload[k])
@@ -2416,8 +2848,9 @@ def ai_generate_list(req: AIGroceryListRequest, user_id: str = Depends(verify_au
         store = item.get("store_name") or item.get("store") or "Any"
         price = item.get("price_notes") or item.get("price") or ""
         cat = item.get("category") or "General"
-        c.execute("INSERT INTO grocery_list_items (id, list_id, user_id, item_name, store_name, price_notes, category, is_checked) VALUES (?, ?, ?, ?, ?, ?, ?, 0)",
-                  (item_id, list_id, user_id, name, store, price, cat))
+        img = item.get("image_url") or ""
+        c.execute("INSERT INTO grocery_list_items (id, list_id, user_id, item_name, store_name, price_notes, category, is_checked, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)",
+                  (item_id, list_id, user_id, name, store, price, cat, img))
                   
     c.execute("UPDATE grocery_lists SET updated_at=? WHERE id=? AND user_id=?", (now, list_id, user_id))
     conn.commit()

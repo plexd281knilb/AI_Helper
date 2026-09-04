@@ -181,10 +181,16 @@ All tables are initialized and automatically migrated on startup in `init_db()` 
 
 ### 7. Local Deals & Smart Grocery Lists (`/api/groceries/*`)
 - **Automated Zip-Code Discovery**: Ingests complete weekly circulars and deals automatically across all local supermarkets (HEB, Kroger, Tom Thumb, Albertsons, Sprouts, Whole Foods, Walmart, Target, ALDI, Costco, etc.) via backend Flipp aggregation without requiring manual URLs.
+- **Product Images & Transparent Cutouts**: Extracts high-res product packshots and transparent cutout images from Flipp circulars and displays them in grocery lists and deal cards, with emoji avatar fallbacks.
+- **Cross-Store Price Comparison Engine**: Cross-references items and prices across all configured local stores:
+  - 🟢 **Green Badge**: Best price or cheaper than competitor (e.g. `✓ Best Price! Save $2.00/lb vs Tom Thumb ($7.99/lb)`).
+  - 🔴 **Red Badge**: Cheaper price available at another store (e.g. `⚠️ Cheaper at H-E-B ($4.99/lb) — Save $1.00/lb`).
+- **Personalized "🔥 My Deals" Feed**: Scores and ranks live circular deals based on user preferences.
+- **Preference Tuning & Feedback**: Users can click 👍 "More like this", 👎 "Less like this", or 🚫 "Hide category" on deals, or customize favorite/ignored departments and liked/disliked keywords with a dedicated **Meat & Essentials Family Preset**.
 - **Store Ads & Circulars**: Users can configure local store ad URLs or use automated zip discovery.
 - **AI Ad Scraping & Browsing**: Scrapes web circulars using clean HTML text extraction, parses structured deals by category, and provides a full interactive deal browser with search and department filtering.
 - **Price Query & Deal Comparison**: Natural language prompt query allows users to ask for best prices, ingredient comparisons, and budget recommendations across stores.
-- **Interactive Grocery Lists**: Create custom lists, group items by category or store, check off bought items, clear checked items, copy markdown/plain text lists to clipboard, and 1-click add deals directly to any list.
+- **Interactive Grocery Lists**: Create custom lists, group items by category or store, check off bought items, clear checked items, copy markdown/plain text lists to clipboard, and 1-click add deals directly to any list with pictures.
 - **AI Meal-Prep List Generator**: Generates full recipe-based grocery lists with assigned stores and estimated pricing based on user dietary or meal planning prompts.
 
 ---
@@ -230,12 +236,16 @@ All tables are initialized and automatically migrated on startup in `init_db()` 
 | `POST` | `/api/groceries/stores/scan_all` | Scan all store circular URLs with AI or Flipp | Yes |
 | `POST` | `/api/groceries/auto_fetch` | Auto-discover & ingest all local circular deals by zip code | Yes |
 | `POST` | `/api/groceries/query_deals` | AI price comparison and deals query | Yes |
+| `GET` | `/api/groceries/preferences` | Get user food & deal feed preferences | Yes |
+| `POST` | `/api/groceries/preferences` | Save food & deal feed preferences | Yes |
+| `POST` | `/api/groceries/preferences/feedback` | Submit feedback (more / less / hide category) | Yes |
+| `GET` | `/api/groceries/feed` | Get ranked, personalized deal feed with cross-store badges | Yes |
 | `GET` | `/api/groceries/lists` | List all grocery lists for user | Yes |
 | `POST` | `/api/groceries/lists` | Create or update a grocery list | Yes |
 | `DELETE` | `/api/groceries/lists/{id}` | Delete a grocery list and its items | Yes |
-| `GET` | `/api/groceries/lists/{id}/items` | List items in a grocery list | Yes |
-| `POST` | `/api/groceries/lists/{id}/items` | Add single item to grocery list | Yes |
-| `POST` | `/api/groceries/lists/{id}/batch_items` | Batch add multiple items to grocery list | Yes |
+| `GET` | `/api/groceries/lists/{id}/items` | List items in a grocery list with images and comparison | Yes |
+| `POST` | `/api/groceries/lists/{id}/items` | Add single item to grocery list with image | Yes |
+| `POST` | `/api/groceries/lists/{id}/batch_items` | Batch add multiple items to grocery list with images | Yes |
 | `PUT` | `/api/groceries/items/{id}` | Update grocery item (check off, edit) | Yes |
 | `DELETE` | `/api/groceries/items/{id}` | Delete item from grocery list | Yes |
 | `POST` | `/api/groceries/lists/{id}/clear_checked` | Remove all checked items from a list | Yes |
