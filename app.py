@@ -1107,3 +1107,31 @@ async def get_logs():
 @app.get("/")
 async def read_index():
     return FileResponse('static/index.html')
+
+@app.get("/privacy")
+async def privacy_policy():
+    return Response(
+        content="""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Privacy Policy - AI Helper</title>
+<style>body{font-family:sans-serif;max-width:700px;margin:40px auto;padding:0 20px;line-height:1.6;color:#333;}</style>
+</head><body>
+<h1>Privacy Policy</h1>
+<p>AI Helper is a self-hosted personal application for scanning emails and syncing calendar events.</p>
+<p>All data is processed locally on your own private server and is not shared with or sold to third parties.</p>
+</body></html>""",
+        media_type="text/html"
+    )
+
+@app.get("/terms")
+async def terms_of_service():
+    return Response(
+        content="""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Terms of Service - AI Helper</title>
+<style>body{font-family:sans-serif;max-width:700px;margin:40px auto;padding:0 20px;line-height:1.6;color:#333;}</style>
+</head><body>
+<h1>Terms of Service</h1>
+<p>AI Helper is a private, personal utility provided for individual productivity and calendar management.</p>
+</body></html>""",
+        media_type="text/html"
+    )
+
