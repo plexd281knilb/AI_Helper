@@ -1620,6 +1620,37 @@ def normalize_grocery_store_name(merchant_raw: str) -> str:
     if 'united' in ml: return 'United Supermarkets'
     return m
 
+def sanitize_deal_price_and_notes(price_str: str, notes_str: str = "") -> tuple:
+    p = (price_str or '').strip()
+    n = (notes_str or '').strip()
+    
+    if len(p) > 25 or ('buy ' in p.lower() and 'get ' in p.lower()) or 'coupon' in p.lower() or 'free with' in p.lower() or 'save up to' in p.lower() or p.lower().startswith('save '):
+        if not n:
+            n = p
+        elif p not in n:
+            n = f"{p} | {n}"
+            
+        pl = p.lower()
+        if 'yellow coupon' in pl:
+            if 'free' in pl:
+                p = 'Yellow Coupon (Free Item)'
+            else:
+                p = 'Yellow Coupon Deal'
+        elif 'digital coupon' in pl:
+            p = 'Digital Coupon'
+        elif 'get free' in pl or 'get 1 free' in pl or 'bogo' in pl:
+            p = 'Buy & Get Free'
+        elif 'save ' in pl or 'save up to' in pl:
+            m_save = re.search(r'(save\s+(?:up\s+to\s+)?\$?\d+(?:\.\d{1,2})?(?:\s*(?:/|per)\s*lb)?)', p, re.I)
+            if m_save:
+                p = m_save.group(1).title()
+            else:
+                p = 'Special Savings'
+        else:
+            p = 'Special Promo'
+            
+    return p, n
+
 def parse_numeric_price(price_str: str) -> dict:
     if not price_str or not isinstance(price_str, str):
         return {'unit_price': None, 'unit': 'unknown', 'raw': ''}
@@ -1627,11 +1658,11 @@ def parse_numeric_price(price_str: str) -> dict:
     raw = price_str.strip()
     raw_lower = raw.lower()
     
+    if len(raw) > 28 or 'coupon' in raw_lower or ('buy ' in raw_lower and 'get ' in raw_lower) or 'free with' in raw_lower or 'save up to' in raw_lower or raw_lower.startswith('save '):
+        return {'unit_price': None, 'unit': 'coupon', 'raw': raw}
+        
     if 'bogo' in raw_lower or 'buy 1 get 1' in raw_lower or 'buy one get one' in raw_lower:
         return {'unit_price': None, 'unit': 'bogo', 'raw': raw}
-        
-    if re.search(r'^(?:save\s+|yellow\s+coupon|digital\s+coupon|coupon|special\s+offer)', raw_lower):
-        return {'unit_price': None, 'unit': 'coupon', 'raw': raw}
         
     m_lb = re.search(r'\$?([0-9]+(?:\.[0-9]{1,2})?)\s*(?:/|\s+per\s+|\s+)?(?:lb|lbs|pound)\b', raw_lower)
     if m_lb:
@@ -1680,7 +1711,8 @@ def normalize_item_tokens(item_name: str) -> set:
     return {w for w in cleaned.split() if len(w) > 2 and w not in stop_words}
 
 def find_cross_store_comparison(current_item_name: str, current_store: str, current_price_str: str, current_category: str, all_stores_deals: list) -> dict:
-    curr_parsed = parse_numeric_price(current_price_str)
+    clean_curr_price, _ = sanitize_deal_price_and_notes(current_price_str, "")
+    curr_parsed = parse_numeric_price(clean_curr_price)
     curr_price_val = curr_parsed.get('unit_price')
     curr_unit = curr_parsed.get('unit')
     curr_tokens = normalize_item_tokens(current_item_name)
@@ -1707,11 +1739,12 @@ def find_cross_store_comparison(current_item_name: str, current_store: str, curr
                 
             overlap = curr_tokens.intersection(d_tokens)
             if len(overlap) >= min(2, len(curr_tokens)) and (len(overlap) / max(len(curr_tokens), 1)) >= 0.5:
-                d_parsed = parse_numeric_price(d.get('price', ''))
+                d_clean_price, _ = sanitize_deal_price_and_notes(d.get('price', ''), d.get('notes', ''))
+                d_parsed = parse_numeric_price(d_clean_price)
                 matches.append({
                     'store': s_name,
                     'item': d_name,
-                    'price_str': d.get('price', ''),
+                    'price_str': d_clean_price,
                     'parsed': d_parsed,
                     'overlap_count': len(overlap)
                 })
@@ -2672,8 +2705,7 @@ def get_personalized_deals_feed(category: Optional[str] = None, best_only: Optio
         item_lower = item_name.lower()
         deal_cat = deal.get("category", "Pantry & Dry Goods")
         deal_cat_lower = deal_cat.lower()
-        price_str = deal.get("price", "")
-        notes_str = deal.get("notes", "")
+        price_str, notes_str = sanitize_deal_price_and_notes(deal.get("price", ""), deal.get("notes", ""))
         img_url = deal.get("image_url", "")
         
         # Category filter
