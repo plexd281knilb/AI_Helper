@@ -1513,14 +1513,23 @@ def fetch_url_clean_content(url: str) -> str:
         req = urllib.request.Request(
             url,
             headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.9'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'none',
+                'Sec-Fetch-User': '?1',
+                'Upgrade-Insecure-Requests': '1'
             }
         )
-        with urllib.request.urlopen(req, timeout=12) as response:
-            html_bytes = response.read()
-            html_str = html_bytes.decode('utf-8', errors='replace')
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        with urllib.request.urlopen(req, timeout=12, context=ctx) as response:
+            html_bytes = response.read(500000)
+            charset = response.headers.get_content_charset() or 'utf-8'
+            html_str = html_bytes.decode(charset, errors='replace')
             return clean_page_html(html_str)
     except Exception as e:
         logger.warning(f"Error fetching weekly ad content from {url}: {e}")
@@ -1775,6 +1784,36 @@ async def delete_grocery_store(store_id: str, user_id: str = Depends(verify_auth
     conn.close()
     return {"status": "success"}
 
+class StoreTextParseRequest(BaseModel):
+    text_content: str
+
+@app.post("/api/groceries/stores/{store_id}/parse_text", dependencies=[Depends(verify_auth)])
+async def parse_store_text_deals(store_id: str, req: StoreTextParseRequest, user_id: str = Depends(verify_auth)):
+    if not req.text_content or len(req.text_content.strip()) < 10:
+        raise HTTPException(status_code=400, detail="Text content is too short to extract deals.")
+        
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    c.execute("SELECT id, name FROM grocery_stores WHERE id=? AND user_id=?", (store_id, user_id))
+    store = c.fetchone()
+    if not store:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Store not found")
+        
+    c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
+    s_row = c.fetchone()
+    settings = json.loads(s_row['settings']) if s_row and s_row['settings'] else {}
+    
+    deals = extract_store_deals_with_ai(store["name"], req.text_content, settings)
+    now_iso = datetime.now().isoformat()
+    
+    c.execute("UPDATE grocery_stores SET last_scanned=?, cached_deals=? WHERE id=? AND user_id=?",
+              (now_iso, json.dumps(deals), store_id, user_id))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "deals_found": len(deals), "deals": deals}
+
 @app.post("/api/groceries/stores/{store_id}/scan")
 async def scan_grocery_store(store_id: str, user_id: str = Depends(verify_auth)):
     conn = sqlite3.connect(DB_FILE)
@@ -1797,11 +1836,15 @@ async def scan_grocery_store(store_id: str, user_id: str = Depends(verify_auth))
     deals = extract_store_deals_with_ai(name, content, settings)
     now_iso = datetime.now().isoformat()
     
+    warning_msg = None
+    if not deals and (not content or len(content.strip()) < 50):
+        warning_msg = f"Could not read circular text from {url}. Many supermarket sites (like Kroger, Tom Thumb, and HEB) block automated scrapers or require selecting your local store zip code. Tip: You can click '📋 Paste Deals' to paste flyer text directly, or use a direct Flipp.com circular link!"
+    
     c.execute("UPDATE grocery_stores SET last_scanned=?, cached_deals=? WHERE id=? AND user_id=?",
               (now_iso, json.dumps(deals), store_id, user_id))
     conn.commit()
     conn.close()
-    return {"status": "success", "deals_found": len(deals), "deals": deals}
+    return {"status": "success", "deals_found": len(deals), "deals": deals, "warning": warning_msg}
 
 @app.post("/api/groceries/stores/scan_all")
 async def scan_all_grocery_stores(user_id: str = Depends(verify_auth)):
