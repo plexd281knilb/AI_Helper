@@ -436,18 +436,19 @@
         .deal-card {
             background: #161b22;
             border: 1px solid var(--border-color);
-            border-radius: var(--radius-md);
-            padding: 14px 15px;
+            border-radius: 12px;
+            padding: 14px;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
             transition: all 0.2s ease;
             position: relative;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
         }
         .deal-card:hover {
             border-color: #3b82f6;
-            transform: translateY(-2px);
-            box-shadow: var(--shadow-md);
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.45);
         }
         .deal-card.feedback-dismissed {
             opacity: 0;
@@ -455,157 +456,257 @@
             transition: all 0.3s ease;
             pointer-events: none;
         }
-        .item-thumb-container {
-            width: 72px;
-            height: 72px;
-            min-width: 72px;
-            min-height: 72px;
-            background: #0b0e14;
-            border-radius: 10px;
-            border: 1px solid rgba(255,255,255,0.08);
+
+        .deal-hero-box {
+            position: relative;
+            width: 100%;
+            height: 140px;
+            background: #0d1117;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
             display: flex;
             align-items: center;
             justify-content: center;
             overflow: hidden;
-            padding: 4px;
+            margin-bottom: 12px;
+            padding: 10px;
             box-sizing: border-box;
-            flex-shrink: 0;
         }
-        .item-thumb {
-            width: 100%;
-            height: 100%;
+        .deal-hero-img {
+            max-width: 100%;
+            max-height: 100%;
             object-fit: contain;
-            border-radius: 6px;
-            transition: transform 0.2s;
+            transition: transform 0.25s ease;
         }
-        .item-thumb:hover {
-            transform: scale(1.08);
+        .deal-card:hover .deal-hero-img {
+            transform: scale(1.06);
         }
-        .item-avatar-fallback {
-            font-size: 32px;
+        .deal-hero-fallback {
+            font-size: 42px;
+            user-select: none;
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 100%;
-            height: 100%;
-            user-select: none;
         }
-        .comp-pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            padding: 3px 8px;
+        .deal-badge-top-left {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            z-index: 2;
+        }
+        .deal-badge-top-right {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            z-index: 2;
+        }
+
+        .deal-content-body {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        .deal-price-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 4px;
+        }
+        .deal-price-text {
+            font-size: 20px;
+            font-weight: 800;
+            color: #10b981;
+            letter-spacing: -0.3px;
+            line-height: 1.1;
+        }
+        .deal-dept-tag {
+            font-size: 11px;
+            color: #8b949e;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        .deal-product-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #ffffff;
+            line-height: 1.35;
+            margin: 4px 0 8px 0;
+            word-break: break-word;
+            min-height: 38px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .deal-notes-box {
+            font-size: 11.5px;
+            color: #94a3b8;
+            line-height: 1.35;
+            margin-bottom: 8px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.04);
+            padding: 5px 8px;
             border-radius: 5px;
+            word-break: break-word;
+        }
+
+        .comp-pill {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 9px;
+            border-radius: 6px;
             font-size: 11px;
             font-weight: 600;
-            line-height: 1.25;
-            margin-top: 5px;
-            width: fit-content;
+            line-height: 1.3;
+            margin-bottom: 5px;
+            width: 100%;
+            box-sizing: border-box;
         }
         .comp-pill-green {
             background: rgba(16, 185, 129, 0.15);
             color: #34d399;
-            border: 1px solid rgba(16, 185, 129, 0.4);
+            border: 1px solid rgba(16, 185, 129, 0.35);
         }
         .comp-pill-red {
             background: rgba(239, 68, 68, 0.15);
             color: #f87171;
-            border: 1px solid rgba(239, 68, 68, 0.4);
+            border: 1px solid rgba(239, 68, 68, 0.35);
         }
         .comp-pill-neutral {
-            background: rgba(148, 163, 184, 0.12);
+            background: rgba(148, 163, 184, 0.1);
             color: #cbd5e1;
-            border: 1px solid rgba(148, 163, 184, 0.25);
+            border: 1px solid rgba(148, 163, 184, 0.2);
         }
         .grade-pill {
             display: inline-flex;
             align-items: center;
-            padding: 1px 6px;
+            padding: 2px 7px;
             border-radius: 4px;
-            font-size: 10.5px;
+            font-size: 11px;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.3px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            backdrop-filter: blur(6px);
         }
         .grade-pill-prime {
-            background: rgba(245, 158, 11, 0.2);
+            background: rgba(245, 158, 11, 0.25);
             color: #fbbf24;
-            border: 1px solid rgba(245, 158, 11, 0.5);
+            border: 1px solid rgba(245, 158, 11, 0.6);
         }
         .grade-pill-choice {
-            background: rgba(59, 130, 246, 0.2);
+            background: rgba(59, 130, 246, 0.25);
             color: #93c5fd;
-            border: 1px solid rgba(59, 130, 246, 0.4);
+            border: 1px solid rgba(59, 130, 246, 0.5);
         }
         .grade-pill-select {
-            background: rgba(148, 163, 184, 0.15);
+            background: rgba(148, 163, 184, 0.2);
             color: #cbd5e1;
-            border: 1px solid rgba(148, 163, 184, 0.3);
+            border: 1px solid rgba(148, 163, 184, 0.4);
         }
         .grade-pill-wagyu {
-            background: rgba(244, 63, 94, 0.2);
+            background: rgba(244, 63, 94, 0.25);
             color: #fda4af;
-            border: 1px solid rgba(244, 63, 94, 0.5);
+            border: 1px solid rgba(244, 63, 94, 0.6);
         }
         .grade-pill-angus {
-            background: rgba(20, 184, 166, 0.2);
+            background: rgba(20, 184, 166, 0.25);
             color: #5eead4;
-            border: 1px solid rgba(20, 184, 166, 0.4);
+            border: 1px solid rgba(20, 184, 166, 0.5);
         }
         .history-pill {
-            display: inline-flex;
+            display: flex;
             align-items: center;
-            gap: 4px;
-            padding: 3px 8px;
-            border-radius: 5px;
+            gap: 5px;
+            padding: 4px 9px;
+            border-radius: 6px;
             font-size: 11px;
             font-weight: 600;
-            line-height: 1.25;
-            margin-top: 5px;
-            width: fit-content;
+            line-height: 1.3;
+            margin-bottom: 5px;
+            width: 100%;
+            box-sizing: border-box;
         }
         .history-pill-best {
             background: rgba(239, 68, 68, 0.2);
             color: #fca5a5;
             border: 1px solid rgba(239, 68, 68, 0.5);
-            box-shadow: 0 0 10px rgba(239, 68, 68, 0.15);
             font-weight: 700;
         }
         .history-pill-low {
-            background: rgba(16, 185, 129, 0.18);
+            background: rgba(16, 185, 129, 0.15);
             color: #6ee7b7;
-            border: 1px solid rgba(16, 185, 129, 0.4);
+            border: 1px solid rgba(16, 185, 129, 0.35);
         }
         .history-pill-below {
-            background: rgba(14, 165, 233, 0.18);
+            background: rgba(14, 165, 233, 0.15);
             color: #7dd3fc;
-            border: 1px solid rgba(14, 165, 233, 0.4);
+            border: 1px solid rgba(14, 165, 233, 0.35);
         }
         .history-pill-above {
-            background: rgba(245, 158, 11, 0.18);
+            background: rgba(245, 158, 11, 0.15);
             color: #fcd34d;
-            border: 1px solid rgba(245, 158, 11, 0.4);
+            border: 1px solid rgba(245, 158, 11, 0.35);
         }
         .history-pill-typical {
             background: rgba(148, 163, 184, 0.1);
             color: #94a3b8;
             border: 1px solid rgba(148, 163, 184, 0.2);
         }
+
+        .deal-action-footer {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255,255,255,0.06);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .deal-add-btn-primary {
+            width: 100%;
+            background: #2563eb;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 9px 12px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: all 0.15s ease;
+        }
+        .deal-add-btn-primary:hover {
+            background: #1d4ed8;
+            transform: translateY(-1px);
+        }
+        .deal-feedback-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 4px;
+        }
         .deal-feedback-btn {
-            background: rgba(255,255,255,0.04);
+            background: rgba(255,255,255,0.03);
             border: 1px solid rgba(255,255,255,0.08);
-            color: #94a3b8;
+            color: #8b949e;
             padding: 4px 8px;
             border-radius: 4px;
-            font-size: 11.5px;
+            font-size: 11px;
             cursor: pointer;
             transition: all 0.15s ease;
             display: inline-flex;
             align-items: center;
-            gap: 4px;
+            gap: 3px;
+            flex: 1;
+            justify-content: center;
         }
         .deal-feedback-btn:hover {
-            background: rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.08);
             color: #fff;
             border-color: rgba(255,255,255,0.2);
         }
@@ -793,7 +894,7 @@
                     </div>
 
                     <!-- Deal Cards Grid Container -->
-                    <div id="my-deals-feed-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px;">
+                    <div id="my-deals-feed-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 16px;">
                         Loading personalized feed...
                     </div>
                 </div>
@@ -3040,17 +3141,12 @@
                 
                 let compPillHtml = '';
                 if (comp.badge_type === 'green') {
-                    compPillHtml = `<div class="comp-pill comp-pill-green" title="${escapeHtml(comp.summary || '')}">${escapeHtml(comp.summary || '✓ Best Price Found')}</div>`;
+                    compPillHtml = `<div class="comp-pill comp-pill-green" title="${escapeHtml(comp.summary || '')}">🟢 ${escapeHtml(comp.summary || '✓ Best Price Found')}</div>`;
                 } else if (comp.badge_type === 'red') {
-                    compPillHtml = `<div class="comp-pill comp-pill-red" title="${escapeHtml(comp.summary || '')}">${escapeHtml(comp.summary || '⚠️ Cheaper at other store')}</div>`;
+                    compPillHtml = `<div class="comp-pill comp-pill-red" title="${escapeHtml(comp.summary || '')}">🔴 ${escapeHtml(comp.summary || '⚠️ Cheaper at other store')}</div>`;
                 } else if (comp.badge_type === 'neutral' && comp.has_match) {
                     compPillHtml = `<div class="comp-pill comp-pill-neutral">⚪ ${escapeHtml(comp.summary || 'Store Special')}</div>`;
                 }
-
-                const imageTag = deal.image_url ? `
-                    <img src="${escapeHtml(deal.image_url)}" alt="${escapeHtml(deal.item)}" class="item-thumb" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                    <div class="item-avatar-fallback" style="display:none;">${emoji}</div>
-                ` : `<div class="item-avatar-fallback">${emoji}</div>`;
 
                 const safeItemName = escapeHtml(deal.item).replace(/'/g, "\\'");
                 const safeStoreName = escapeHtml(deal.store).replace(/'/g, "\\'");
@@ -3084,35 +3180,42 @@
                 return `
                     <div class="deal-card" id="deal-card-${idx}">
                         <div>
-                            <div style="display: flex; gap: 12px; align-items: flex-start; margin-bottom: 8px;">
-                                <div class="item-thumb-container">
-                                    ${imageTag}
+                            <div class="deal-hero-box">
+                                <div class="deal-badge-top-left">
+                                    <span class="store-pill ${pillClass}">${escapeHtml(deal.store)}</span>
                                 </div>
-                                <div style="flex: 1; min-width: 0;">
-                                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 6px;">
-                                        <span class="store-pill ${pillClass}">${escapeHtml(deal.store)}</span>
-                                        ${cleanedPrice ? `<span class="price-pill" style="font-size: 13.5px; font-weight: 800; color: #34d399;">${escapeHtml(cleanedPrice)}</span>` : ''}
-                                    </div>
-                                    <div style="font-weight: 700; color: #fff; font-size: 13.5px; margin-top: 4px; line-height: 1.35; word-break: break-word;">
-                                        ${escapeHtml(deal.item)}
-                                    </div>
-                                    <div style="display: flex; gap: 5px; align-items: center; margin-top: 4px; flex-wrap: wrap;">
-                                        <span class="category-pill" style="font-size: 10.5px;">${escapeHtml(deal.category)}</span>
-                                        ${gradePillHtml}
-                                    </div>
-                                </div>
+                                ${gradePillHtml ? `<div class="deal-badge-top-right">${gradePillHtml}</div>` : ''}
+                                
+                                ${deal.image_url ? `
+                                    <img src="${escapeHtml(deal.image_url)}" class="deal-hero-img" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                    <div class="deal-hero-fallback" style="display:none;">${emoji}</div>
+                                ` : `<div class="deal-hero-fallback">${emoji}</div>`}
                             </div>
-                            
-                            ${cleanNotes ? `<div style="font-size: 11.5px; color: #94a3b8; line-height: 1.35; margin-bottom: 6px; background: rgba(0,0,0,0.25); padding: 4px 8px; border-radius: 4px; word-break: break-word;">${escapeHtml(cleanNotes)}</div>` : ''}
-                            
-                            <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 4px;">
-                                ${compPillHtml}
-                                ${historyPillHtml}
+
+                            <div class="deal-content-body">
+                                <div class="deal-price-header">
+                                    <span class="deal-price-text">${escapeHtml(cleanedPrice || 'Sale')}</span>
+                                    <span class="deal-dept-tag">${escapeHtml(deal.category || 'General')}</span>
+                                </div>
+
+                                <div class="deal-product-title" title="${escapeHtml(deal.item)}">
+                                    ${escapeHtml(deal.item)}
+                                </div>
+
+                                ${cleanNotes ? `<div class="deal-notes-box">${escapeHtml(cleanNotes)}</div>` : ''}
+
+                                <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 4px;">
+                                    ${compPillHtml}
+                                    ${historyPillHtml}
+                                </div>
                             </div>
                         </div>
 
-                        <div style="margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
-                            <div style="display: flex; gap: 4px; align-items: center;">
+                        <div class="deal-action-footer">
+                            <button class="deal-add-btn-primary" onclick="addFeedDealToList('${safeItemName}', '${safeStoreName}', '${safePrice}', '${safeCategory}', '${safeImageUrl}', this)">
+                                ➕ Add to List
+                            </button>
+                            <div class="deal-feedback-row">
                                 <button class="deal-feedback-btn" onclick="submitDealFeedback('${safeItemName}', '${safeCategory}', 'more', this, ${idx})" title="Show more deals like this item">
                                     👍 More
                                 </button>
@@ -3123,9 +3226,6 @@
                                     🚫 Hide
                                 </button>
                             </div>
-                            <button class="add-btn" onclick="addFeedDealToList('${safeItemName}', '${safeStoreName}', '${safePrice}', '${safeCategory}', '${safeImageUrl}', this)" style="margin: 0; padding: 5px 12px; font-size: 12px; background: #2563eb;">
-                                + Add to List
-                            </button>
                         </div>
                     </div>
                 `;
@@ -3669,7 +3769,7 @@
             container.innerHTML = filtered.map((deal) => {
                 const emoji = getCategoryEmoji(deal.category);
                 const imageTag = deal.image_url ? `
-                    <img src="${escapeHtml(deal.image_url)}" alt="${escapeHtml(deal.item)}" class="item-thumb" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    <img src="${escapeHtml(deal.image_url)}" alt="" class="item-thumb" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
                     <div class="item-avatar-fallback" style="display:none; font-size: 20px;">${emoji}</div>
                 ` : `<div class="item-avatar-fallback" style="font-size: 20px;">${emoji}</div>`;
 
@@ -4171,7 +4271,7 @@
                                     const historyPillHtml = getHistoryPillHtml(item.price_history);
 
                                     const imageTag = item.image_url ? `
-                                        <img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.item_name)}" style="width: 44px; height: 44px; object-fit: contain; padding: 2px; box-sizing: border-box;" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                        <img src="${escapeHtml(item.image_url)}" alt="" style="width: 44px; height: 44px; object-fit: contain; padding: 2px; box-sizing: border-box;" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
                                         <div class="item-avatar-fallback" style="display:none; font-size: 20px;">${emoji}</div>
                                     ` : `<div class="item-avatar-fallback" style="font-size: 20px;">${emoji}</div>`;
 
