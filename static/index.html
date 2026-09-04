@@ -514,6 +514,80 @@
             color: #cbd5e1;
             border: 1px solid rgba(148, 163, 184, 0.25);
         }
+        .grade-pill {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 7px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+        .grade-pill-prime {
+            background: rgba(245, 158, 11, 0.2);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.5);
+        }
+        .grade-pill-choice {
+            background: rgba(59, 130, 246, 0.2);
+            color: #93c5fd;
+            border: 1px solid rgba(59, 130, 246, 0.4);
+        }
+        .grade-pill-select {
+            background: rgba(148, 163, 184, 0.15);
+            color: #cbd5e1;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+        }
+        .grade-pill-wagyu {
+            background: rgba(244, 63, 94, 0.2);
+            color: #fda4af;
+            border: 1px solid rgba(244, 63, 94, 0.5);
+        }
+        .grade-pill-angus {
+            background: rgba(20, 184, 166, 0.2);
+            color: #5eead4;
+            border: 1px solid rgba(20, 184, 166, 0.4);
+        }
+        .history-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 9px;
+            border-radius: 6px;
+            font-size: 11.5px;
+            font-weight: 600;
+            line-height: 1.3;
+            margin-top: 5px;
+            width: fit-content;
+        }
+        .history-pill-best {
+            background: rgba(239, 68, 68, 0.2);
+            color: #fca5a5;
+            border: 1px solid rgba(239, 68, 68, 0.5);
+            box-shadow: 0 0 10px rgba(239, 68, 68, 0.15);
+            font-weight: 700;
+        }
+        .history-pill-low {
+            background: rgba(16, 185, 129, 0.18);
+            color: #6ee7b7;
+            border: 1px solid rgba(16, 185, 129, 0.4);
+        }
+        .history-pill-below {
+            background: rgba(14, 165, 233, 0.18);
+            color: #7dd3fc;
+            border: 1px solid rgba(14, 165, 233, 0.4);
+        }
+        .history-pill-above {
+            background: rgba(245, 158, 11, 0.18);
+            color: #fcd34d;
+            border: 1px solid rgba(245, 158, 11, 0.4);
+        }
+        .history-pill-typical {
+            background: rgba(148, 163, 184, 0.1);
+            color: #94a3b8;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+        }
         .deal-feedback-btn {
             background: rgba(255,255,255,0.04);
             border: 1px solid rgba(255,255,255,0.08);
@@ -2769,6 +2843,55 @@
             return p;
         }
 
+        function guessBeefGrade(itemName) {
+            if (!itemName) return '';
+            const name = itemName.toLowerCase();
+            const beefIndicators = [
+                'beef', 'steak', 'ribeye', 'strip', 'sirloin', 'brisket', 'roast',
+                'chuck', 'tenderloin', 'filet', 't-bone', 'porterhouse', 'flank',
+                'skirt', 'round', 'tri-tip', 'patty', 'patties', 'ground beef',
+                'short rib', 'prime rib', 'top sirloin', 'new york strip'
+            ];
+            if (!beefIndicators.some(b => name.includes(b))) return '';
+            if (/\b(usda\s*prime|prime\s*1|prime\s*beef|prime)\b/i.test(name)) return 'prime';
+            if (/\b(usda\s*choice|choice\s*beef|choice)\b/i.test(name)) return 'choice';
+            if (/\b(usda\s*select|select\s*beef|select)\b/i.test(name)) return 'select';
+            if (/\b(wagyu|kobe|american\s*wagyu)\b/i.test(name)) return 'wagyu';
+            if (/\b(black\s*angus|angus)\b/i.test(name)) return 'angus';
+            return '';
+        }
+
+        function getGradePillHtml(beefGrade, itemName = '') {
+            let bg = (beefGrade || '').toLowerCase();
+            if (!bg || bg === 'none') {
+                bg = guessBeefGrade(itemName);
+            }
+            if (!bg || bg === 'none') return '';
+            if (bg === 'prime') return `<span class="grade-pill grade-pill-prime" title="USDA Prime Quality Beef">⭐ Prime</span>`;
+            if (bg === 'choice') return `<span class="grade-pill grade-pill-choice" title="USDA Choice Quality Beef">Choice</span>`;
+            if (bg === 'select') return `<span class="grade-pill grade-pill-select" title="USDA Select Quality Beef">Select</span>`;
+            if (bg === 'wagyu') return `<span class="grade-pill grade-pill-wagyu" title="Premium Wagyu Beef">🥩 Wagyu</span>`;
+            if (bg === 'angus') return `<span class="grade-pill grade-pill-angus" title="Black Angus Beef">Angus</span>`;
+            return `<span class="grade-pill grade-pill-select">${escapeHtml(bg.toUpperCase())}</span>`;
+        }
+
+        function getHistoryPillHtml(hist) {
+            if (!hist || !hist.has_history || !hist.summary) return '';
+            const btype = hist.badge_type || 'neutral';
+            if (btype === 'all_time_low') {
+                return `<div class="history-pill history-pill-best" title="${escapeHtml(hist.summary)}">${escapeHtml(hist.summary)}</div>`;
+            } else if (btype === 'matching_low') {
+                return `<div class="history-pill history-pill-low" title="${escapeHtml(hist.summary)}">${escapeHtml(hist.summary)}</div>`;
+            } else if (btype === 'below_avg') {
+                return `<div class="history-pill history-pill-below" title="${escapeHtml(hist.summary)}">${escapeHtml(hist.summary)}</div>`;
+            } else if (btype === 'above_avg') {
+                return `<div class="history-pill history-pill-above" title="${escapeHtml(hist.summary)}">${escapeHtml(hist.summary)}</div>`;
+            } else if (btype === 'typical') {
+                return `<div class="history-pill history-pill-typical" title="${escapeHtml(hist.summary)}">${escapeHtml(hist.summary)}</div>`;
+            }
+            return `<div class="history-pill history-pill-typical" title="${escapeHtml(hist.summary)}">${escapeHtml(hist.summary)}</div>`;
+        }
+
         function initGroceriesTab() {
             const savedSubTab = localStorage.getItem('ai_helper_grocery_subtab') || 'feed';
             switchGrocerySubTab(savedSubTab);
@@ -2932,6 +3055,8 @@
                 const safePrice = escapeHtml(cleanedPrice).replace(/'/g, "\\'");
                 const safeCategory = escapeHtml(deal.category || 'General').replace(/'/g, "\\'");
                 const safeImageUrl = escapeHtml(deal.image_url || '').replace(/'/g, "\\'");
+                const gradePillHtml = getGradePillHtml(deal.beef_grade, deal.item);
+                const historyPillHtml = getHistoryPillHtml(deal.price_history);
 
                 return `
                     <div class="deal-card" id="deal-card-${idx}">
@@ -2948,8 +3073,9 @@
                                     <div style="font-weight: 700; color: #fff; font-size: 14.5px; margin-top: 5px; line-height: 1.35; word-break: break-word;">
                                         ${escapeHtml(deal.item)}
                                     </div>
-                                    <div style="display: flex; gap: 6px; align-items: center; margin-top: 4px;">
+                                    <div style="display: flex; gap: 6px; align-items: center; margin-top: 4px; flex-wrap: wrap;">
                                         <span class="category-pill" style="font-size: 11px;">${escapeHtml(deal.category)}</span>
+                                        ${gradePillHtml}
                                     </div>
                                 </div>
                             </div>
@@ -2957,6 +3083,7 @@
                             ${deal.notes ? `<div style="font-size: 12px; color: #94a3b8; line-height: 1.35; margin-bottom: 8px; background: rgba(0,0,0,0.25); padding: 5px 8px; border-radius: 4px;">${escapeHtml(deal.notes)}</div>` : ''}
                             
                             ${compPillHtml}
+                            ${historyPillHtml}
                         </div>
 
                         <div style="margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 10px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
@@ -3536,8 +3663,11 @@
                                     ${imageTag}
                                 </div>
                                 <div style="flex: 1; min-width: 0;">
-                                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 4px;">
-                                        <span class="category-pill" style="font-size: 11px;">${escapeHtml(deal.category || 'General')}</span>
+                                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 4px; flex-wrap: wrap;">
+                                        <div style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
+                                            <span class="category-pill" style="font-size: 11px;">${escapeHtml(deal.category || 'General')}</span>
+                                            ${getGradePillHtml(deal.beef_grade, deal.item)}
+                                        </div>
                                         ${cleanedPrice ? `<span class="price-pill" style="font-size: 13px; font-weight: bold;">${escapeHtml(cleanedPrice)}</span>` : ''}
                                     </div>
                                     <div style="font-weight: 600; color: #fff; font-size: 13.5px; margin-top: 4px; line-height: 1.35;">
@@ -3992,6 +4122,9 @@
                                         compPillHtml = `<span class="comp-pill comp-pill-red" style="font-size: 11px; padding: 2px 7px; margin-top: 0;" title="${escapeHtml(comp.summary || '')}">🔴 ${escapeHtml(comp.summary || 'Cheaper elsewhere')}</span>`;
                                     }
 
+                                    const gradePillHtml = getGradePillHtml(item.beef_grade, item.item_name);
+                                    const historyPillHtml = getHistoryPillHtml(item.price_history);
+
                                     const imageTag = item.image_url ? `
                                         <img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.item_name)}" style="width: 44px; height: 44px; object-fit: contain; padding: 2px; box-sizing: border-box;" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
                                         <div class="item-avatar-fallback" style="display:none; font-size: 20px;">${emoji}</div>
@@ -4009,9 +4142,11 @@
                                                     <div style="display: flex; gap: 6px; align-items: center; margin-top: 4px; flex-wrap: wrap;">
                                                         ${currentGroceryGrouping !== 'store' ? `<span class="store-pill ${pillClass}">${escapeHtml(item.store_name || 'Any')}</span>` : ''}
                                                         ${currentGroceryGrouping !== 'category' && item.category ? `<span class="category-pill">${escapeHtml(item.category)}</span>` : ''}
+                                                        ${gradePillHtml}
                                                         ${item.price_notes ? `<span class="price-pill">${escapeHtml(item.price_notes)}</span>` : ''}
                                                         ${compPillHtml}
                                                     </div>
+                                                    ${historyPillHtml ? `<div style="margin-top: 4px;">${historyPillHtml}</div>` : ''}
                                                 </div>
                                             </div>
                                             <button class="remove-btn" onclick="deleteGroceryItem('${item.id}')" style="margin: 0; padding: 4px 8px; font-size: 12px; opacity: 0.75;">🗑️</button>

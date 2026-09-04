@@ -132,6 +132,22 @@ All tables are initialized and automatically migrated on startup in `init_db()` 
 | `price_notes` | TEXT | Price or deal notes (e.g. "$4.99/lb sale", "Digital coupon") |
 | `category` | TEXT | Item category (Produce, Meat & Seafood, Dairy, etc.) |
 | `is_checked` | INTEGER | `0` = pending, `1` = checked/bought |
+| `image_url` | TEXT | Product image or cutout thumbnail URL |
+
+### `grocery_price_history`
+| Column | Type | Description |
+|---|---|---|
+| `id` | TEXT PRIMARY KEY | History entry UUID |
+| `user_id` | TEXT | Foreign key referencing `users.id` |
+| `item_name` | TEXT | Raw item name |
+| `normalized_key` | TEXT | Canonicalized search and grouping key (e.g. `beef:beef ribeye steak:prime`) |
+| `store_name` | TEXT | Supermarket or store name |
+| `price_str` | TEXT | Clean formatted price string (e.g. `$9.99/lb`) |
+| `unit_price` | REAL | Numeric unit price (e.g. `9.99`) |
+| `unit` | TEXT | Price unit (`lb`, `ea`, `oz`) |
+| `beef_grade` | TEXT | Detected USDA beef grade (`prime`, `choice`, `select`, `wagyu`, `angus`, `none`) |
+| `category` | TEXT | Department / category |
+| `recorded_at` | TEXT | ISO timestamp of price recording |
 
 ---
 
@@ -185,6 +201,8 @@ All tables are initialized and automatically migrated on startup in `init_db()` 
 - **Cross-Store Price Comparison Engine**: Cross-references items and prices across all configured local stores:
   - 🟢 **Green Badge**: Best price or cheaper than competitor (e.g. `✓ Best Price! Save $2.00/lb vs Tom Thumb ($7.99/lb)`).
   - 🔴 **Red Badge**: Cheaper price available at another store (e.g. `⚠️ Cheaper at H-E-B ($4.99/lb) — Save $1.00/lb`).
+- **Historical Price Trend Tracking & Lowest Price Flagging**: Automatically tracks and indexes historical unit prices for items over time across stores. Flags when a deal is an all-time low (e.g. `🔥 Best Price in 2 months! Save $1.00/lb vs prev low ($10.99/lb at Tom Thumb)`), matching low, or below average.
+- **Beef Grade Isolation & Quality Protection**: Detects and isolates USDA Beef Quality Grades (`prime`, `choice`, `select`, `wagyu`, `angus`, `none`). Prevents misleading price comparisons where lower quality grades (e.g., Select at $6.99/lb) would override or be compared against higher quality grades (e.g., Prime at $9.99/lb).
 - **Personalized "🔥 My Deals" Feed**: Scores and ranks live circular deals based on user preferences.
 - **Preference Tuning & Feedback**: Users can click 👍 "More like this", 👎 "Less like this", or 🚫 "Hide category" on deals, or customize favorite/ignored departments and liked/disliked keywords with a dedicated **Meat & Essentials Family Preset**.
 - **Store Ads & Circulars**: Users can configure local store ad URLs or use automated zip discovery.
@@ -240,6 +258,7 @@ All tables are initialized and automatically migrated on startup in `init_db()` 
 | `POST` | `/api/groceries/preferences` | Save food & deal feed preferences | Yes |
 | `POST` | `/api/groceries/preferences/feedback` | Submit feedback (more / less / hide category) | Yes |
 | `GET` | `/api/groceries/feed` | Get ranked, personalized deal feed with cross-store badges | Yes |
+| `GET` | `/api/groceries/price_history` | Get historical recorded price points for an item | Yes |
 | `GET` | `/api/groceries/lists` | List all grocery lists for user | Yes |
 | `POST` | `/api/groceries/lists` | Create or update a grocery list | Yes |
 | `DELETE` | `/api/groceries/lists/{id}` | Delete a grocery list and its items | Yes |

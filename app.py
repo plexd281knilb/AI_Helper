@@ -183,6 +183,22 @@ def init_db():
     except sqlite3.OperationalError:
         pass # Column already exists
         
+    c.execute('''CREATE TABLE IF NOT EXISTS grocery_price_history (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT,
+                    item_name TEXT,
+                    normalized_key TEXT,
+                    store_name TEXT,
+                    price_str TEXT,
+                    unit_price REAL,
+                    unit TEXT,
+                    beef_grade TEXT,
+                    category TEXT,
+                    recorded_at TEXT
+                 )''')
+    c.execute("CREATE INDEX IF NOT EXISTS idx_gph_user_key ON grocery_price_history(user_id, normalized_key, recorded_at);")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_gph_user_store ON grocery_price_history(user_id, store_name, recorded_at);")
+    
     conn.commit()
     conn.close()
 
@@ -1692,6 +1708,83 @@ def parse_numeric_price(price_str: str) -> dict:
             
     return {'unit_price': None, 'unit': 'unknown', 'raw': raw}
 
+def detect_beef_grade(item_name: str, category: str = "") -> str:
+    name = (item_name or '').lower()
+    cat = (category or '').lower()
+    
+    # Check if beef/meat
+    beef_indicators = [
+        'beef', 'steak', 'ribeye', 'strip', 'sirloin', 'brisket', 'roast',
+        'chuck', 'tenderloin', 'filet', 't-bone', 'porterhouse', 'flank',
+        'skirt', 'round', 'tri-tip', 'patty', 'patties', 'ground beef',
+        'short rib', 'prime rib', 'top sirloin', 'new york strip'
+    ]
+    
+    is_beef = any(b in name for b in beef_indicators) or ('meat' in cat and any(b in name for b in ['steak', 'roast', 'angus']))
+    if not is_beef:
+        return ""
+        
+    # Detect grade
+    if re.search(r'\b(?:usda\s*prime|prime\s*1|prime\s*beef|prime\s*choice\s*n\/a|prime)\b', name):
+        return "prime"
+    if re.search(r'\b(?:usda\s*choice|choice\s*beef|choice)\b', name):
+        return "choice"
+    if re.search(r'\b(?:usda\s*select|select\s*beef|select)\b', name):
+        return "select"
+    if re.search(r'\b(?:wagyu|kobe|american\s*wagyu)\b', name):
+        return "wagyu"
+    if re.search(r'\b(?:black\s*angus|angus)\b', name):
+        return "angus"
+        
+    return "none"
+
+def normalize_item_history_key(item_name: str, category: str = "") -> tuple:
+    name = (item_name or '').lower()
+    
+    # 1. Detect beef grade if beef
+    beef_grade = detect_beef_grade(item_name, category)
+    
+    # 2. Clean weights, measurements, packaging
+    cleaned = re.sub(r'\b\d+(?:\.\d+)?\s*(?:oz|lb|lbs|ct|pk|pack|count|fl\s*oz|gal|gallon|qt|pt|liter|l|ml|kg|g)\b', ' ', name)
+    cleaned = re.sub(r'\b\d+/\d+\b', ' ', cleaned)
+    cleaned = re.sub(r'[^a-z0-9\s]', ' ', cleaned)
+    
+    # 3. Stop words
+    stop_words = {
+        'fresh', 'organic', 'usda', 'prime', 'choice', 'select', 'all', 'natural', 'frozen',
+        'great', 'value', 'signature', 'h-e-b', 'heb', 'kroger', 'market', 'pantry',
+        'family', 'pack', 'super', 'size', 'selected', 'varieties', 'brand', 'assorted', 'large',
+        'small', 'medium', 'jumbo', 'grade', 'a', 'aa', 'free', 'range', 'cage', 'wild', 'caught',
+        'farm', 'raised', 'boneless', 'skinless', 'bone', 'in', 'center', 'cut', 'thin', 'sliced',
+        'thick', 'whole', 'half', 'quarter', 'the', 'and', 'or', 'with', 'in', 'for', 'of', 'item', 'lb', 'lbs',
+        'claws', 'claw'
+    }
+    
+    tokens = [w for w in cleaned.split() if len(w) > 2 and w not in stop_words]
+    
+    # Stem simple plurals
+    canonical_tokens = []
+    for t in tokens:
+        if t.endswith('ies'): t = t[:-3] + 'y'
+        elif t.endswith('es') and not t.endswith('ees'): t = t[:-2]
+        elif t.endswith('s') and not t.endswith('ss'): t = t[:-1]
+        canonical_tokens.append(t)
+        
+    if 'claw' in name:
+        canonical_tokens.append('claw')
+    if 'crab' in name and 'crab' not in canonical_tokens:
+        canonical_tokens.append('crab')
+        
+    canonical_tokens.sort()
+    base_key = " ".join(canonical_tokens)
+    
+    if beef_grade:
+        final_key = f"beef:{base_key}:{beef_grade}"
+    else:
+        final_key = base_key
+        
+    return final_key, beef_grade
+
 def normalize_item_tokens(item_name: str) -> set:
     if not item_name:
         return set()
@@ -1717,6 +1810,7 @@ def find_cross_store_comparison(current_item_name: str, current_store: str, curr
     curr_unit = curr_parsed.get('unit')
     curr_tokens = normalize_item_tokens(current_item_name)
     norm_curr_store = normalize_grocery_store_name(current_store).lower()
+    curr_grade = detect_beef_grade(current_item_name, current_category)
 
     matches = []
     
@@ -1732,6 +1826,12 @@ def find_cross_store_comparison(current_item_name: str, current_store: str, curr
             
             if current_category and d_cat and current_category not in ['General', ''] and d_cat not in ['General', ''] and current_category != d_cat:
                 continue
+                
+            # Grade isolation for beef: prevent comparing Prime vs Select or Choice vs Select
+            if curr_grade:
+                d_grade = detect_beef_grade(d_name, d_cat)
+                if d_grade and d_grade != curr_grade:
+                    continue
                 
             d_tokens = normalize_item_tokens(d_name)
             if not curr_tokens or not d_tokens:
@@ -1804,6 +1904,8 @@ def find_cross_store_comparison(current_item_name: str, current_store: str, curr
                 'summary': f"✓ Matching Lowest Price (also {lowest_price_str} at {lowest_store})",
                 'diff_text': "Matched price",
                 'best_store': current_store,
+                'lowest_other_store': lowest_store,
+                'lowest_other_price': lowest_price_str,
                 'other_prices': [{'store': m['store'], 'price': m['price_str'], 'item': m['item']} for m in matches[:3]]
             }
     else:
@@ -1816,6 +1918,150 @@ def find_cross_store_comparison(current_item_name: str, current_store: str, curr
             'diff_text': '',
             'other_prices': [{'store': m['store'], 'price': m['price_str'], 'item': m['item']} for m in matches[:3]]
         }
+
+def record_store_deals_price_history(conn, user_id: str, store_name: str, deals: list, recorded_at_iso: Optional[str] = None):
+    if not deals:
+        return
+    recorded_at = recorded_at_iso or datetime.now().isoformat()
+    rec_date = recorded_at[:10]
+    c = conn.cursor()
+    
+    for d in deals:
+        raw_name = d.get('item') or ''
+        if not raw_name or len(raw_name.strip()) < 2:
+            continue
+        clean_price, notes_str = sanitize_deal_price_and_notes(d.get('price', ''), d.get('notes', ''))
+        parsed = parse_numeric_price(clean_price)
+        unit_price = parsed.get('unit_price')
+        unit = parsed.get('unit') or 'ea'
+        category = d.get('category', 'Pantry & Dry Goods')
+        
+        if unit_price is None:
+            continue
+            
+        norm_key, beef_grade = normalize_item_history_key(raw_name, category)
+        if not norm_key:
+            continue
+            
+        try:
+            c.execute('''SELECT id FROM grocery_price_history 
+                         WHERE user_id=? AND normalized_key=? AND store_name=? AND substr(recorded_at, 1, 10)=?''',
+                      (user_id, norm_key, store_name, rec_date))
+            existing = c.fetchone()
+            if existing:
+                c.execute('''UPDATE grocery_price_history SET price_str=?, unit_price=?, unit=?, beef_grade=?, category=?, recorded_at=? WHERE id=?''',
+                          (clean_price, unit_price, unit, beef_grade, category, recorded_at, existing[0]))
+            else:
+                rec_id = str(uuid.uuid4())
+                c.execute('''INSERT INTO grocery_price_history (id, user_id, item_name, normalized_key, store_name, price_str, unit_price, unit, beef_grade, category, recorded_at)
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                          (rec_id, user_id, raw_name, norm_key, store_name, clean_price, unit_price, unit, beef_grade, category, recorded_at))
+        except Exception as ex:
+            logger.debug(f"Error saving price history point: {ex}")
+
+def get_item_price_history_metrics(conn, user_id: str, item_name: str, current_price_val: Optional[float], category: str = "", current_unit: str = "ea") -> Optional[dict]:
+    if current_price_val is None:
+        return None
+        
+    norm_key, beef_grade = normalize_item_history_key(item_name, category)
+    if not norm_key:
+        return None
+        
+    try:
+        c = conn.cursor()
+        c.execute('''SELECT store_name, price_str, unit_price, unit, recorded_at 
+                     FROM grocery_price_history 
+                     WHERE user_id=? AND normalized_key=? AND unit=? 
+                     ORDER BY recorded_at DESC''',
+                  (user_id, norm_key, current_unit))
+        rows = c.fetchall()
+        
+        if not rows:
+            return {
+                'has_history': False,
+                'beef_grade': beef_grade,
+                'records_count': 0,
+                'history_badge': None,
+                'badge_type': 'neutral',
+                'summary': f"First time recorded ({beef_grade.upper()} Grade)" if beef_grade and beef_grade != 'none' else "First time recorded"
+            }
+            
+        prices = [r[2] for r in rows]
+        all_time_low = min(prices)
+        all_time_high = max(prices)
+        avg_price = round(sum(prices) / len(prices), 2)
+        
+        lowest_row = min(rows, key=lambda r: r[2])
+        lowest_store = lowest_row[0]
+        lowest_price_str = lowest_row[1]
+        lowest_date_str = lowest_row[4][:10]
+        
+        now = datetime.now()
+        better_or_equal_dates = []
+        for r in rows:
+            if r[2] <= current_price_val:
+                try:
+                    better_or_equal_dates.append(datetime.fromisoformat(r[4]))
+                except Exception:
+                    pass
+                    
+        days_since_seen = None
+        if better_or_equal_dates:
+            most_recent_better = max(better_or_equal_dates)
+            days_since_seen = max((now - most_recent_better).days, 0)
+        else:
+            oldest_record_dates = []
+            for r in rows:
+                try: oldest_record_dates.append(datetime.fromisoformat(r[4]))
+                except Exception: pass
+            if oldest_record_dates:
+                days_since_seen = max((now - min(oldest_record_dates)).days, 1)
+            else:
+                days_since_seen = 30
+                
+        grade_label = f" [{beef_grade.upper()}]" if beef_grade and beef_grade != 'none' else ""
+        unit_suffix = "/lb" if current_unit == 'lb' else ""
+        
+        diff_from_low = round(current_price_val - all_time_low, 2)
+        diff_from_avg = round(current_price_val - avg_price, 2)
+        
+        if diff_from_low <= -0.15:
+            savings = abs(diff_from_low)
+            badge_type = 'all_time_low'
+            time_frame = f"{days_since_seen} days" if days_since_seen < 60 else f"{days_since_seen // 30} months"
+            summary = f"🔥 Best{grade_label} Price in {time_frame}! Save ${savings:.2f}{unit_suffix} vs prev low ({lowest_price_str} at {lowest_store})"
+        elif abs(diff_from_low) <= 0.10:
+            badge_type = 'matching_low'
+            summary = f"🏷️ Matching All-Time Low{grade_label} ({lowest_price_str} at {lowest_store})"
+        elif diff_from_avg <= -0.50:
+            savings = abs(diff_from_avg)
+            badge_type = 'below_avg'
+            summary = f"📉 ${savings:.2f}{unit_suffix} Below Avg{grade_label} (Avg: ${avg_price:.2f}{unit_suffix})"
+        elif diff_from_avg >= 0.50:
+            extra = diff_from_avg
+            badge_type = 'above_avg'
+            summary = f"📈 ${extra:.2f}{unit_suffix} Above Avg{grade_label} (Avg: ${avg_price:.2f}{unit_suffix})"
+        else:
+            badge_type = 'typical'
+            summary = f"⚖️ Typical Price{grade_label} (Avg: ${avg_price:.2f}{unit_suffix})"
+            
+        return {
+            'has_history': True,
+            'beef_grade': beef_grade,
+            'records_count': len(rows),
+            'all_time_low': all_time_low,
+            'all_time_low_store': lowest_store,
+            'all_time_low_date': lowest_date_str,
+            'avg_price': avg_price,
+            'diff_from_low': diff_from_low,
+            'diff_from_avg': diff_from_avg,
+            'badge_type': badge_type,
+            'summary': summary,
+            'history_badge': summary
+        }
+    except Exception as e:
+        logger.debug(f"Error querying price history metrics: {e}")
+        return None
 
 def clean_deal_name(name: str) -> str:
     if not name:
@@ -2384,6 +2630,7 @@ def parse_store_text_deals(store_id: str, req: StoreTextParseRequest, user_id: s
     
     c.execute("UPDATE grocery_stores SET last_scanned=?, cached_deals=? WHERE id=? AND user_id=?",
               (now_iso, json.dumps(deals), store_id, user_id))
+    record_store_deals_price_history(conn, user_id, store["name"], deals, now_iso)
     conn.commit()
     conn.close()
     return {"status": "success", "deals_found": len(deals), "deals": deals}
@@ -2445,6 +2692,7 @@ def auto_fetch_local_deals(req: AutoFetchDealsRequest, user_id: str = Depends(ve
             )
             existing_stores[norm_key] = store_id
             
+        record_store_deals_price_history(conn, user_id, sname, deals, now_iso)
         updated_stores.append({
             "id": store_id,
             "name": sname,
@@ -2503,6 +2751,7 @@ def scan_grocery_store(store_id: str, user_id: str = Depends(verify_auth)):
             
     c.execute("UPDATE grocery_stores SET ad_url=?, last_scanned=?, cached_deals=? WHERE id=? AND user_id=?",
               (url, now_iso, json.dumps(deals), store_id, user_id))
+    record_store_deals_price_history(conn, user_id, name, deals, now_iso)
     conn.commit()
     conn.close()
     return {"status": "success", "deals_found": len(deals), "deals": deals, "warning": warning_msg}
@@ -2544,6 +2793,7 @@ def scan_all_grocery_stores(user_id: str = Depends(verify_auth)):
                 
         c.execute("UPDATE grocery_stores SET ad_url=?, last_scanned=?, cached_deals=? WHERE id=? AND user_id=?",
                   (ad_url, now_iso, json.dumps(deals), s["id"], user_id))
+        record_store_deals_price_history(conn, user_id, s["name"], deals, now_iso)
         results.append({"store": s["name"], "deals_found": len(deals)})
             
     conn.commit()
@@ -2666,7 +2916,6 @@ def get_personalized_deals_feed(category: Optional[str] = None, best_only: Optio
     
     c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
     s_row = c.fetchone()
-    conn.close()
     
     settings = json.loads(s_row['settings']) if s_row and s_row['settings'] else {}
     prefs = get_user_deal_preferences(settings)
@@ -2748,6 +2997,19 @@ def get_personalized_deals_feed(category: Optional[str] = None, best_only: Optio
             score -= 15
             if best_only:
                 continue
+
+        parsed_price = parse_numeric_price(price_str)
+        curr_val = parsed_price.get('unit_price')
+        curr_u = parsed_price.get('unit') or 'ea'
+        beef_grade = detect_beef_grade(item_name, deal_cat)
+        hist_metrics = get_item_price_history_metrics(conn, user_id, item_name, curr_val, deal_cat, curr_u)
+        
+        if hist_metrics and hist_metrics.get('badge_type') == 'all_time_low':
+            score += 45
+        elif hist_metrics and hist_metrics.get('badge_type') == 'below_avg':
+            score += 20
+        elif hist_metrics and hist_metrics.get('badge_type') == 'matching_low':
+            score += 15
                 
         scored_deals.append({
             "item": item_name,
@@ -2759,9 +3021,12 @@ def get_personalized_deals_feed(category: Optional[str] = None, best_only: Optio
             "image_url": img_url,
             "score": score,
             "comparison": comp,
+            "beef_grade": beef_grade,
+            "price_history": hist_metrics,
             "matched_keywords": matched_liked
         })
         
+    conn.close()
     scored_deals.sort(key=lambda d: d["score"], reverse=True)
     
     return {
@@ -2770,6 +3035,26 @@ def get_personalized_deals_feed(category: Optional[str] = None, best_only: Optio
         "deals_count": len(scored_deals),
         "preferences": prefs,
         "deals": scored_deals[:150]
+    }
+
+# --- Grocery Price History Endpoint ---
+@app.get("/api/groceries/price_history")
+def get_grocery_price_history(item: str, category: Optional[str] = "", user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
+    norm_key, beef_grade = normalize_item_history_key(item, category or "")
+    c = conn.cursor()
+    c.execute('''SELECT id, item_name, store_name, price_str, unit_price, unit, beef_grade, category, recorded_at 
+                 FROM grocery_price_history 
+                 WHERE user_id=? AND normalized_key=? 
+                 ORDER BY recorded_at DESC LIMIT 50''',
+              (user_id, norm_key))
+    rows = [dict(r) for r in c.fetchall()]
+    conn.close()
+    return {
+        "status": "success",
+        "normalized_key": norm_key,
+        "beef_grade": beef_grade,
+        "history": rows
     }
 
 # --- Grocery Lists & Items Endpoints ---
@@ -2825,7 +3110,6 @@ def get_grocery_list_items(list_id: str, user_id: str = Depends(verify_auth)):
     
     c.execute("SELECT id, name, ad_url, cached_deals FROM grocery_stores WHERE user_id=?", (user_id,))
     stores_raw = c.fetchall()
-    conn.close()
     
     all_stores = []
     for s in stores_raw:
@@ -2845,6 +3129,18 @@ def get_grocery_list_items(list_id: str, user_id: str = Depends(verify_auth)):
         )
         item["comparison"] = comp
         
+        p_clean, _ = sanitize_deal_price_and_notes(item.get("price_notes", ""), "")
+        parsed = parse_numeric_price(p_clean)
+        item["beef_grade"] = detect_beef_grade(item.get("item_name", ""), item.get("category", ""))
+        item["price_history"] = get_item_price_history_metrics(
+            conn, user_id,
+            item.get("item_name", ""),
+            parsed.get("unit_price"),
+            item.get("category", ""),
+            parsed.get("unit") or "ea"
+        )
+        
+    conn.close()
     return rows
 
 @app.post("/api/groceries/lists/{list_id}/items")
