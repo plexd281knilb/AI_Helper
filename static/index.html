@@ -360,23 +360,28 @@
         .store-pill {
             display: inline-flex;
             align-items: center;
-            padding: 3px 8px;
+            padding: 2.5px 8px;
             border-radius: 4px;
             font-size: 11.5px;
-            font-weight: 700;
+            font-weight: 800;
             text-transform: uppercase;
-            letter-spacing: 0.3px;
+            letter-spacing: 0.4px;
+            line-height: 1.2;
+            white-space: nowrap;
         }
-        .store-pill-heb { background: rgba(225, 29, 72, 0.2); color: #fb7185; border: 1px solid rgba(225, 29, 72, 0.4); }
-        .store-pill-kroger { background: rgba(37, 99, 235, 0.2); color: #60a5fa; border: 1px solid rgba(37, 99, 235, 0.4); }
-        .store-pill-tom-thumb { background: rgba(8, 145, 178, 0.2); color: #38bdf8; border: 1px solid rgba(8, 145, 178, 0.4); }
-        .store-pill-costco { background: rgba(185, 28, 28, 0.2); color: #f87171; border: 1px solid rgba(185, 28, 28, 0.4); }
-        .store-pill-sprouts { background: rgba(5, 150, 105, 0.2); color: #34d399; border: 1px solid rgba(5, 150, 105, 0.4); }
-        .store-pill-whole-foods { background: rgba(4, 120, 87, 0.2); color: #6ee7b7; border: 1px solid rgba(4, 120, 87, 0.4); }
-        .store-pill-walmart { background: rgba(217, 119, 6, 0.2); color: #fbbf24; border: 1px solid rgba(217, 119, 6, 0.4); }
-        .store-pill-aldi { background: rgba(29, 78, 216, 0.2); color: #93c5fd; border: 1px solid rgba(29, 78, 216, 0.4); }
-        .store-pill-trader-joes, .store-pill-trader-joe { background: rgba(194, 65, 12, 0.2); color: #fdba74; border: 1px solid rgba(194, 65, 12, 0.4); }
-        .store-pill-any { background: rgba(100, 116, 139, 0.2); color: #cbd5e1; border: 1px solid rgba(100, 116, 139, 0.4); }
+        .store-pill-heb { background: rgba(225, 29, 72, 0.22); color: #fb7185; border: 1px solid rgba(225, 29, 72, 0.5); }
+        .store-pill-kroger { background: rgba(37, 99, 235, 0.22); color: #60a5fa; border: 1px solid rgba(37, 99, 235, 0.5); }
+        .store-pill-albertsons { background: rgba(14, 165, 233, 0.22); color: #38bdf8; border: 1px solid rgba(14, 165, 233, 0.5); }
+        .store-pill-tom-thumb { background: rgba(8, 145, 178, 0.22); color: #22d3ee; border: 1px solid rgba(8, 145, 178, 0.5); }
+        .store-pill-costco { background: rgba(220, 38, 38, 0.22); color: #f87171; border: 1px solid rgba(220, 38, 38, 0.5); }
+        .store-pill-sprouts { background: rgba(5, 150, 105, 0.22); color: #34d399; border: 1px solid rgba(5, 150, 105, 0.5); }
+        .store-pill-whole-foods { background: rgba(4, 120, 87, 0.22); color: #6ee7b7; border: 1px solid rgba(4, 120, 87, 0.5); }
+        .store-pill-walmart { background: rgba(217, 119, 6, 0.22); color: #fbbf24; border: 1px solid rgba(217, 119, 6, 0.5); }
+        .store-pill-target { background: rgba(225, 29, 72, 0.2); color: #f43f5e; border: 1px solid rgba(225, 29, 72, 0.45); }
+        .store-pill-aldi { background: rgba(29, 78, 216, 0.22); color: #93c5fd; border: 1px solid rgba(29, 78, 216, 0.5); }
+        .store-pill-fiesta { background: rgba(168, 85, 247, 0.22); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.5); }
+        .store-pill-trader-joes, .store-pill-trader-joe { background: rgba(194, 65, 12, 0.22); color: #fdba74; border: 1px solid rgba(194, 65, 12, 0.5); }
+        .store-pill-any { background: rgba(100, 116, 139, 0.22); color: #cbd5e1; border: 1px solid rgba(100, 116, 139, 0.45); }
 
         .price-pill {
             background: rgba(16, 185, 129, 0.15);
@@ -3167,10 +3172,10 @@
 
                         <div class="deal-main-info">
                             <div class="deal-top-line">
-                                <span class="store-pill ${pillClass}" style="font-size: 10px; padding: 1px 6px;">${escapeHtml(deal.store)}</span>
+                                <span class="store-pill ${pillClass}">${escapeHtml(deal.store)}</span>
                                 <span class="deal-price-badge">${escapeHtml(cleanedPrice || 'Sale')}</span>
                                 ${gradePillHtml}
-                                <span style="font-size: 10px; color: #8b949e; margin-left: auto;">${escapeHtml(deal.category || '')}</span>
+                                <span style="font-size: 10.5px; color: #8b949e; margin-left: auto; text-transform: uppercase; font-weight: 500; letter-spacing: 0.3px;">${escapeHtml(deal.category || '')}</span>
                             </div>
 
                             <div class="deal-title-text" title="${escapeHtml(deal.item)}">
@@ -3464,15 +3469,17 @@
         // =====================================================================
         function getStorePillClass(storeName) {
             const s = (storeName || '').toLowerCase().replace(/[^a-z0-9]/g, '-');
-            if (s.includes('heb')) return 'store-pill-heb';
+            if (s.includes('heb') || s.includes('h-e-b')) return 'store-pill-heb';
             if (s.includes('kroger')) return 'store-pill-kroger';
-            if (s.includes('tom-thumb') || s.includes('tomthumb') || s.includes('safeway') || s.includes('albertsons')) return 'store-pill-tom-thumb';
+            if (s.includes('albertsons')) return 'store-pill-albertsons';
+            if (s.includes('tom-thumb') || s.includes('tomthumb') || s.includes('safeway')) return 'store-pill-tom-thumb';
             if (s.includes('costco')) return 'store-pill-costco';
             if (s.includes('sprout')) return 'store-pill-sprouts';
             if (s.includes('whole-food') || s.includes('wholefood')) return 'store-pill-whole-foods';
             if (s.includes('walmart') || s.includes('wal-mart')) return 'store-pill-walmart';
+            if (s.includes('target')) return 'store-pill-target';
             if (s.includes('aldi')) return 'store-pill-aldi';
-            if (s.includes('fiesta')) return 'store-pill-any';
+            if (s.includes('fiesta')) return 'store-pill-fiesta';
             if (s.includes('trader-joe') || s.includes('traderjoe')) return 'store-pill-trader-joe';
             return 'store-pill-any';
         }
