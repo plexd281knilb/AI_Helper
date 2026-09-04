@@ -52,10 +52,13 @@
         .event-date { color: #a0a5b1; font-size: 0.95em; margin-bottom: 12px; font-weight: 500; }
         .event-account { display: inline-block; background: var(--input-bg); color: #888; font-size: 0.8em; margin-bottom: 12px; padding: 4px 10px; border-radius: 20px; }
         
-        .add-btn { background-color: var(--accent); color: white; border: none; padding: 12px 20px; border-radius: var(--radius-sm); cursor: pointer; text-decoration: none; display: inline-block; margin-top: 15px; font-size: 14px; font-weight: 600; transition: background 0.2s; }
-        .add-btn:hover { background-color: var(--accent-hover); }
-        .dismiss-btn { background-color: #3a3f4c; color: white; border: none; padding: 12px 20px; border-radius: var(--radius-sm); cursor: pointer; text-decoration: none; display: inline-block; margin-top: 15px; margin-left: 10px; font-size: 14px; font-weight: 600; transition: background 0.2s;}
-        .dismiss-btn:hover { background-color: #4a5060; }
+        .add-btn { background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: white; border: 1px solid rgba(255, 255, 255, 0.15); padding: 10px 18px; border-radius: var(--radius-sm); cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 13.5px; font-weight: 600; box-shadow: 0 2px 6px rgba(37, 99, 235, 0.35); transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1); }
+        .add-btn:hover { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37, 99, 235, 0.45); }
+        .add-btn:active { transform: translateY(1px) scale(0.98); }
+        
+        .dismiss-btn { background: #21262d; color: #cbd5e1; border: 1px solid #30363d; padding: 10px 18px; border-radius: var(--radius-sm); cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 13.5px; font-weight: 600; transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1); }
+        .dismiss-btn:hover { background: #30363d; color: #fff; border-color: rgba(255,255,255,0.25); transform: translateY(-1px); }
+        .dismiss-btn:active { transform: translateY(1px) scale(0.98); }
         
         .form-group { margin-bottom: 20px; position: relative;}
         .form-group label { display: block; margin-bottom: 8px; font-weight: 600; color: #b0b5c1; font-size: 14px; }
@@ -63,14 +66,18 @@
         .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--accent); }
         .form-group small { display: block; margin-top: 6px; font-size: 13px; color: #7a7f8c; line-height: 1.4; }
         
-        .save-btn { background-color: #10b981; color: white; border: none; padding: 12px 20px; border-radius: var(--radius-sm); cursor: pointer; font-size: 15px; font-weight: 600; margin-top: 10px; transition: background 0.2s; }
-        .save-btn:hover { background-color: #059669; }
-        .remove-btn { background-color: #ef4444; color: white; border: none; padding: 10px 16px; border-radius: var(--radius-sm); cursor: pointer; font-size: 14px; font-weight: 600; margin-top: 5px; transition: background 0.2s;}
-        .remove-btn:hover { background-color: #dc2626; }
+        .save-btn { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: 1px solid rgba(255, 255, 255, 0.15); padding: 10px 18px; border-radius: var(--radius-sm); cursor: pointer; font-size: 14px; font-weight: 600; box-shadow: 0 2px 6px rgba(16, 185, 129, 0.35); transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1); display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+        .save-btn:hover { background: linear-gradient(135deg, #34d399 0%, #10b981 100%); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(16, 185, 129, 0.45); }
+        .save-btn:active { transform: translateY(1px) scale(0.98); }
+
+        .remove-btn { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; border: 1px solid rgba(255, 255, 255, 0.15); padding: 8px 14px; border-radius: var(--radius-sm); cursor: pointer; font-size: 13px; font-weight: 600; box-shadow: 0 2px 6px rgba(239, 68, 68, 0.3); transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1); display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
+        .remove-btn:hover { background: linear-gradient(135deg, #f87171 0%, #ef4444 100%); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4); }
+        .remove-btn:active { transform: translateY(1px) scale(0.98); }
+
         .add-account-btn { background-color: transparent; color: var(--accent); border: 2px dashed var(--border-color); padding: 15px; border-radius: var(--radius-md); cursor: pointer; font-size: 15px; font-weight: 600; margin-bottom: 20px; width: 100%; transition: all 0.2s;}
         .add-account-btn:hover { border-color: var(--accent); background-color: rgba(66, 133, 244, 0.05); }
-        .fetch-models-btn { background-color: #3a3f4c; color: white; border: none; padding: 10px 15px; border-radius: var(--radius-sm); cursor: pointer; font-size: 13px; font-weight: 600; margin-bottom: 15px; margin-top: 5px; transition: background 0.2s;}
-        .fetch-models-btn:hover { background-color: #4a5060; }
+        .fetch-models-btn { background-color: #21262d; border: 1px solid #30363d; color: #cbd5e1; padding: 9px 15px; border-radius: var(--radius-sm); cursor: pointer; font-size: 13px; font-weight: 600; margin-bottom: 15px; margin-top: 5px; transition: all 0.2s;}
+        .fetch-models-btn:hover { background-color: #30363d; color: #fff; border-color: rgba(255,255,255,0.2); }
         
         .sync-btn { background-color: #E91E63; color: white; font-weight: 600; padding: 12px 24px; border: none; border-radius: var(--radius-sm); cursor: pointer; box-shadow: 0 4px 12px rgba(233, 30, 99, 0.3); transition: transform 0.2s, box-shadow 0.2s;}
         .sync-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(233, 30, 99, 0.4); }
@@ -294,35 +301,59 @@
             user-select: text;
         }
         .filter-chip {
-            background: #222630;
-            border: 1px solid var(--border-color);
-            color: #a0a5b1;
-            padding: 7px 16px;
+            background: #161b22;
+            border: 1px solid #30363d;
+            color: #94a3b8;
+            padding: 6px 15px;
             border-radius: 20px;
-            font-size: 13px;
+            font-size: 12.5px;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+            user-select: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
         }
         .filter-chip:hover:not(.active) {
-            background: #2e3442;
-            color: #fff;
+            background: #21262d;
+            color: #ffffff;
+            border-color: rgba(255, 255, 255, 0.25);
+            transform: translateY(-1px);
+        }
+        .filter-chip:active {
+            transform: scale(0.96);
         }
         .filter-chip.active {
-            background: var(--accent);
-            color: #fff;
-            border-color: var(--accent);
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            color: #ffffff;
+            border-color: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 2px 8px rgba(37, 99, 235, 0.4);
         }
         .copy-btn {
-            background: #21262d;
+            background: #161b22;
             border: 1px solid #30363d;
-            color: #c9d1d9;
-            padding: 5px 12px;
+            color: #cbd5e1;
+            padding: 6px 13px;
             border-radius: var(--radius-sm);
             font-size: 12px;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+        }
+        .copy-btn:hover {
+            background: #21262d;
+            color: #ffffff;
+            border-color: rgba(255, 255, 255, 0.25);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        }
+        .copy-btn:active {
+            transform: translateY(1px) scale(0.98);
         }
         /* Logs Terminal */
         #log-output {
@@ -338,6 +369,7 @@
             word-wrap: break-word;
             border: 1px solid #30363d;
             box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);
+        }
         /* Grocery & Deals Styles */
         .prompt-suggestion {
             display: inline-block;
@@ -653,35 +685,60 @@
             flex-direction: column;
             align-items: flex-end;
             justify-content: center;
-            gap: 5px;
+            gap: 6px;
             flex-shrink: 0;
+            min-width: 175px;
         }
         .deal-add-btn-compact {
-            background: #2563eb;
-            color: #fff;
-            border: none;
-            border-radius: 5px;
-            padding: 5px 11px;
-            font-size: 12px;
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            border-radius: 6px;
+            padding: 5px 12px;
+            font-size: 11.5px;
             font-weight: 600;
             cursor: pointer;
             display: inline-flex;
             align-items: center;
-            gap: 4px;
-            transition: all 0.15s ease;
+            justify-content: center;
+            gap: 5px;
+            transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
             white-space: nowrap;
+            width: 100%;
+            box-sizing: border-box;
+            box-shadow: 0 2px 6px rgba(37, 99, 235, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+            letter-spacing: 0.15px;
         }
         .deal-add-btn-compact:hover {
-            background: #1d4ed8;
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            border-color: rgba(255, 255, 255, 0.28);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.25);
             transform: translateY(-1px);
+        }
+        .deal-add-btn-compact:active {
+            transform: translateY(1px) scale(0.98);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+        }
+        .deal-add-btn-compact.added {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+            border-color: rgba(16, 185, 129, 0.5) !important;
+            box-shadow: 0 2px 8px rgba(16, 185, 129, 0.4) !important;
+        }
+
+        .deal-feedback-row {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+            justify-content: flex-end;
+            width: 100%;
         }
         .deal-feedback-btn-mini {
             position: relative;
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: #0d1117;
+            border: 1px solid rgba(255, 255, 255, 0.12);
             color: #94a3b8;
-            padding: 3px 7px;
-            border-radius: 4px;
+            padding: 3px 8px;
+            border-radius: 5px;
             font-size: 11.5px;
             cursor: pointer;
             transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
@@ -690,12 +747,14 @@
             justify-content: center;
             line-height: 1;
             user-select: none;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
         }
         .deal-feedback-btn-mini:hover {
-            background: rgba(255, 255, 255, 0.12);
-            color: #fff;
-            border-color: rgba(255, 255, 255, 0.3);
+            background: #1f2937;
+            color: #ffffff;
+            border-color: rgba(255, 255, 255, 0.28);
             transform: translateY(-1px);
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4);
         }
         .deal-feedback-btn-mini:active {
             transform: scale(0.92);
@@ -707,16 +766,16 @@
             animation: feedbackShakeDown 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97);
         }
         .deal-feedback-btn-mini.active-up {
-            background: rgba(16, 185, 129, 0.25) !important;
+            background: rgba(16, 185, 129, 0.22) !important;
             color: #34d399 !important;
             border-color: #10b981 !important;
-            box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.4) !important;
         }
         .deal-feedback-btn-mini.active-down {
-            background: rgba(239, 68, 68, 0.25) !important;
+            background: rgba(239, 68, 68, 0.22) !important;
             color: #f87171 !important;
             border-color: #ef4444 !important;
-            box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+            box-shadow: 0 0 10px rgba(239, 68, 68, 0.4) !important;
         }
 
         .deal-card.card-pulse-liked {
@@ -3333,9 +3392,9 @@
 
                         <div class="deal-right-actions">
                             <button class="deal-add-btn-compact" onclick="addFeedDealToList('${safeItemName}', '${safeStoreName}', '${safePrice}', '${safeCategory}', '${safeImageUrl}', this)">
-                                ➕ Add
+                                ➕ Add to Grocery List
                             </button>
-                            <div style="display: flex; gap: 3px; align-items: center;">
+                            <div class="deal-feedback-row">
                                 <button class="deal-feedback-btn-mini" onclick="submitDealFeedback('${safeItemName}', '${safeCategory}', 'more', this, ${idx})" title="More like this">👍</button>
                                 <button class="deal-feedback-btn-mini" onclick="submitDealFeedback('${safeItemName}', '${safeCategory}', 'less', this, ${idx})" title="Less like this">👎</button>
                                 <button class="deal-feedback-btn-mini" onclick="submitDealFeedback('${safeItemName}', '${safeCategory}', 'hide_category', this, ${idx})" title="Hide category">🚫</button>
@@ -3441,7 +3500,7 @@
             const targetListId = (listSelect ? listSelect.value : null) || activeGroceryListId;
             if (!targetListId) return alert("Please select or create a grocery list first.");
 
-            const origText = btn ? btn.innerText : '';
+            const origText = btn ? btn.innerText : '➕ Add to Grocery List';
             if (btn) btn.innerText = "Adding...";
 
             try {
@@ -3459,18 +3518,21 @@
                 });
                 await handleApiError(response);
                 if (btn) {
-                    btn.innerText = "✓ Added!";
-                    btn.style.background = "#10b981";
-                    showFloatingFeedback(btn, `✓ Added to List!`, 'add');
+                    btn.classList.add('added');
+                    btn.innerText = "✓ Added to Grocery List!";
+                    showFloatingFeedback(btn, `✓ Added to Grocery List!`, 'add');
                     setTimeout(() => {
                         btn.innerText = origText;
-                        btn.style.background = "#2563eb";
+                        btn.classList.remove('added');
                     }, 1800);
                 }
                 if (currentGrocerySubTab === 'lists') loadActiveListItems();
             } catch(e) {
                 if (e.message !== "Unauthorized") alert(e.message || "Failed to add item.");
-                if (btn) btn.innerText = origText;
+                if (btn) {
+                    btn.innerText = origText;
+                    btn.classList.remove('added');
+                }
             }
         }
 
@@ -3999,8 +4061,8 @@
                             ${cleanNotes ? `<div style="font-size: 11.5px; color: #94a3b8; margin-bottom: 6px; line-height: 1.35; background: rgba(0,0,0,0.25); padding: 4px 8px; border-radius: 4px;">${escapeHtml(cleanNotes)}</div>` : ''}
                         </div>
                         <div style="display: flex; justify-content: flex-end; margin-top: 8px; border-top: 1px dashed rgba(255,255,255,0.08); padding-top: 8px;">
-                            <button class="add-btn" onclick="addFeedDealToList('${safeItem}', '${safeStore}', '${safePrice}', '${safeCat}', '${safeImg}', this)" style="margin: 0; padding: 4px 11px; font-size: 12px; background: #2563eb;">
-                                + Add to List
+                            <button class="deal-add-btn-compact" onclick="addFeedDealToList('${safeItem}', '${safeStore}', '${safePrice}', '${safeCat}', '${safeImg}', this)" style="width: auto; padding: 5px 14px;">
+                                ➕ Add to Grocery List
                             </button>
                         </div>
                     </div>
