@@ -856,11 +856,21 @@ async def process_user_emails(user_id: str):
                                                 logger.info(f"Background auto-synced event '{event_data['title']}' for {user_id}")
                                                 sync_details.append(f"Auto-synced '{event_data['title']}' to Google Calendar")
                                             except Exception as date_err:
-                                                logger.error(f"Failed to auto-sync event {event_data['title']} (bad date format?): {date_err}")
-                                                sync_details.append(f"Saved to Dashboard (sync error: {date_err})")
+                                                err_str = str(date_err)
+                                                if "invalid_grant" in err_str:
+                                                    logger.warning(f"Google Calendar OAuth token for {user_id} is expired or revoked.")
+                                                    sync_details.append("Saved to Dashboard (Google Calendar token expired — reconnect in Settings)")
+                                                else:
+                                                    logger.error(f"Failed to auto-sync event {event_data['title']}: {date_err}")
+                                                    sync_details.append(f"Saved to Dashboard (sync error: {err_str})")
                                         except Exception as e:
-                                            logger.error(f"Background auto-sync failed for {user_id}: {e}")
-                                            sync_details.append(f"Saved to Dashboard (Google Calendar error)")
+                                            err_str = str(e)
+                                            if "invalid_grant" in err_str:
+                                                logger.warning(f"Google Calendar OAuth token for {user_id} is expired or revoked.")
+                                                sync_details.append("Saved to Dashboard (Google Calendar token expired — reconnect in Settings)")
+                                            else:
+                                                logger.error(f"Background auto-sync failed for {user_id}: {e}")
+                                                sync_details.append(f"Saved to Dashboard (Google Calendar error: {err_str})")
                                     else:
                                         sync_details.append(f"Saved to Dashboard for review / manual sync")
                                     
@@ -1019,6 +1029,18 @@ async def google_auth_callback(request: Request, state: str):
         logger.error(f"Google OAuth Failed for user {user_id}: {e}")
     return RedirectResponse(url="/")
 
+@app.delete("/api/auth/google/token", dependencies=[Depends(verify_auth)])
+async def disconnect_google(user_id: str = Depends(verify_auth)):
+    token_file = os.path.join(DATA_DIR, f"token_{user_id}.json")
+    if os.path.exists(token_file):
+        try:
+            os.remove(token_file)
+            logger.info(f"User {user_id} disconnected Google Calendar (token removed).")
+        except Exception as e:
+            logger.error(f"Error removing token file for user {user_id}: {e}")
+            raise HTTPException(status_code=500, detail="Failed to remove token")
+    return {"status": "success"}
+
 @app.post("/api/events/{event_id}/sync")
 async def sync_event(event_id: str, user_id: str = Depends(verify_auth)):
     conn = sqlite3.connect(DB_FILE)
@@ -1034,7 +1056,7 @@ async def sync_event(event_id: str, user_id: str = Depends(verify_auth)):
     token_file = os.path.join(DATA_DIR, f"token_{user_id}.json")
     if not os.path.exists(token_file):
         conn.close()
-        raise HTTPException(status_code=400, detail="Google Calendar not connected")
+        raise HTTPException(status_code=400, detail="Google Calendar not connected. Please connect in Settings.")
         
     try:
         start_dt = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
@@ -1064,7 +1086,10 @@ async def sync_event(event_id: str, user_id: str = Depends(verify_auth)):
         return {"status": "success"}
     except Exception as e:
         conn.close()
-        raise HTTPException(status_code=500, detail=str(e))
+        err_str = str(e)
+        if "invalid_grant" in err_str:
+            raise HTTPException(status_code=400, detail="Google Calendar token has expired or was revoked. Please reconnect Google Calendar in Settings.")
+        raise HTTPException(status_code=500, detail=err_str)
 
 @app.delete("/api/events/{event_id}")
 async def dismiss_event(event_id: str, user_id: str = Depends(verify_auth)):

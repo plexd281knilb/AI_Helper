@@ -466,6 +466,10 @@
                     <div id="oauth-link-container" style="display:none; margin-top: 15px;">
                         <a id="oauth-link" href="#" class="add-btn">Login with Google to Authorize Calendar</a>
                     </div>
+                    <div id="oauth-connected-container" style="display:none; margin-top: 15px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                        <a id="oauth-reconnect-link" href="#" class="add-btn" style="background: #2563eb; margin: 0;">🔄 Re-authorize / Reconnect Google</a>
+                        <button class="remove-btn" onclick="disconnectGoogleCalendar()" style="margin: 0; padding: 10px 18px; font-size: 14px;">Disconnect Calendar</button>
+                    </div>
                 </div>
                 
                 <!-- Email Accounts Section -->
@@ -1334,11 +1338,23 @@
                 const data = await response.json();
                 if (data.url) {
                     const link = document.getElementById('oauth-link');
-                    link.href = data.url;
-                    document.getElementById('oauth-link-container').style.display = 'block';
+                    if (link) link.href = data.url;
+                    const reconnectLink = document.getElementById('oauth-reconnect-link');
+                    if (reconnectLink) reconnectLink.href = data.url;
                 }
             } catch(e) {
                 if (e.message !== "Unauthorized") console.error("Could not fetch OAuth URL");
+            }
+        }
+
+        async function disconnectGoogleCalendar() {
+            if (!confirm("Disconnect Google Calendar for your user account?")) return;
+            try {
+                const response = await fetch('/api/auth/google/token', { method: 'DELETE' });
+                await handleApiError(response);
+                loadSettings();
+            } catch(e) {
+                if (e.message !== "Unauthorized") alert("Failed to disconnect Google Calendar.");
             }
         }
 
@@ -1655,19 +1671,26 @@
                 // Google Status
                 const statusBadge = document.getElementById('gcal-status');
                 googleConnected = settings.google_connected;
+                const linkContainer = document.getElementById('oauth-link-container');
+                const connectedContainer = document.getElementById('oauth-connected-container');
                 
                 if (settings.google_connected) {
                     statusBadge.className = 'badge-green';
                     statusBadge.innerText = 'Connected';
-                    document.getElementById('oauth-link-container').style.display = 'none';
+                    linkContainer.style.display = 'none';
+                    connectedContainer.style.display = 'flex';
+                    setupOAuthLink();
                 } else if (settings.google_auth_ready) {
                     statusBadge.className = 'badge-red';
                     statusBadge.innerText = 'Needs Login';
+                    linkContainer.style.display = 'block';
+                    connectedContainer.style.display = 'none';
                     setupOAuthLink();
                 } else {
                     statusBadge.className = 'badge-red';
                     statusBadge.innerText = 'Missing Credentials';
-                    document.getElementById('oauth-link-container').style.display = 'none';
+                    linkContainer.style.display = 'none';
+                    connectedContainer.style.display = 'none';
                 }
 
             } catch(e) {
