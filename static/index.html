@@ -2922,7 +2922,7 @@
                 }
 
                 const imageTag = deal.image_url ? `
-                    <img src="${escapeHtml(deal.image_url)}" alt="${escapeHtml(deal.item)}" class="item-thumb" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    <img src="${escapeHtml(deal.image_url)}" alt="${escapeHtml(deal.item)}" class="item-thumb" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
                     <div class="item-avatar-fallback" style="display:none;">${emoji}</div>
                 ` : `<div class="item-avatar-fallback">${emoji}</div>`;
 
@@ -3517,7 +3517,7 @@
             container.innerHTML = filtered.map((deal) => {
                 const emoji = getCategoryEmoji(deal.category);
                 const imageTag = deal.image_url ? `
-                    <img src="${escapeHtml(deal.image_url)}" alt="${escapeHtml(deal.item)}" class="item-thumb" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    <img src="${escapeHtml(deal.image_url)}" alt="${escapeHtml(deal.item)}" class="item-thumb" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
                     <div class="item-avatar-fallback" style="display:none; font-size: 20px;">${emoji}</div>
                 ` : `<div class="item-avatar-fallback" style="font-size: 20px;">${emoji}</div>`;
 
@@ -3993,7 +3993,7 @@
                                     }
 
                                     const imageTag = item.image_url ? `
-                                        <img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.item_name)}" style="width: 44px; height: 44px; object-fit: contain; padding: 2px; box-sizing: border-box;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                        <img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.item_name)}" style="width: 44px; height: 44px; object-fit: contain; padding: 2px; box-sizing: border-box;" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
                                         <div class="item-avatar-fallback" style="display:none; font-size: 20px;">${emoji}</div>
                                     ` : `<div class="item-avatar-fallback" style="font-size: 20px;">${emoji}</div>`;
 
