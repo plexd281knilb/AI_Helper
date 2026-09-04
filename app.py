@@ -1826,8 +1826,9 @@ def _fetch_single_flipp_flyer(f: dict, postal_code: str, headers: dict, ctx: ssl
                 if it.get('brand') and it.get('brand') not in clean_name:
                     notes_parts.append(f"Brand: {it.get('brand')}")
                     
-                notes_str = " | ".join(notes_parts)
                 img_url = it.get('cutout_image_url') or it.get('clean_image_url') or it.get('clipping_image_url') or it.get('image_url') or it.get('original_image_url') or ''
+                if img_url.startswith('http://'):
+                    img_url = 'https://' + img_url[7:]
                 
                 deals.append({
                     'item': clean_name,
@@ -1951,6 +1952,8 @@ def fetch_flipp_store_deals(postal_code: str = '76262', store_name_filter: Optio
                             s_sale = sit.get('sale_story')
                             s_price_str = f"${float(s_price):.2f}" if s_price is not None else (s_sale or "")
                             s_img = sit.get('cutout_image_url') or sit.get('clean_image_url') or sit.get('clipping_image_url') or sit.get('image_url') or sit.get('original_image_url') or ''
+                            if s_img.startswith('http://'):
+                                s_img = 'https://' + s_img[7:]
                             
                             if s_name.lower() in existing_map:
                                 cur_deal = existing_map[s_name.lower()]
