@@ -7,12 +7,14 @@ import hashlib
 import logging
 import re
 import ssl
+import time
 import urllib.request
 import urllib.parse
 from html import unescape
 from logging.handlers import RotatingFileHandler
 from datetime import datetime, timedelta
 from typing import List, Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from fastapi import FastAPI, Request, Response, UploadFile, File, Depends, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, RedirectResponse
@@ -53,9 +55,17 @@ logger = logging.getLogger("AIHelper")
 logger.info("Application starting up...")
 
 # --- Database Setup ---
+def get_db_conn():
+    conn = sqlite3.connect(DB_FILE, timeout=30.0)
+    conn.row_factory = sqlite3.Row
+    return conn
+
 def init_db():
-    conn = sqlite3.connect(DB_FILE)
+    conn = sqlite3.connect(DB_FILE, timeout=30.0)
     c = conn.cursor()
+    c.execute("PRAGMA journal_mode=WAL;")
+    c.execute("PRAGMA busy_timeout=30000;")
+    c.execute("PRAGMA synchronous=NORMAL;")
     c.execute('''CREATE TABLE IF NOT EXISTS users (
                     id TEXT PRIMARY KEY,
                     username TEXT UNIQUE,
@@ -223,12 +233,12 @@ def verify_auth(request: Request):
     return user_id
 
 @app.get("/api/auth/status")
-async def auth_status(request: Request):
+def auth_status(request: Request):
     token = request.cookies.get("session_token")
     user_id = get_user_id_from_token(token)
     logged_in = user_id is not None
     
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db_conn()
     c = conn.cursor()
     c.execute("SELECT COUNT(*) FROM users")
     count = c.fetchone()[0]
@@ -236,13 +246,13 @@ async def auth_status(request: Request):
     return {"setup_required": count == 0, "logged_in": logged_in}
 
 @app.post("/api/auth/register")
-async def auth_register(req: AuthRequest):
+def auth_register(req: AuthRequest):
     if len(req.password) < 4:
         return {"error": "Password must be at least 4 characters."}
     pwd_hash = hashlib.sha256(req.password.encode()).hexdigest()
     user_id = str(uuid.uuid4())
     default_settings = json.dumps({"ai_provider": "gemini", "ai_model": "gemini-1.5-flash", "public_url": ""})
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db_conn()
     c = conn.cursor()
     try:
         c.execute("INSERT INTO users (id, username, password_hash, settings) VALUES (?, ?, ?, ?)", (user_id, req.username, pwd_hash, default_settings))
@@ -255,9 +265,9 @@ async def auth_register(req: AuthRequest):
     return {"status": "success"}
 
 @app.post("/api/auth/login")
-async def auth_login(req: AuthRequest, response: Response):
+def auth_login(req: AuthRequest, response: Response):
     req_hash = hashlib.sha256(req.password.encode()).hexdigest()
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db_conn()
     c = conn.cursor()
     c.execute("SELECT id FROM users WHERE username=? AND password_hash=?", (req.username, req_hash))
     user = c.fetchone()
@@ -295,12 +305,12 @@ async def auth_login(req: AuthRequest, response: Response):
     return {"status": "success"}
 
 @app.post("/api/auth/logout")
-async def auth_logout(request: Request, response: Response):
+def auth_logout(request: Request, response: Response):
     token = request.cookies.get("session_token")
     if token:
         SESSION_CACHE.pop(token, None)
         try:
-            conn = sqlite3.connect(DB_FILE)
+            conn = get_db_conn()
             c = conn.cursor()
             c.execute("DELETE FROM sessions WHERE token=?", (token,))
             conn.commit()
@@ -322,8 +332,8 @@ class UserUpdate(BaseModel):
     password: Optional[str] = None
 
 @app.get("/api/users", dependencies=[Depends(verify_auth)])
-async def get_users():
-    conn = sqlite3.connect(DB_FILE)
+def get_users():
+    conn = get_db_conn()
     c = conn.cursor()
     c.execute("SELECT id, username FROM users")
     users = [{"id": r[0], "username": r[1]} for r in c.fetchall()]
@@ -331,13 +341,13 @@ async def get_users():
     return users
 
 @app.post("/api/users", dependencies=[Depends(verify_auth)])
-async def create_user(req: UserCreate):
+def create_user(req: UserCreate):
     if len(req.password) < 4:
         return {"error": "Password must be at least 4 characters."}
     pwd_hash = hashlib.sha256(req.password.encode()).hexdigest()
     user_id = str(uuid.uuid4())
     default_settings = json.dumps({"ai_provider": "gemini", "ai_model": "gemini-1.5-flash", "public_url": ""})
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db_conn()
     c = conn.cursor()
     try:
         c.execute("INSERT INTO users (id, username, password_hash, settings) VALUES (?, ?, ?, ?)", (user_id, req.username, pwd_hash, default_settings))
@@ -349,8 +359,8 @@ async def create_user(req: UserCreate):
     return {"status": "success"}
 
 @app.put("/api/users/{target_user_id}", dependencies=[Depends(verify_auth)])
-async def update_user(target_user_id: str, req: UserUpdate):
-    conn = sqlite3.connect(DB_FILE)
+def update_user(target_user_id: str, req: UserUpdate):
+    conn = get_db_conn()
     c = conn.cursor()
     if req.username:
         try:
@@ -369,10 +379,10 @@ async def update_user(target_user_id: str, req: UserUpdate):
     return {"status": "success"}
 
 @app.delete("/api/users/{target_user_id}")
-async def delete_user(target_user_id: str, current_user: str = Depends(verify_auth)):
+def delete_user(target_user_id: str, current_user: str = Depends(verify_auth)):
     if target_user_id == current_user:
         return {"error": "You cannot delete yourself."}
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db_conn()
     c = conn.cursor()
     c.execute("DELETE FROM users WHERE id=?", (target_user_id,))
     c.execute("DELETE FROM email_accounts WHERE user_id=?", (target_user_id,))
@@ -403,9 +413,8 @@ class SettingsSave(BaseModel):
     postal_code: Optional[str] = "76262"
 
 @app.get("/api/settings")
-async def read_settings(user_id: str = Depends(verify_auth)):
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
+def read_settings(user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
     c = conn.cursor()
     c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
     row = c.fetchone()
@@ -432,8 +441,8 @@ async def read_settings(user_id: str = Depends(verify_auth)):
     }
 
 @app.post("/api/settings/ai")
-async def save_ai_settings(s: SettingsSave, user_id: str = Depends(verify_auth)):
-    conn = sqlite3.connect(DB_FILE)
+def save_ai_settings(s: SettingsSave, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
     c = conn.cursor()
     c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
     row = c.fetchone()
@@ -446,8 +455,8 @@ async def save_ai_settings(s: SettingsSave, user_id: str = Depends(verify_auth))
     return {"status": "success"}
 
 @app.post("/api/accounts")
-async def save_account(acc: AccountSave, user_id: str = Depends(verify_auth)):
-    conn = sqlite3.connect(DB_FILE)
+def save_account(acc: AccountSave, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
     c = conn.cursor()
     acc_id = acc.id or str(uuid.uuid4())
     c.execute("SELECT id FROM email_accounts WHERE id=? AND user_id=?", (acc_id, user_id))
@@ -460,8 +469,8 @@ async def save_account(acc: AccountSave, user_id: str = Depends(verify_auth)):
     return {"status": "success", "id": acc_id}
 
 @app.delete("/api/accounts/{acc_id}")
-async def delete_account(acc_id: str, user_id: str = Depends(verify_auth)):
-    conn = sqlite3.connect(DB_FILE)
+def delete_account(acc_id: str, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
     c = conn.cursor()
     c.execute("DELETE FROM email_accounts WHERE id=? AND user_id=?", (acc_id, user_id))
     conn.commit()
@@ -469,8 +478,8 @@ async def delete_account(acc_id: str, user_id: str = Depends(verify_auth)):
     return {"status": "success"}
     
 @app.delete("/api/settings/reset_history")
-async def reset_history(user_id: str = Depends(verify_auth)):
-    conn = sqlite3.connect(DB_FILE)
+def reset_history(user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
     c = conn.cursor()
     c.execute("DELETE FROM processed_emails_v2 WHERE user_id=?", (user_id,))
     conn.commit()
@@ -479,8 +488,8 @@ async def reset_history(user_id: str = Depends(verify_auth)):
     return {"status": "success"}
 
 @app.get("/api/history", dependencies=[Depends(verify_auth)])
-async def get_history(user_id: str = Depends(verify_auth)):
-    conn = sqlite3.connect(DB_FILE)
+def get_history(user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
     c.execute("SELECT id, account, subject, date, body, sender, reason, status FROM processed_emails_v2 WHERE user_id=? ORDER BY date DESC LIMIT 100", (user_id,))
@@ -508,8 +517,8 @@ async def get_history(user_id: str = Depends(verify_auth)):
     return history_rows
 
 @app.delete("/api/history/{account}/{uid}", dependencies=[Depends(verify_auth)])
-async def delete_history_item(account: str, uid: str, user_id: str = Depends(verify_auth)):
-    conn = sqlite3.connect(DB_FILE)
+def delete_history_item(account: str, uid: str, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
     c = conn.cursor()
     c.execute("DELETE FROM processed_emails_v2 WHERE user_id=? AND account=? AND id=?", (user_id, account, uid))
     conn.commit()
@@ -517,10 +526,10 @@ async def delete_history_item(account: str, uid: str, user_id: str = Depends(ver
     return {"status": "success"}
 
 @app.post("/api/history/bulk_delete", dependencies=[Depends(verify_auth)])
-async def bulk_delete_history(req: list[dict], user_id: str = Depends(verify_auth)):
+def bulk_delete_history(req: list[dict], user_id: str = Depends(verify_auth)):
     if not req:
         return {"status": "success"}
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db_conn()
     c = conn.cursor()
     for item in req:
         c.execute("DELETE FROM processed_emails_v2 WHERE user_id=? AND account=? AND id=?", (user_id, item.get('account'), item.get('id')))
@@ -529,8 +538,8 @@ async def bulk_delete_history(req: list[dict], user_id: str = Depends(verify_aut
     return {"status": "success"}
 
 @app.post("/api/upload_client_secret", dependencies=[Depends(verify_auth)])
-async def upload_client_secret(file: UploadFile = File(...)):
-    contents = await file.read()
+def upload_client_secret(file: UploadFile = File(...)):
+    contents = file.file.read()
     with open(CLIENT_SECRETS_FILE, "wb") as f:
         f.write(contents)
     logger.info("Google Client Secret JSON uploaded.")
@@ -541,7 +550,7 @@ class ModelRequest(BaseModel):
     api_key: str
 
 @app.post("/api/models", dependencies=[Depends(verify_auth)])
-async def get_models(req: ModelRequest):
+def get_models(req: ModelRequest):
     api_key = req.api_key
     if not api_key:
         return {"models": []}
@@ -868,9 +877,8 @@ def push_event_to_gcal(service, title: str, description: str, date_str: str, loc
     created = service.events().insert(calendarId='primary', body=gcal_event).execute()
     return {"status": "created", "event_id": created.get("id")}
 
-async def process_user_emails(user_id: str):
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
+def process_user_emails(user_id: str):
+    conn = get_db_conn()
     c = conn.cursor()
     c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
     row = c.fetchone()
@@ -916,7 +924,7 @@ async def process_user_emails(user_id: str):
                             
                             # Gemini Free Tier limit is 15 RPM (1 request every 4 seconds)
                             if settings.get("ai_provider", "gemini") == "gemini":
-                                await asyncio.sleep(4.1)
+                                time.sleep(4.1)
                                 
                             if event_data_list:
                                 email_status = "added"
@@ -1011,18 +1019,17 @@ async def process_user_emails(user_id: str):
 USER_LAST_SCAN = {}
 
 @app.get("/api/fetch_emails")
-async def fetch_emails_endpoint(user_id: str = Depends(verify_auth)):
+def fetch_emails_endpoint(user_id: str = Depends(verify_auth)):
     logger.info(f"User {user_id} triggered manual email fetch.")
     USER_LAST_SCAN[user_id] = datetime.now().timestamp()
-    return await process_user_emails(user_id)
+    return process_user_emails(user_id)
 
 # --- Background Task Scheduler ---
 async def scheduled_email_fetch():
     logger.info("Background job scheduler initialized.")
     while True:
         try:
-            conn = sqlite3.connect(DB_FILE)
-            conn.row_factory = sqlite3.Row
+            conn = get_db_conn()
             c = conn.cursor()
             c.execute("SELECT id, settings FROM users")
             users = c.fetchall()
@@ -1054,7 +1061,7 @@ async def scheduled_email_fetch():
                 if (now_ts - last_scan) >= interval_seconds:
                     logger.info(f"Triggering scheduled background email scan for user {user_id} (frequency: every {interval_minutes}m)...")
                     USER_LAST_SCAN[user_id] = now_ts
-                    await process_user_emails(user_id)
+                    await asyncio.to_thread(process_user_emails, user_id)
         except Exception as e:
             logger.error(f"Error in background job scheduler: {e}")
 
@@ -1065,9 +1072,8 @@ async def startup_event():
     asyncio.create_task(scheduled_email_fetch())
 
 @app.get("/api/events")
-async def get_events(user_id: str = Depends(verify_auth)):
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
+def get_events(user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
     c = conn.cursor()
     now_iso = datetime.now().isoformat()
     c.execute("SELECT * FROM events WHERE status IN ('pending', 'added') AND user_id=? AND date >= ? ORDER BY date ASC", (user_id, now_iso))
@@ -1077,10 +1083,10 @@ async def get_events(user_id: str = Depends(verify_auth)):
 
 # --- Google Calendar OAuth & Sync ---
 @app.get("/api/auth/google/url")
-async def get_google_auth_url(request: Request, user_id: str = Depends(verify_auth)):
+def get_google_auth_url(request: Request, user_id: str = Depends(verify_auth)):
     if not os.path.exists(CLIENT_SECRETS_FILE):
         return {"error": "Client secrets missing"}
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db_conn()
     c = conn.cursor()
     c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
     s = json.loads(c.fetchone()[0] or "{}")
@@ -1096,10 +1102,10 @@ async def get_google_auth_url(request: Request, user_id: str = Depends(verify_au
     return {"url": auth_url}
 
 @app.get("/api/auth/google/callback")
-async def google_auth_callback(request: Request, state: str):
+def google_auth_callback(request: Request, state: str):
     if not os.path.exists(CLIENT_SECRETS_FILE):
         return "Error: secrets missing."
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db_conn()
     c = conn.cursor()
     c.execute("SELECT id, settings FROM users")
     user_id = None
@@ -1128,7 +1134,7 @@ async def google_auth_callback(request: Request, state: str):
     return RedirectResponse(url="/")
 
 @app.delete("/api/auth/google/token", dependencies=[Depends(verify_auth)])
-async def disconnect_google(user_id: str = Depends(verify_auth)):
+def disconnect_google(user_id: str = Depends(verify_auth)):
     token_file = os.path.join(DATA_DIR, f"token_{user_id}.json")
     if os.path.exists(token_file):
         try:
@@ -1140,8 +1146,8 @@ async def disconnect_google(user_id: str = Depends(verify_auth)):
     return {"status": "success"}
 
 @app.post("/api/events/{event_id}/sync")
-async def sync_event(event_id: str, user_id: str = Depends(verify_auth)):
-    conn = sqlite3.connect(DB_FILE)
+def sync_event(event_id: str, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
     c = conn.cursor()
     c.execute("SELECT title, date, description, location FROM events WHERE id=? AND user_id=?", (event_id, user_id))
     row = c.fetchone()
@@ -1149,7 +1155,10 @@ async def sync_event(event_id: str, user_id: str = Depends(verify_auth)):
         conn.close()
         raise HTTPException(status_code=404, detail="Event not found")
         
-    title, date_str, description, location = row
+    title = row['title']
+    date_str = row['date']
+    description = row['description']
+    location = row['location']
     
     token_file = os.path.join(DATA_DIR, f"token_{user_id}.json")
     if not os.path.exists(token_file):
@@ -1173,8 +1182,8 @@ async def sync_event(event_id: str, user_id: str = Depends(verify_auth)):
         raise HTTPException(status_code=500, detail=err_str)
 
 @app.delete("/api/events/{event_id}")
-async def dismiss_event(event_id: str, user_id: str = Depends(verify_auth)):
-    conn = sqlite3.connect(DB_FILE)
+def dismiss_event(event_id: str, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
     c = conn.cursor()
     c.execute("UPDATE events SET status='dismissed' WHERE id=? AND user_id=?", (event_id, user_id))
     conn.commit()
@@ -1185,7 +1194,7 @@ class BulkEventAction(BaseModel):
     event_ids: List[str]
 
 @app.post("/api/events/bulk_sync", dependencies=[Depends(verify_auth)])
-async def bulk_sync_events(req: BulkEventAction, user_id: str = Depends(verify_auth)):
+def bulk_sync_events(req: BulkEventAction, user_id: str = Depends(verify_auth)):
     if not req.event_ids:
         return {"status": "success", "synced": 0}
         
@@ -1202,7 +1211,7 @@ async def bulk_sync_events(req: BulkEventAction, user_id: str = Depends(verify_a
             raise HTTPException(status_code=400, detail="Google Calendar token has expired or was revoked. Please reconnect Google Calendar in Settings.")
         raise HTTPException(status_code=500, detail=f"Failed to authenticate with Google: {err_str}")
         
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db_conn()
     c = conn.cursor()
     placeholders = ','.join('?' * len(req.event_ids))
     c.execute(f"SELECT id, title, date, description, location FROM events WHERE user_id=? AND id IN ({placeholders})", (user_id, *req.event_ids))
@@ -1211,7 +1220,11 @@ async def bulk_sync_events(req: BulkEventAction, user_id: str = Depends(verify_a
     synced_count = 0
     errors = []
     for row in rows:
-        event_id, title, date_str, description, location = row
+        event_id = row['id']
+        title = row['title']
+        date_str = row['date']
+        description = row['description']
+        location = row['location']
         try:
             res = push_event_to_gcal(service, title, description, date_str, location)
             c.execute("UPDATE events SET status='added' WHERE id=?", (event_id,))
@@ -1229,10 +1242,10 @@ async def bulk_sync_events(req: BulkEventAction, user_id: str = Depends(verify_a
     return {"status": "success", "synced": synced_count, "errors": errors}
 
 @app.post("/api/events/bulk_dismiss")
-async def bulk_dismiss_events(req: BulkEventAction, user_id: str = Depends(verify_auth)):
+def bulk_dismiss_events(req: BulkEventAction, user_id: str = Depends(verify_auth)):
     if not req.event_ids:
         return {"status": "success"}
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db_conn()
     c = conn.cursor()
     placeholders = ','.join('?' * len(req.event_ids))
     c.execute(f"UPDATE events SET status='dismissed' WHERE user_id=? AND id IN ({placeholders})", (user_id, *req.event_ids))
@@ -1244,7 +1257,7 @@ class BulkHistorySync(BaseModel):
     items: List[dict]
 
 @app.post("/api/history/{account}/{uid}/sync", dependencies=[Depends(verify_auth)])
-async def sync_history_email(account: str, uid: str, user_id: str = Depends(verify_auth)):
+def sync_history_email(account: str, uid: str, user_id: str = Depends(verify_auth)):
     token_file = os.path.join(DATA_DIR, f"token_{user_id}.json")
     if not os.path.exists(token_file):
         raise HTTPException(status_code=400, detail="Google Calendar not connected. Please connect your Google account in Settings.")
@@ -1258,8 +1271,7 @@ async def sync_history_email(account: str, uid: str, user_id: str = Depends(veri
             raise HTTPException(status_code=400, detail="Google Calendar token has expired or was revoked. Please reconnect Google Calendar in Settings.")
         raise HTTPException(status_code=500, detail=f"Failed to authenticate with Google: {err_str}")
         
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
+    conn = get_db_conn()
     c = conn.cursor()
     
     # Check for existing events linked to this email
@@ -1346,7 +1358,7 @@ async def sync_history_email(account: str, uid: str, user_id: str = Depends(veri
     }
 
 @app.post("/api/history/bulk_sync", dependencies=[Depends(verify_auth)])
-async def bulk_sync_history(req: BulkHistorySync, user_id: str = Depends(verify_auth)):
+def bulk_sync_history(req: BulkHistorySync, user_id: str = Depends(verify_auth)):
     if not req.items:
         return {"status": "success", "synced": 0}
         
@@ -1363,8 +1375,7 @@ async def bulk_sync_history(req: BulkHistorySync, user_id: str = Depends(verify_
             raise HTTPException(status_code=400, detail="Google Calendar token has expired or was revoked. Please reconnect Google Calendar in Settings.")
         raise HTTPException(status_code=500, detail=f"Failed to authenticate with Google: {err_str}")
         
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
+    conn = get_db_conn()
     c = conn.cursor()
     
     c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
@@ -1429,7 +1440,7 @@ async def bulk_sync_history(req: BulkHistorySync, user_id: str = Depends(verify_
     return {"status": "success", "synced": total_synced, "errors": all_errors}
 
 @app.get("/api/logs", dependencies=[Depends(verify_auth)])
-async def get_logs():
+def get_logs():
     if not os.path.exists(LOG_FILE):
         return {"logs": "No logs recorded yet."}
     try:
@@ -1559,6 +1570,75 @@ def normalize_grocery_store_name(merchant_raw: str) -> str:
     if 'united' in ml: return 'United Supermarkets'
     return m
 
+def _fetch_single_flipp_flyer(f: dict, postal_code: str, headers: dict, ctx: ssl.SSLContext, norm_store: str):
+    fid = f.get('id')
+    if not fid:
+        return norm_store, fid, f, []
+    furl = f"https://backflipp.wishabi.com/flipp/flyers/{fid}"
+    try:
+        freq = urllib.request.Request(furl, headers=headers)
+        with urllib.request.urlopen(freq, timeout=8, context=ctx) as fresp:
+            fdata = json.loads(fresp.read().decode('utf-8'))
+            items = fdata.get('items', [])
+            
+            deals = []
+            seen_names = set()
+            
+            for it in items:
+                name = it.get('name')
+                if not name or len(name.strip()) < 2:
+                    continue
+                clean_name = name.strip()
+                if clean_name.lower() in seen_names:
+                    continue
+                seen_names.add(clean_name.lower())
+                
+                raw_price = it.get('price') or it.get('current_price') or ''
+                sale_story = it.get('sale_story') or ''
+                price_str = ''
+                if raw_price:
+                    try:
+                        fval = float(raw_price)
+                        price_str = f"${fval:.2f}"
+                    except Exception:
+                        price_str = str(raw_price)
+                elif sale_story:
+                    price_str = sale_story
+                else:
+                    price_str = "Sale"
+                    
+                notes_parts = []
+                if sale_story and sale_story != price_str:
+                    notes_parts.append(sale_story)
+                if it.get('description'):
+                    notes_parts.append(it.get('description'))
+                if it.get('brand') and it.get('brand') not in clean_name:
+                    notes_parts.append(f"Brand: {it.get('brand')}")
+                    
+                notes_str = " | ".join(notes_parts)
+                
+                deals.append({
+                    'item': clean_name,
+                    'price': price_str,
+                    'category': guess_deal_category(clean_name),
+                    'notes': notes_str
+                })
+            return norm_store, fid, f, deals
+    except Exception as e:
+        logger.warning(f"Error fetching Flipp flyer {fid} for {norm_store}: {e}")
+        return norm_store, fid, f, []
+
+def _enrich_single_store_search(store_name: str, postal_code: str, headers: dict, ctx: ssl.SSLContext):
+    try:
+        q_url = f"https://backflipp.wishabi.com/flipp/items/search?postal_code={postal_code}&q={urllib.parse.quote_plus(store_name)}"
+        s_req = urllib.request.Request(q_url, headers=headers)
+        with urllib.request.urlopen(s_req, timeout=6, context=ctx) as s_resp:
+            s_data = json.loads(s_resp.read().decode('utf-8'))
+            return store_name, s_data.get('items', [])
+    except Exception as e:
+        logger.debug(f"Search enrichment error for {store_name}: {e}")
+        return store_name, []
+
 def fetch_flipp_store_deals(postal_code: str = '76262', store_name_filter: Optional[str] = None) -> dict:
     if not postal_code or not postal_code.strip():
         postal_code = '76262'
@@ -1575,7 +1655,7 @@ def fetch_flipp_store_deals(postal_code: str = '76262', store_name_filter: Optio
     url = f"https://backflipp.wishabi.com/flipp/flyers?postal_code={postal_code}&locale=en-us"
     try:
         req = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(req, timeout=12, context=ctx) as resp:
+        with urllib.request.urlopen(req, timeout=8, context=ctx) as resp:
             flyer_data = json.loads(resp.read().decode('utf-8'))
             flyers = flyer_data.get('flyers', [])
     except Exception as e:
@@ -1591,6 +1671,7 @@ def fetch_flipp_store_deals(postal_code: str = '76262', store_name_filter: Optio
     stores_data = {}
     target_filter_norm = normalize_grocery_store_name(store_name_filter).lower() if store_name_filter else None
 
+    matched_flyers = []
     for f in flyers:
         merchant = f.get('merchant') or ''
         merchant_lower = merchant.lower()
@@ -1604,57 +1685,17 @@ def fetch_flipp_store_deals(postal_code: str = '76262', store_name_filter: Optio
         if target_filter_norm and target_filter_norm not in norm_store.lower() and norm_store.lower() not in target_filter_norm:
             continue
             
-        fid = f['id']
-        furl = f"https://backflipp.wishabi.com/flipp/flyers/{fid}"
-        try:
-            freq = urllib.request.Request(furl, headers=headers)
-            with urllib.request.urlopen(freq, timeout=12, context=ctx) as fresp:
-                fdata = json.loads(fresp.read().decode('utf-8'))
-                items = fdata.get('items', [])
-                
-                deals = []
-                seen_names = set()
-                
-                for it in items:
-                    name = it.get('name')
-                    if not name or len(name.strip()) < 2:
-                        continue
-                    clean_name = name.strip()
-                    if clean_name.lower() in seen_names:
-                        continue
-                    seen_names.add(clean_name.lower())
-                    
-                    raw_price = it.get('price') or it.get('current_price') or ''
-                    sale_story = it.get('sale_story') or ''
-                    price_str = ''
-                    if raw_price:
-                        try:
-                            fval = float(raw_price)
-                            price_str = f"${fval:.2f}"
-                        except Exception:
-                            price_str = str(raw_price)
-                    elif sale_story:
-                        price_str = sale_story
-                    else:
-                        price_str = "Sale"
-                        
-                    notes_parts = []
-                    if sale_story and sale_story != price_str:
-                        notes_parts.append(sale_story)
-                    if it.get('description'):
-                        notes_parts.append(it.get('description'))
-                    if it.get('brand') and it.get('brand') not in clean_name:
-                        notes_parts.append(f"Brand: {it.get('brand')}")
-                        
-                    notes_str = " | ".join(notes_parts)
-                    
-                    deals.append({
-                        'item': clean_name,
-                        'price': price_str,
-                        'category': guess_deal_category(clean_name),
-                        'notes': notes_str
-                    })
-                    
+        matched_flyers.append((f, norm_store))
+
+    if not matched_flyers:
+        return {}
+
+    # Parallel flyer item fetching
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(_fetch_single_flipp_flyer, f, postal_code, headers, ctx, nstore) for f, nstore in matched_flyers]
+        for fut in as_completed(futures):
+            try:
+                norm_store, fid, f, deals = fut.result()
                 if deals:
                     ad_web_url = f"https://flipp.com/flyer/{fid}?postal_code={postal_code}"
                     if norm_store not in stores_data:
@@ -1673,48 +1714,48 @@ def fetch_flipp_store_deals(postal_code: str = '76262', store_name_filter: Optio
                             if d['item'].lower() not in existing_items:
                                 stores_data[norm_store]['deals'].append(d)
                                 existing_items.add(d['item'].lower())
-        except Exception as e:
-            logger.warning(f"Error fetching Flipp flyer {fid} for {merchant}: {e}")
-            
-    # Search API enrichment for rich prices and coupon stories
-    for store_name in list(stores_data.keys()):
-        try:
-            q_url = f"https://backflipp.wishabi.com/flipp/items/search?postal_code={postal_code}&q={urllib.parse.quote_plus(store_name)}"
-            s_req = urllib.request.Request(q_url, headers=headers)
-            with urllib.request.urlopen(s_req, timeout=8, context=ctx) as s_resp:
-                s_data = json.loads(s_resp.read().decode('utf-8'))
-                s_items = s_data.get('items', [])
-                
-                store_deals = stores_data[store_name]['deals']
-                existing_map = {d['item'].lower(): d for d in store_deals}
-                
-                for sit in s_items:
-                    s_name = (sit.get('name') or '').strip()
-                    if not s_name:
-                        continue
-                    
-                    s_price = sit.get('current_price')
-                    s_sale = sit.get('sale_story')
-                    s_price_str = f"${float(s_price):.2f}" if s_price is not None else (s_sale or "")
-                    
-                    if s_name.lower() in existing_map:
-                        cur_deal = existing_map[s_name.lower()]
-                        if (cur_deal['price'] == 'Sale' or not cur_deal['price']) and s_price_str:
-                            cur_deal['price'] = s_price_str
-                        if s_sale and s_sale not in cur_deal['notes']:
-                            cur_deal['notes'] = f"{s_sale} | {cur_deal['notes']}".strip(" |")
-                    else:
-                        if s_price_str or s_sale:
-                            new_deal = {
-                                'item': s_name,
-                                'price': s_price_str or "Sale",
-                                'category': guess_deal_category(s_name),
-                                'notes': s_sale or ""
-                            }
-                            store_deals.append(new_deal)
-                            existing_map[s_name.lower()] = new_deal
-        except Exception as e:
-            logger.debug(f"Search enrichment error for {store_name}: {e}")
+            except Exception as ex:
+                logger.warning(f"Error processing flyer response: {ex}")
+
+    # Parallel search enrichment for rich sale prices and coupon stories
+    store_names = list(stores_data.keys())
+    if store_names:
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            futures = [executor.submit(_enrich_single_store_search, sname, postal_code, headers, ctx) for sname in store_names]
+            for fut in as_completed(futures):
+                try:
+                    sname, s_items = fut.result()
+                    if sname in stores_data and s_items:
+                        store_deals = stores_data[sname]['deals']
+                        existing_map = {d['item'].lower(): d for d in store_deals}
+                        
+                        for sit in s_items:
+                            s_name = (sit.get('name') or '').strip()
+                            if not s_name:
+                                continue
+                            
+                            s_price = sit.get('current_price')
+                            s_sale = sit.get('sale_story')
+                            s_price_str = f"${float(s_price):.2f}" if s_price is not None else (s_sale or "")
+                            
+                            if s_name.lower() in existing_map:
+                                cur_deal = existing_map[s_name.lower()]
+                                if (cur_deal['price'] == 'Sale' or not cur_deal['price']) and s_price_str:
+                                    cur_deal['price'] = s_price_str
+                                if s_sale and s_sale not in cur_deal['notes']:
+                                    cur_deal['notes'] = f"{s_sale} | {cur_deal['notes']}".strip(" |")
+                            else:
+                                if s_price_str or s_sale:
+                                    new_deal = {
+                                        'item': s_name,
+                                        'price': s_price_str or "Sale",
+                                        'category': guess_deal_category(s_name),
+                                        'notes': s_sale or ""
+                                    }
+                                    store_deals.append(new_deal)
+                                    existing_map[s_name.lower()] = new_deal
+                except Exception as e:
+                    logger.debug(f"Search enrichment error for {sname}: {e}")
             
     return stores_data
 
@@ -1952,9 +1993,8 @@ def ai_generate_grocery_list_items(prompt_text: str, store_deals_data: list, set
 
 # --- Store Management Endpoints ---
 @app.get("/api/groceries/stores")
-async def get_grocery_stores(user_id: str = Depends(verify_auth)):
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
+def get_grocery_stores(user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
     c = conn.cursor()
     c.execute("SELECT id, name, ad_url, notes, last_scanned, cached_deals FROM grocery_stores WHERE user_id=? ORDER BY name ASC", (user_id,))
     rows = c.fetchall()
@@ -1973,8 +2013,8 @@ async def get_grocery_stores(user_id: str = Depends(verify_auth)):
     return stores
 
 @app.post("/api/groceries/stores")
-async def save_grocery_store(store: GroceryStoreSave, user_id: str = Depends(verify_auth)):
-    conn = sqlite3.connect(DB_FILE)
+def save_grocery_store(store: GroceryStoreSave, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
     c = conn.cursor()
     store_id = store.id or str(uuid.uuid4())
     c.execute("SELECT id FROM grocery_stores WHERE id=? AND user_id=?", (store_id, user_id))
@@ -1989,8 +2029,8 @@ async def save_grocery_store(store: GroceryStoreSave, user_id: str = Depends(ver
     return {"status": "success", "id": store_id}
 
 @app.delete("/api/groceries/stores/{store_id}")
-async def delete_grocery_store(store_id: str, user_id: str = Depends(verify_auth)):
-    conn = sqlite3.connect(DB_FILE)
+def delete_grocery_store(store_id: str, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
     c = conn.cursor()
     c.execute("DELETE FROM grocery_stores WHERE id=? AND user_id=?", (store_id, user_id))
     conn.commit()
@@ -2001,12 +2041,11 @@ class StoreTextParseRequest(BaseModel):
     text_content: str
 
 @app.post("/api/groceries/stores/{store_id}/parse_text", dependencies=[Depends(verify_auth)])
-async def parse_store_text_deals(store_id: str, req: StoreTextParseRequest, user_id: str = Depends(verify_auth)):
+def parse_store_text_deals(store_id: str, req: StoreTextParseRequest, user_id: str = Depends(verify_auth)):
     if not req.text_content or len(req.text_content.strip()) < 10:
         raise HTTPException(status_code=400, detail="Text content is too short to extract deals.")
         
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
+    conn = get_db_conn()
     c = conn.cursor()
     c.execute("SELECT id, name FROM grocery_stores WHERE id=? AND user_id=?", (store_id, user_id))
     store = c.fetchone()
@@ -2028,9 +2067,8 @@ async def parse_store_text_deals(store_id: str, req: StoreTextParseRequest, user
     return {"status": "success", "deals_found": len(deals), "deals": deals}
 
 @app.post("/api/groceries/auto_fetch", dependencies=[Depends(verify_auth)])
-async def auto_fetch_local_deals(req: AutoFetchDealsRequest, user_id: str = Depends(verify_auth)):
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
+def auto_fetch_local_deals(req: AutoFetchDealsRequest, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
     c = conn.cursor()
     
     c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
@@ -2105,9 +2143,8 @@ async def auto_fetch_local_deals(req: AutoFetchDealsRequest, user_id: str = Depe
     }
 
 @app.post("/api/groceries/stores/{store_id}/scan")
-async def scan_grocery_store(store_id: str, user_id: str = Depends(verify_auth)):
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
+def scan_grocery_store(store_id: str, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
     c = conn.cursor()
     c.execute("SELECT id, name, ad_url FROM grocery_stores WHERE id=? AND user_id=?", (store_id, user_id))
     store = c.fetchone()
@@ -2149,9 +2186,8 @@ async def scan_grocery_store(store_id: str, user_id: str = Depends(verify_auth))
     return {"status": "success", "deals_found": len(deals), "deals": deals, "warning": warning_msg}
 
 @app.post("/api/groceries/stores/scan_all")
-async def scan_all_grocery_stores(user_id: str = Depends(verify_auth)):
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
+def scan_all_grocery_stores(user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
     c = conn.cursor()
     c.execute("SELECT id, name, ad_url FROM grocery_stores WHERE user_id=?", (user_id,))
     stores = c.fetchall()
@@ -2161,7 +2197,7 @@ async def scan_all_grocery_stores(user_id: str = Depends(verify_auth)):
     settings = json.loads(row['settings']) if row and row['settings'] else {}
     postal_code = settings.get("postal_code", "76262")
     
-    # Bulk fetch Flipp deals for all stores
+    # Bulk fetch Flipp deals for all stores in parallel
     flipp_stores = fetch_flipp_store_deals(postal_code)
     
     results = []
@@ -2182,7 +2218,7 @@ async def scan_all_grocery_stores(user_id: str = Depends(verify_auth)):
             content = fetch_url_clean_content(s["ad_url"])
             deals = extract_store_deals_with_ai(s["name"], content, settings)
             if settings.get("ai_provider", "gemini") == "gemini":
-                await asyncio.sleep(2.0)
+                time.sleep(2.0)
                 
         c.execute("UPDATE grocery_stores SET ad_url=?, last_scanned=?, cached_deals=? WHERE id=? AND user_id=?",
                   (ad_url, now_iso, json.dumps(deals), s["id"], user_id))
@@ -2194,9 +2230,8 @@ async def scan_all_grocery_stores(user_id: str = Depends(verify_auth)):
 
 # --- Deal Query & Price Finder Endpoint ---
 @app.post("/api/groceries/query_deals")
-async def query_deals(req: DealQueryRequest, user_id: str = Depends(verify_auth)):
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
+def query_deals(req: DealQueryRequest, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
     c = conn.cursor()
     c.execute("SELECT id, name, ad_url, cached_deals FROM grocery_stores WHERE user_id=?", (user_id,))
     rows = c.fetchall()
@@ -2225,9 +2260,8 @@ async def query_deals(req: DealQueryRequest, user_id: str = Depends(verify_auth)
 
 # --- Grocery Lists & Items Endpoints ---
 @app.get("/api/groceries/lists")
-async def get_grocery_lists(user_id: str = Depends(verify_auth)):
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
+def get_grocery_lists(user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
     c = conn.cursor()
     c.execute("SELECT id, title, created_at, updated_at FROM grocery_lists WHERE user_id=? ORDER BY updated_at DESC", (user_id,))
     lists = [dict(r) for r in c.fetchall()]
@@ -2245,8 +2279,8 @@ async def get_grocery_lists(user_id: str = Depends(verify_auth)):
     return lists
 
 @app.post("/api/groceries/lists")
-async def save_grocery_list(glist: GroceryListSave, user_id: str = Depends(verify_auth)):
-    conn = sqlite3.connect(DB_FILE)
+def save_grocery_list(glist: GroceryListSave, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
     c = conn.cursor()
     list_id = glist.id or str(uuid.uuid4())
     now = datetime.now().isoformat()
@@ -2260,8 +2294,8 @@ async def save_grocery_list(glist: GroceryListSave, user_id: str = Depends(verif
     return {"status": "success", "id": list_id}
 
 @app.delete("/api/groceries/lists/{list_id}")
-async def delete_grocery_list(list_id: str, user_id: str = Depends(verify_auth)):
-    conn = sqlite3.connect(DB_FILE)
+def delete_grocery_list(list_id: str, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
     c = conn.cursor()
     c.execute("DELETE FROM grocery_lists WHERE id=? AND user_id=?", (list_id, user_id))
     c.execute("DELETE FROM grocery_list_items WHERE list_id=? AND user_id=?", (list_id, user_id))
@@ -2270,9 +2304,8 @@ async def delete_grocery_list(list_id: str, user_id: str = Depends(verify_auth))
     return {"status": "success"}
 
 @app.get("/api/groceries/lists/{list_id}/items")
-async def get_grocery_list_items(list_id: str, user_id: str = Depends(verify_auth)):
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
+def get_grocery_list_items(list_id: str, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
     c = conn.cursor()
     c.execute("SELECT id, list_id, item_name, store_name, price_notes, category, is_checked FROM grocery_list_items WHERE list_id=? AND user_id=? ORDER BY is_checked ASC, category ASC, item_name ASC", (list_id, user_id))
     rows = [dict(r) for r in c.fetchall()]
@@ -2280,8 +2313,8 @@ async def get_grocery_list_items(list_id: str, user_id: str = Depends(verify_aut
     return rows
 
 @app.post("/api/groceries/lists/{list_id}/items")
-async def add_grocery_item(list_id: str, item: GroceryItemSave, user_id: str = Depends(verify_auth)):
-    conn = sqlite3.connect(DB_FILE)
+def add_grocery_item(list_id: str, item: GroceryItemSave, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
     c = conn.cursor()
     item_id = item.id or str(uuid.uuid4())
     c.execute("INSERT INTO grocery_list_items (id, list_id, user_id, item_name, store_name, price_notes, category, is_checked) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -2293,10 +2326,10 @@ async def add_grocery_item(list_id: str, item: GroceryItemSave, user_id: str = D
     return {"status": "success", "id": item_id}
 
 @app.post("/api/groceries/lists/{list_id}/batch_items")
-async def add_batch_grocery_items(list_id: str, req: GroceryBatchItemsSave, user_id: str = Depends(verify_auth)):
+def add_batch_grocery_items(list_id: str, req: GroceryBatchItemsSave, user_id: str = Depends(verify_auth)):
     if not req.items:
         return {"status": "success", "count": 0}
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db_conn()
     c = conn.cursor()
     added_count = 0
     now = datetime.now().isoformat()
@@ -2315,8 +2348,8 @@ async def add_batch_grocery_items(list_id: str, req: GroceryBatchItemsSave, user
     return {"status": "success", "count": added_count}
 
 @app.put("/api/groceries/items/{item_id}")
-async def update_grocery_item(item_id: str, payload: dict, user_id: str = Depends(verify_auth)):
-    conn = sqlite3.connect(DB_FILE)
+def update_grocery_item(item_id: str, payload: dict, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
     c = conn.cursor()
     fields = []
     values = []
@@ -2332,8 +2365,8 @@ async def update_grocery_item(item_id: str, payload: dict, user_id: str = Depend
     return {"status": "success"}
 
 @app.delete("/api/groceries/items/{item_id}")
-async def delete_grocery_item(item_id: str, user_id: str = Depends(verify_auth)):
-    conn = sqlite3.connect(DB_FILE)
+def delete_grocery_item(item_id: str, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
     c = conn.cursor()
     c.execute("DELETE FROM grocery_list_items WHERE id=? AND user_id=?", (item_id, user_id))
     conn.commit()
@@ -2341,8 +2374,8 @@ async def delete_grocery_item(item_id: str, user_id: str = Depends(verify_auth))
     return {"status": "success"}
 
 @app.post("/api/groceries/lists/{list_id}/clear_checked")
-async def clear_checked_grocery_items(list_id: str, user_id: str = Depends(verify_auth)):
-    conn = sqlite3.connect(DB_FILE)
+def clear_checked_grocery_items(list_id: str, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
     c = conn.cursor()
     c.execute("DELETE FROM grocery_list_items WHERE list_id=? AND user_id=? AND is_checked=1", (list_id, user_id))
     now = datetime.now().isoformat()
@@ -2352,9 +2385,8 @@ async def clear_checked_grocery_items(list_id: str, user_id: str = Depends(verif
     return {"status": "success"}
 
 @app.post("/api/groceries/ai_generate_list")
-async def ai_generate_list(req: AIGroceryListRequest, user_id: str = Depends(verify_auth)):
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
+def ai_generate_list(req: AIGroceryListRequest, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
     c = conn.cursor()
     c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
     s_row = c.fetchone()

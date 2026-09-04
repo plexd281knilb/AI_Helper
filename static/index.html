@@ -1615,6 +1615,13 @@
             
             if (!confirm(`Push calendar events from ${selected.length} selected email(s) to Google Calendar?`)) return;
             
+            const btn = event && event.target ? event.target : null;
+            const origHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.innerHTML = `<span>⏳</span> Pushing ${selected.length} item(s)...`;
+                btn.disabled = true;
+            }
+            
             try {
                 const response = await fetch('/api/history/bulk_sync', {
                     method: 'POST',
@@ -1635,7 +1642,12 @@
                 if (selAll) selAll.checked = false;
                 loadHistory();
             } catch(err) {
-                alert("Bulk Calendar Push Failed: " + err.message);
+                alert("Bulk Calendar Push Notice: " + err.message);
+            } finally {
+                if (btn) {
+                    btn.innerHTML = origHtml;
+                    btn.disabled = false;
+                }
             }
         }
 
@@ -1904,6 +1916,13 @@
             const selected = Array.from(document.querySelectorAll('.event-checkbox:checked')).map(cb => cb.value);
             if (selected.length === 0) return alert("Please select at least one event to push to Google Calendar.");
             
+            const btn = event && event.target ? event.target : null;
+            const origHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.innerHTML = `<span>⏳</span> Pushing ${selected.length} event(s)...`;
+                btn.disabled = true;
+            }
+            
             const msgBox = document.getElementById('dashboard-msg');
             msgBox.innerHTML = '<span style="color: #60a5fa;">Pushing selected events to Google Calendar...</span>';
             
@@ -1926,6 +1945,11 @@
             } catch(e) {
                 if (e.message !== "Unauthorized") {
                     msgBox.innerHTML = `<div class="error">${e.message || 'Error pushing events. Make sure Google Calendar is connected in Settings.'}</div>`;
+                }
+            } finally {
+                if (btn) {
+                    btn.innerHTML = origHtml;
+                    btn.disabled = false;
                 }
             }
         }
@@ -2943,8 +2967,15 @@
         }
 
         async function scanAllStoreAds() {
+            const btn = event && event.target ? event.target : null;
+            const origHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.innerHTML = '<span>⏳</span> Scanning All Stores...';
+                btn.disabled = true;
+            }
+
             const msgBox = document.getElementById('groceries-msg');
-            msgBox.innerHTML = '<span style="color: #60a5fa;">Scanning weekly ads across all stores with AI... Please wait!</span>';
+            msgBox.innerHTML = '<span style="color: #60a5fa;">Scanning weekly ads across all stores in parallel... Please wait!</span>';
             try {
                 const response = await fetch('/api/groceries/stores/scan_all', {method: 'POST'});
                 await handleApiError(response);
@@ -2954,6 +2985,11 @@
                 setTimeout(() => msgBox.innerHTML = '', 4000);
             } catch(e) {
                 if (e.message !== "Unauthorized") msgBox.innerHTML = `<div class="error">${e.message || 'Error scanning store ads.'}</div>`;
+            } finally {
+                if (btn) {
+                    btn.innerHTML = origHtml;
+                    btn.disabled = false;
+                }
             }
         }
 
