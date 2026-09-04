@@ -1439,6 +1439,12 @@ async def get_logs():
         return {"logs": f"Error reading logs: {e}"}
 
 @app.get("/")
+@app.get("/dashboard")
+@app.get("/history")
+@app.get("/groceries")
+@app.get("/settings")
+@app.get("/users")
+@app.get("/logs")
 async def read_index():
     return FileResponse('static/index.html')
 
