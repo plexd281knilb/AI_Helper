@@ -8,10 +8,10 @@ An AI-powered web application that pulls emails, extracts calendar events using 
 - **AI Event Extraction**: Analyzes email content to detect events, deadlines, dates, and times using Google Gemini or OpenAI.
 - **Google Calendar Sync**: Add individual or batch sync events directly to Google Calendar.
 - **🛒 Deals & Local Grocery Intelligence**:
-  - Track weekly ads and circulars from stores like HEB, Kroger, Tom Thumb, Costco, Sprouts, Whole Foods, Walmart, and custom links.
-  - Natural language AI search to compare prices and find the best local bargains.
-  - Smart interactive grocery lists with category/store sorting, item check-off, and clipboard export.
-  - AI meal plan list generator that auto-assigns items to the best stores.
+  - **1-Click Zip Code Discovery**: Ingest and track weekly circulars and deals automatically across all local supermarkets (HEB, Kroger, Tom Thumb, Albertsons, Sprouts, ALDI, Whole Foods, Walmart, Costco, Target, etc.) based on your zip code.
+  - **Browse & Filter Deals**: Department and category filtering (Produce, Meat & Seafood, Dairy, Pantry, etc.) with live search and 1-click list adding.
+  - **AI Deal Comparison**: Natural language AI search to compare prices and find the best local bargains across all your local stores.
+  - **Smart Grocery Lists**: Interactive grocery lists with category/store grouping, check-off status, clipboard copy, and AI meal plan generator.
 - **Dockerized**: Easy multi-user deployment on Unraid or any Docker host with persistent SQLite storage.
 
 ## Setup

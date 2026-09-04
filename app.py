@@ -8,6 +8,7 @@ import logging
 import re
 import ssl
 import urllib.request
+import urllib.parse
 from html import unescape
 from logging.handlers import RotatingFileHandler
 from datetime import datetime, timedelta
@@ -399,6 +400,7 @@ class SettingsSave(BaseModel):
     fetch_interval_minutes: Optional[int] = 60
     lookback_days: Optional[int] = 7
     email_fetch_limit: Optional[int] = 20
+    postal_code: Optional[str] = "76262"
 
 @app.get("/api/settings")
 async def read_settings(user_id: str = Depends(verify_auth)):
@@ -423,6 +425,7 @@ async def read_settings(user_id: str = Depends(verify_auth)):
         "fetch_interval_minutes": int(settings.get("fetch_interval_minutes", 60)),
         "lookback_days": int(settings.get("lookback_days", 7)),
         "email_fetch_limit": int(settings.get("email_fetch_limit", 20)),
+        "postal_code": settings.get("postal_code", "76262"),
         "last_scan_time": settings.get("last_scan_time", None),
         "google_auth_ready": os.path.exists(CLIENT_SECRETS_FILE),
         "google_connected": os.path.exists(token_file)
@@ -1512,6 +1515,209 @@ class AIGroceryListRequest(BaseModel):
     list_title: Optional[str] = "Weekly Meal Plan & Deals"
     prompt: str
 
+class AutoFetchDealsRequest(BaseModel):
+    postal_code: Optional[str] = "76262"
+
+def guess_deal_category(item_name: str) -> str:
+    name = (item_name or '').lower()
+    if any(w in name for w in ['beef', 'steak', 'chicken', 'pork', 'rib', 'roast', 'bacon', 'salmon', 'fish', 'shrimp', 'lobster', 'crab', 'turkey', 'sausage', 'chop', 'wings', 'meat', 'patty', 'patties', 'frank', 'hot dog', 'ground chuck', 'ground round']):
+        return 'Meat & Seafood'
+    if any(w in name for w in ['apple', 'berry', 'berries', 'grape', 'banana', 'peach', 'melon', 'watermelon', 'cantaloupe', 'salad', 'lettuce', 'tomato', 'potato', 'onion', 'avocado', 'zucchini', 'vegetable', 'fruit', 'lemon', 'lime', 'citrus', 'nectarine', 'cherry', 'spinach', 'kale', 'carrot', 'broccoli']):
+        return 'Produce'
+    if any(w in name for w in ['milk', 'cheese', 'yogurt', 'butter', 'cream', 'egg', 'eggs', 'dairy', 'sour cream', 'creamer', 'cheddar', 'mozzarella', 'parmesan']):
+        return 'Dairy & Eggs'
+    if any(w in name for w in ['frozen', 'ice cream', 'pizza', 'novelties', 'fillet', 'waffles', 'popsicle']):
+        return 'Frozen'
+    if any(w in name for w in ['water', 'soda', 'coke', 'pepsi', 'drink', 'coffee', 'tea', 'juice', 'beer', 'wine', 'gatorade', 'shake', 'beverage', 'seltzer']):
+        return 'Beverages'
+    if any(w in name for w in ['bread', 'buns', 'bakery', 'cake', 'pie', 'cookie', 'deli', 'croissant', 'tortilla', 'bagel', 'muffin', 'pastry']):
+        return 'Bakery & Deli'
+    if any(w in name for w in ['chip', 'snack', 'candy', 'chocolate', 'nuts', 'cracker', 'popcorn', 'pretzels', 'doritos', 'lays']):
+        return 'Snacks'
+    if any(w in name for w in ['paper', 'towel', 'detergent', 'tide', 'shampoo', 'soap', 'cleaner', 'swiffer', 'bleach', 'tissue', 'foil', 'wipe', 'diaper', 'trash bag']):
+        return 'Household & Personal'
+    return 'Pantry & Dry Goods'
+
+def normalize_grocery_store_name(merchant_raw: str) -> str:
+    m = (merchant_raw or '').strip()
+    ml = m.lower()
+    if 'kroger' in ml: return 'Kroger'
+    if 'sprouts' in ml: return 'Sprouts Farmers Market'
+    if 'tom thumb' in ml: return 'Tom Thumb'
+    if 'albertsons' in ml: return 'Albertsons'
+    if 'h-e-b' in ml or 'heb' in ml: return 'H-E-B'
+    if 'aldi' in ml: return 'ALDI'
+    if 'walmart' in ml: return 'Walmart'
+    if 'target' in ml: return 'Target'
+    if 'costco' in ml: return 'Costco'
+    if 'fiesta' in ml: return 'Fiesta Mart'
+    if 'whole foods' in ml: return 'Whole Foods Market'
+    if 'trader joe' in ml: return "Trader Joe's"
+    if 'winco' in ml: return 'WinCo Foods'
+    if 'brookshire' in ml: return "Brookshire's"
+    if 'market street' in ml: return 'Market Street'
+    if 'united' in ml: return 'United Supermarkets'
+    return m
+
+def fetch_flipp_store_deals(postal_code: str = '76262', store_name_filter: Optional[str] = None) -> dict:
+    if not postal_code or not postal_code.strip():
+        postal_code = '76262'
+    postal_code = postal_code.strip()
+    
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*'
+    }
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    
+    url = f"https://backflipp.wishabi.com/flipp/flyers?postal_code={postal_code}&locale=en-us"
+    try:
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=12, context=ctx) as resp:
+            flyer_data = json.loads(resp.read().decode('utf-8'))
+            flyers = flyer_data.get('flyers', [])
+    except Exception as e:
+        logger.error(f"Error querying Flipp flyers for zip {postal_code}: {e}")
+        return {}
+
+    known_grocery_keywords = [
+        'kroger', 'h-e-b', 'heb', 'tom thumb', 'albertsons', 'sprouts',
+        'aldi', 'walmart', 'target', 'fiesta', 'costco', 'winco',
+        'whole foods', 'trader joe', 'brookshire', 'market street', 'united supermarkets', 'bravo'
+    ]
+    
+    stores_data = {}
+    target_filter_norm = normalize_grocery_store_name(store_name_filter).lower() if store_name_filter else None
+
+    for f in flyers:
+        merchant = f.get('merchant') or ''
+        merchant_lower = merchant.lower()
+        
+        # Check if grocery merchant or specifically targeted
+        if not any(kw in merchant_lower for kw in known_grocery_keywords):
+            if not target_filter_norm or target_filter_norm not in merchant_lower:
+                continue
+            
+        norm_store = normalize_grocery_store_name(merchant)
+        if target_filter_norm and target_filter_norm not in norm_store.lower() and norm_store.lower() not in target_filter_norm:
+            continue
+            
+        fid = f['id']
+        furl = f"https://backflipp.wishabi.com/flipp/flyers/{fid}"
+        try:
+            freq = urllib.request.Request(furl, headers=headers)
+            with urllib.request.urlopen(freq, timeout=12, context=ctx) as fresp:
+                fdata = json.loads(fresp.read().decode('utf-8'))
+                items = fdata.get('items', [])
+                
+                deals = []
+                seen_names = set()
+                
+                for it in items:
+                    name = it.get('name')
+                    if not name or len(name.strip()) < 2:
+                        continue
+                    clean_name = name.strip()
+                    if clean_name.lower() in seen_names:
+                        continue
+                    seen_names.add(clean_name.lower())
+                    
+                    raw_price = it.get('price') or it.get('current_price') or ''
+                    sale_story = it.get('sale_story') or ''
+                    price_str = ''
+                    if raw_price:
+                        try:
+                            fval = float(raw_price)
+                            price_str = f"${fval:.2f}"
+                        except Exception:
+                            price_str = str(raw_price)
+                    elif sale_story:
+                        price_str = sale_story
+                    else:
+                        price_str = "Sale"
+                        
+                    notes_parts = []
+                    if sale_story and sale_story != price_str:
+                        notes_parts.append(sale_story)
+                    if it.get('description'):
+                        notes_parts.append(it.get('description'))
+                    if it.get('brand') and it.get('brand') not in clean_name:
+                        notes_parts.append(f"Brand: {it.get('brand')}")
+                        
+                    notes_str = " | ".join(notes_parts)
+                    
+                    deals.append({
+                        'item': clean_name,
+                        'price': price_str,
+                        'category': guess_deal_category(clean_name),
+                        'notes': notes_str
+                    })
+                    
+                if deals:
+                    ad_web_url = f"https://flipp.com/flyer/{fid}?postal_code={postal_code}"
+                    if norm_store not in stores_data:
+                        stores_data[norm_store] = {
+                            'name': norm_store,
+                            'ad_url': ad_web_url,
+                            'flyer_id': fid,
+                            'flyer_title': f.get('title') or f"{norm_store} Weekly Ad",
+                            'valid_from': f.get('valid_from'),
+                            'valid_to': f.get('valid_to'),
+                            'deals': deals
+                        }
+                    else:
+                        existing_items = {d['item'].lower() for d in stores_data[norm_store]['deals']}
+                        for d in deals:
+                            if d['item'].lower() not in existing_items:
+                                stores_data[norm_store]['deals'].append(d)
+                                existing_items.add(d['item'].lower())
+        except Exception as e:
+            logger.warning(f"Error fetching Flipp flyer {fid} for {merchant}: {e}")
+            
+    # Search API enrichment for rich prices and coupon stories
+    for store_name in list(stores_data.keys()):
+        try:
+            q_url = f"https://backflipp.wishabi.com/flipp/items/search?postal_code={postal_code}&q={urllib.parse.quote_plus(store_name)}"
+            s_req = urllib.request.Request(q_url, headers=headers)
+            with urllib.request.urlopen(s_req, timeout=8, context=ctx) as s_resp:
+                s_data = json.loads(s_resp.read().decode('utf-8'))
+                s_items = s_data.get('items', [])
+                
+                store_deals = stores_data[store_name]['deals']
+                existing_map = {d['item'].lower(): d for d in store_deals}
+                
+                for sit in s_items:
+                    s_name = (sit.get('name') or '').strip()
+                    if not s_name:
+                        continue
+                    
+                    s_price = sit.get('current_price')
+                    s_sale = sit.get('sale_story')
+                    s_price_str = f"${float(s_price):.2f}" if s_price is not None else (s_sale or "")
+                    
+                    if s_name.lower() in existing_map:
+                        cur_deal = existing_map[s_name.lower()]
+                        if (cur_deal['price'] == 'Sale' or not cur_deal['price']) and s_price_str:
+                            cur_deal['price'] = s_price_str
+                        if s_sale and s_sale not in cur_deal['notes']:
+                            cur_deal['notes'] = f"{s_sale} | {cur_deal['notes']}".strip(" |")
+                    else:
+                        if s_price_str or s_sale:
+                            new_deal = {
+                                'item': s_name,
+                                'price': s_price_str or "Sale",
+                                'category': guess_deal_category(s_name),
+                                'notes': s_sale or ""
+                            }
+                            store_deals.append(new_deal)
+                            existing_map[s_name.lower()] = new_deal
+        except Exception as e:
+            logger.debug(f"Search enrichment error for {store_name}: {e}")
+            
+    return stores_data
+
 # Web content fetcher for store ads
 def fetch_url_clean_content(url: str) -> str:
     if not url or not url.startswith(("http://", "https://")):
@@ -1821,6 +2027,83 @@ async def parse_store_text_deals(store_id: str, req: StoreTextParseRequest, user
     conn.close()
     return {"status": "success", "deals_found": len(deals), "deals": deals}
 
+@app.post("/api/groceries/auto_fetch", dependencies=[Depends(verify_auth)])
+async def auto_fetch_local_deals(req: AutoFetchDealsRequest, user_id: str = Depends(verify_auth)):
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    
+    c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
+    s_row = c.fetchone()
+    settings = json.loads(s_row['settings']) if s_row and s_row['settings'] else {}
+    
+    postal_code = (req.postal_code or settings.get("postal_code", "76262")).strip()
+    if not postal_code:
+        postal_code = "76262"
+        
+    settings["postal_code"] = postal_code
+    c.execute("UPDATE users SET settings=? WHERE id=?", (json.dumps(settings), user_id))
+    
+    stores_data = fetch_flipp_store_deals(postal_code)
+    if not stores_data:
+        conn.commit()
+        conn.close()
+        return {
+            "status": "warning",
+            "message": f"No digital weekly circulars found for postal code {postal_code}. Please verify the zip code.",
+            "stores_count": 0,
+            "total_deals": 0,
+            "stores": []
+        }
+        
+    now_iso = datetime.now().isoformat()
+    updated_stores = []
+    
+    c.execute("SELECT id, name FROM grocery_stores WHERE user_id=?", (user_id,))
+    existing_stores = {r["name"].lower(): r["id"] for r in c.fetchall()}
+    
+    total_deals_count = 0
+    for sname, sinfo in stores_data.items():
+        deals = sinfo.get("deals", [])
+        total_deals_count += len(deals)
+        deals_json = json.dumps(deals)
+        ad_url = sinfo.get("ad_url", "")
+        valid_range = f"Valid: {sinfo.get('valid_from', '')[:10]} to {sinfo.get('valid_to', '')[:10]}" if sinfo.get('valid_to') else ""
+        
+        norm_key = sname.lower()
+        if norm_key in existing_stores:
+            store_id = existing_stores[norm_key]
+            c.execute(
+                "UPDATE grocery_stores SET name=?, ad_url=?, notes=?, last_scanned=?, cached_deals=? WHERE id=? AND user_id=?",
+                (sname, ad_url, valid_range, now_iso, deals_json, store_id, user_id)
+            )
+        else:
+            store_id = str(uuid.uuid4())
+            c.execute(
+                "INSERT INTO grocery_stores (id, user_id, name, ad_url, notes, last_scanned, cached_deals) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (store_id, user_id, sname, ad_url, valid_range, now_iso, deals_json)
+            )
+            existing_stores[norm_key] = store_id
+            
+        updated_stores.append({
+            "id": store_id,
+            "name": sname,
+            "deals_count": len(deals),
+            "ad_url": ad_url,
+            "valid_range": valid_range
+        })
+        
+    conn.commit()
+    conn.close()
+    
+    return {
+        "status": "success",
+        "postal_code": postal_code,
+        "stores_count": len(updated_stores),
+        "total_deals": total_deals_count,
+        "stores": updated_stores
+    }
+
 @app.post("/api/groceries/stores/{store_id}/scan")
 async def scan_grocery_store(store_id: str, user_id: str = Depends(verify_auth)):
     conn = sqlite3.connect(DB_FILE)
@@ -1835,20 +2118,32 @@ async def scan_grocery_store(store_id: str, user_id: str = Depends(verify_auth))
     c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
     row = c.fetchone()
     settings = json.loads(row['settings']) if row and row['settings'] else {}
+    postal_code = settings.get("postal_code", "76262")
     
-    url = store["ad_url"]
+    url = store["ad_url"] or ""
     name = store["name"]
-    content = fetch_url_clean_content(url)
     
-    deals = extract_store_deals_with_ai(name, content, settings)
+    deals = []
     now_iso = datetime.now().isoformat()
-    
     warning_msg = None
-    if not deals and (not content or len(content.strip()) < 50):
-        warning_msg = f"Could not read circular text from {url}. Many supermarket sites (like Kroger, Tom Thumb, and HEB) block automated scrapers or require selecting your local store zip code. Tip: You can click '📋 Paste Deals' to paste flyer text directly, or use a direct Flipp.com circular link!"
     
-    c.execute("UPDATE grocery_stores SET last_scanned=?, cached_deals=? WHERE id=? AND user_id=?",
-              (now_iso, json.dumps(deals), store_id, user_id))
+    # Try automatic Flipp lookup first
+    flipp_stores = fetch_flipp_store_deals(postal_code, store_name_filter=name)
+    if flipp_stores:
+        matched_info = list(flipp_stores.values())[0]
+        deals = matched_info.get("deals", [])
+        if matched_info.get("ad_url"):
+            url = matched_info["ad_url"]
+    
+    # If not on Flipp or Flipp returned 0, try direct web content fetch + AI
+    if not deals and url and url.startswith(("http://", "https://")) and "flipp.com" not in url:
+        content = fetch_url_clean_content(url)
+        deals = extract_store_deals_with_ai(name, content, settings)
+        if not deals and (not content or len(content.strip()) < 50):
+            warning_msg = f"Could not read circular text from {url}. Supermarkets (like Kroger, Tom Thumb, and HEB) block scrapers without cookies. Tip: Use 1-Click Auto-Fetch Deals by Zip Code or click '📋 Paste Deals' to paste flyer text directly!"
+            
+    c.execute("UPDATE grocery_stores SET ad_url=?, last_scanned=?, cached_deals=? WHERE id=? AND user_id=?",
+              (url, now_iso, json.dumps(deals), store_id, user_id))
     conn.commit()
     conn.close()
     return {"status": "success", "deals_found": len(deals), "deals": deals, "warning": warning_msg}
@@ -1864,17 +2159,34 @@ async def scan_all_grocery_stores(user_id: str = Depends(verify_auth)):
     c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
     row = c.fetchone()
     settings = json.loads(row['settings']) if row and row['settings'] else {}
+    postal_code = settings.get("postal_code", "76262")
+    
+    # Bulk fetch Flipp deals for all stores
+    flipp_stores = fetch_flipp_store_deals(postal_code)
     
     results = []
     now_iso = datetime.now().isoformat()
+    
     for s in stores:
-        content = fetch_url_clean_content(s["ad_url"])
-        deals = extract_store_deals_with_ai(s["name"], content, settings)
-        c.execute("UPDATE grocery_stores SET last_scanned=?, cached_deals=? WHERE id=? AND user_id=?",
-                  (now_iso, json.dumps(deals), s["id"], user_id))
+        sname = s["name"]
+        norm_key = normalize_grocery_store_name(sname)
+        deals = []
+        ad_url = s["ad_url"]
+        
+        if norm_key in flipp_stores:
+            matched = flipp_stores[norm_key]
+            deals = matched.get("deals", [])
+            if matched.get("ad_url"):
+                ad_url = matched["ad_url"]
+        elif s["ad_url"] and s["ad_url"].startswith(("http://", "https://")) and "flipp.com" not in s["ad_url"]:
+            content = fetch_url_clean_content(s["ad_url"])
+            deals = extract_store_deals_with_ai(s["name"], content, settings)
+            if settings.get("ai_provider", "gemini") == "gemini":
+                await asyncio.sleep(2.0)
+                
+        c.execute("UPDATE grocery_stores SET ad_url=?, last_scanned=?, cached_deals=? WHERE id=? AND user_id=?",
+                  (ad_url, now_iso, json.dumps(deals), s["id"], user_id))
         results.append({"store": s["name"], "deals_found": len(deals)})
-        if settings.get("ai_provider", "gemini") == "gemini":
-            await asyncio.sleep(2.0)
             
     conn.commit()
     conn.close()

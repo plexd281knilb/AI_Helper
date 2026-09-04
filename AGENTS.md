@@ -180,8 +180,9 @@ All tables are initialized and automatically migrated on startup in `init_db()` 
 - Real-time status badge and next-run countdown display in the Settings tab.
 
 ### 7. Local Deals & Smart Grocery Lists (`/api/groceries/*`)
-- **Store Ads & Circulars**: Users can configure local store ad URLs (HEB, Kroger, Tom Thumb, Costco, Sprouts, Whole Foods, Walmart, etc.).
-- **AI Ad Scraping**: Scrapes web circulars using clean HTML text extraction and parses structured deals by category.
+- **Automated Zip-Code Discovery**: Ingests complete weekly circulars and deals automatically across all local supermarkets (HEB, Kroger, Tom Thumb, Albertsons, Sprouts, Whole Foods, Walmart, Target, ALDI, Costco, etc.) via backend Flipp aggregation without requiring manual URLs.
+- **Store Ads & Circulars**: Users can configure local store ad URLs or use automated zip discovery.
+- **AI Ad Scraping & Browsing**: Scrapes web circulars using clean HTML text extraction, parses structured deals by category, and provides a full interactive deal browser with search and department filtering.
 - **Price Query & Deal Comparison**: Natural language prompt query allows users to ask for best prices, ingredient comparisons, and budget recommendations across stores.
 - **Interactive Grocery Lists**: Create custom lists, group items by category or store, check off bought items, clear checked items, copy markdown/plain text lists to clipboard, and 1-click add deals directly to any list.
 - **AI Meal-Prep List Generator**: Generates full recipe-based grocery lists with assigned stores and estimated pricing based on user dietary or meal planning prompts.
@@ -225,8 +226,9 @@ All tables are initialized and automatically migrated on startup in `init_db()` 
 | `GET` | `/api/groceries/stores` | List all configured grocery stores and ads | Yes |
 | `POST` | `/api/groceries/stores` | Add or update a grocery store | Yes |
 | `DELETE` | `/api/groceries/stores/{id}` | Delete a grocery store | Yes |
-| `POST` | `/api/groceries/stores/{id}/scan` | Scan store circular URL with AI | Yes |
-| `POST` | `/api/groceries/stores/scan_all` | Scan all store circular URLs with AI | Yes |
+| `POST` | `/api/groceries/stores/{id}/scan` | Scan store circular URL with AI or Flipp | Yes |
+| `POST` | `/api/groceries/stores/scan_all` | Scan all store circular URLs with AI or Flipp | Yes |
+| `POST` | `/api/groceries/auto_fetch` | Auto-discover & ingest all local circular deals by zip code | Yes |
 | `POST` | `/api/groceries/query_deals` | AI price comparison and deals query | Yes |
 | `GET` | `/api/groceries/lists` | List all grocery lists for user | Yes |
 | `POST` | `/api/groceries/lists` | Create or update a grocery list | Yes |

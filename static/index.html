@@ -671,30 +671,55 @@
 
                 <!-- SUB-SECTION 3: Store Ads & Circulars -->
                 <div id="grocery-section-stores" class="grocery-sub-section" style="display: none;">
+                    
+                    <!-- 1-Click Auto-Fetch Banner by Zip Code -->
+                    <div class="account-box" style="margin-bottom: 20px; background: linear-gradient(135deg, rgba(37,99,235,0.18), rgba(16,185,129,0.15)); border: 1px solid rgba(59, 130, 246, 0.4); padding: 18px 22px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+                            <div style="max-width: 580px;">
+                                <h3 style="margin: 0 0 6px 0; color: #fff; display: flex; align-items: center; gap: 8px;">
+                                    <span>🚀</span> 1-Click Auto-Fetch Deals by Zip Code
+                                </h3>
+                                <p style="color: #cbd5e1; font-size: 13.5px; margin: 0; line-height: 1.5;">
+                                    Automatically scans and extracts live weekly circulars and sale prices for <strong>Kroger, Albertsons, Tom Thumb, H-E-B, Sprouts, ALDI, Walmart, Target, Costco, Fiesta Mart</strong> and more in your exact area.
+                                </p>
+                            </div>
+                            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                                <div style="display: flex; align-items: center; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 2px 10px;">
+                                    <span style="font-size: 14px; margin-right: 6px;">📍</span>
+                                    <input type="text" id="postal-code-input" placeholder="Zip Code" value="76262" style="width: 110px; border: none; background: transparent; color: #fff; font-size: 15px; font-weight: 700; padding: 8px 4px; margin-bottom: 0; outline: none;">
+                                </div>
+                                <button class="save-btn" id="btn-auto-fetch-deals" onclick="triggerAutoFetchByZip()" style="margin: 0; padding: 12px 22px; font-size: 14px; font-weight: 600; background: #2563eb; display: flex; align-items: center; gap: 6px;">
+                                    <span>⚡</span> Auto-Fetch All Local Deals
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 20px;">
                         <div>
-                            <h3 style="margin: 0 0 4px 0; color: #fff;">Configured Stores &amp; Weekly Ads</h3>
-                            <p style="color: #aaa; font-size: 13.5px; margin: 0;">Add your local store circular URLs to let AI extract weekly sales automatically.</p>
+                            <h3 style="margin: 0 0 4px 0; color: #fff;">Configured Stores &amp; Weekly Circulars</h3>
+                            <p style="color: #aaa; font-size: 13.5px; margin: 0;">Weekly circulars automatically sync via your zip code or custom circular URLs.</p>
                         </div>
-                        <button class="save-btn" onclick="scanAllStoreAds()" style="margin: 0; padding: 10px 18px; font-size: 13.5px; background: #2563eb;">🔄 Scan All Weekly Ads</button>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <button class="save-btn" onclick="scanAllStoreAds()" style="margin: 0; padding: 10px 18px; font-size: 13.5px; background: #2563eb;">🔄 Refresh All Stores</button>
+                        </div>
                     </div>
 
                     <!-- Info Banner for Weekly Ads -->
                     <div style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: var(--radius-md); padding: 14px 18px; margin-bottom: 20px; font-size: 13.5px; color: #cbd5e1; line-height: 1.5;">
                         <div style="font-weight: 700; color: #93c5fd; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
-                            <span>💡</span> How Weekly Ads &amp; Circulars Work
+                            <span>💡</span> Live Circular Sync &amp; Deal Management
                         </div>
-                        Supermarkets like Kroger, HEB, and Tom Thumb customize deals by regional zip code:
                         <ul style="margin: 6px 0 0 18px; padding: 0;">
-                            <li>Open your store's website in a browser, select your local store/zip code, and copy your specific store circular link.</li>
-                            <li>Or use your local <a href="https://flipp.com" target="_blank" rel="noopener noreferrer" style="color: #60a5fa; text-decoration: underline;">Flipp.com</a> circular link.</li>
-                            <li>Or click <strong>📋 Paste Deals</strong> on any store card to paste the flyer text from emails or circulars directly!</li>
+                            <li>Click <strong>⚡ Auto-Fetch All Local Deals</strong> above to discover and download all supermarket circulars for your zip code automatically.</li>
+                            <li>Click <strong>👁️ Deals</strong> on any store card to browse and search all items and add them to your grocery list with 1-click.</li>
+                            <li>You can also click <strong>📋 Paste Text</strong> on any store to paste raw circular text from emails or websites!</li>
                         </ul>
                     </div>
 
                     <!-- 1-Click Template Bar -->
                     <div class="account-box" style="margin-bottom: 20px; background: rgba(59, 130, 246, 0.05); border-color: rgba(59, 130, 246, 0.2);">
-                        <h4 style="margin: 0 0 10px 0; color: #93c5fd; font-size: 13.5px;">⚡ Quick Add Popular Stores (1-Click Template)</h4>
+                        <h4 style="margin: 0 0 10px 0; color: #93c5fd; font-size: 13.5px;">⚡ Quick Add Popular Stores</h4>
                         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                             <button class="add-btn" onclick="quickAddStore('HEB', 'https://www.heb.com/weekly-ads')" style="margin: 0; font-size: 12px; background: #e11d48;">+ HEB</button>
                             <button class="add-btn" onclick="quickAddStore('Kroger', 'https://www.kroger.com/weeklyad')" style="margin: 0; font-size: 12px; background: #2563eb;">+ Kroger</button>
@@ -733,6 +758,47 @@
                     <!-- Stores Grid -->
                     <div id="stores-grid-container">
                         Loading configured stores...
+                    </div>
+                </div>
+            </div>
+
+            <!-- Browse Store Deals Modal -->
+            <div id="browse-deals-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 999; justify-content: center; align-items: center; padding: 20px;">
+                <div class="account-box" style="width: 95%; max-width: 920px; max-height: 88vh; display: flex; flex-direction: column; background: #161b22; border: 1px solid #30363d; border-radius: var(--radius-md); padding: 22px; box-shadow: 0 12px 35px rgba(0,0,0,0.7); overflow: hidden;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; flex-wrap: wrap; gap: 10px;">
+                        <div>
+                            <h2 style="margin: 0 0 4px 0; color: #fff; display: flex; align-items: center; gap: 8px; font-size: 18px;">
+                                <span id="browse-modal-store-pill" class="store-pill">Store</span>
+                                <span id="browse-modal-title">Weekly Circular Deals</span>
+                            </h2>
+                            <div style="font-size: 13px; color: #94a3b8;" id="browse-modal-subtitle"></div>
+                        </div>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <a id="browse-modal-flyer-link" href="#" target="_blank" rel="noopener noreferrer" class="copy-btn" style="text-decoration: none; padding: 6px 12px; font-size: 12.5px;">🔗 View Web Flyer</a>
+                            <button class="remove-btn" onclick="closeBrowseDealsModal()" style="margin: 0; padding: 6px 12px; font-size: 14px;">✕</button>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 14px;">
+                        <div style="flex: 1; min-width: 220px;">
+                            <input type="text" id="browse-modal-search" placeholder="🔍 Search deals (e.g. steak, milk, berries, chips)..." oninput="filterBrowseModalDeals()" style="width: 100%; box-sizing: border-box; margin-bottom: 0; padding: 8px 12px; font-size: 13.5px;">
+                        </div>
+                        <div id="browse-modal-categories" style="display: flex; gap: 6px; flex-wrap: wrap;">
+                            <!-- Category filter chips -->
+                        </div>
+                    </div>
+
+                    <div id="browse-modal-deals-list" style="flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; padding-right: 4px;">
+                        <!-- Deals rendered dynamically -->
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px; border-top: 1px solid var(--border-color); padding-top: 12px; font-size: 13px; color: #aaa; flex-wrap: wrap; gap: 10px;">
+                        <span id="browse-modal-footer-count">Showing 0 deals</span>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <label for="browse-modal-target-list" style="font-size: 12.5px; color: #888;">Target List:</label>
+                            <select id="browse-modal-target-list" style="padding: 5px 8px; font-size: 12.5px; border-radius: 4px; background: var(--input-bg); color: #fff; border: 1px solid var(--border-color);"></select>
+                            <button class="remove-btn" onclick="closeBrowseDealsModal()" style="margin: 0; padding: 6px 14px; font-size: 13px; background: #374151; color: #fff;">Close</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -780,6 +846,7 @@
                     </div>
                 </div>
             </div>
+
 
             <!-- Users View -->
             <div id="users" class="view">
@@ -968,6 +1035,12 @@
                             <option value="">Fetching models...</option>
                         </select>
                         <small style="color:#ff5252; display:none;" id="model-warning">If the AI fails to run, make sure a valid model is selected here and saved!</small>
+                    </div>
+
+                    <div class="form-group" style="margin-top: 20px;">
+                        <label for="postal_code">Local Zip / Postal Code (for Weekly Deals)</label>
+                        <input type="text" id="postal_code" placeholder="e.g. 76262" value="76262">
+                        <small style="color:#888;">Used to locate local supermarket circulars and sales for Kroger, Albertsons, Tom Thumb, HEB, Sprouts, ALDI, Walmart, Target, etc.</small>
                     </div>
 
                     <button class="save-btn" style="width: 100%;" onclick="saveAISettings()">Save General Settings</button>
@@ -2193,6 +2266,7 @@
         }
 
         function collectFullSettingsPayload() {
+            const postalEl = document.getElementById('postal_code') || document.getElementById('postal-code-input');
             return {
                 ai_provider: document.getElementById('ai_provider').value,
                 ai_model: document.getElementById('ai_model').value,
@@ -2200,6 +2274,7 @@
                 openai_api_key: document.getElementById('openai_api_key').value,
                 public_url: document.getElementById('public_url').value,
                 custom_prompt: document.getElementById('custom_prompt').value,
+                postal_code: postalEl ? postalEl.value.trim() : '76262',
                 fetch_interval_minutes: getSelectedIntervalMinutes(),
                 lookback_days: parseInt(document.getElementById('lookback_days').value, 10) || 7,
                 email_fetch_limit: parseInt(document.getElementById('email_fetch_limit').value, 10) || 20
@@ -2247,6 +2322,12 @@
                 document.getElementById('openai_api_key').value = settings.openai_api_key || '';
                 document.getElementById('custom_prompt').value = settings.custom_prompt || '';
                 savedModelSelection = settings.ai_model || '';
+
+                const postalCodeVal = settings.postal_code || '76262';
+                const postalInput = document.getElementById('postal_code');
+                if (postalInput) postalInput.value = postalCodeVal;
+                const postalBarInput = document.getElementById('postal-code-input');
+                if (postalBarInput) postalBarInput.value = postalCodeVal;
 
                 // Job Schedule settings
                 const intervalMinutes = settings.fetch_interval_minutes !== undefined ? settings.fetch_interval_minutes : 60;
@@ -2416,6 +2497,7 @@
             if (s.includes('whole-food') || s.includes('wholefood')) return 'store-pill-whole-foods';
             if (s.includes('walmart') || s.includes('wal-mart')) return 'store-pill-walmart';
             if (s.includes('aldi')) return 'store-pill-aldi';
+            if (s.includes('fiesta')) return 'store-pill-any';
             if (s.includes('trader-joe') || s.includes('traderjoe')) return 'store-pill-trader-joe';
             return 'store-pill-any';
         }
@@ -2435,13 +2517,13 @@
                     if (allGroceryStores.length === 0) {
                         container.innerHTML = `
                             <div style="color: #aaa; text-align: center; padding: 30px; border: 1px dashed var(--border-color); border-radius: var(--radius-md);">
-                                <h3 style="color: #fff; margin-top: 0;">No Stores Configured Yet</h3>
-                                <p>Click any of the quick-add buttons above (e.g. HEB, Kroger, Costco) or add a custom weekly ad URL to start comparing prices!</p>
+                                <h3 style="color: #fff; margin-top: 0;">No Stores Synced Yet</h3>
+                                <p>Click <strong>⚡ Auto-Fetch All Local Deals</strong> above to automatically scan and pull circulars for your local supermarkets!</p>
                             </div>
                         `;
                     } else {
                         container.innerHTML = `
-                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 16px;">
                                 ${allGroceryStores.map(store => {
                                     const pillClass = getStorePillClass(store.name);
                                     const scannedStr = store.last_scanned ? new Date(store.last_scanned).toLocaleString() : 'Never scanned';
@@ -2450,24 +2532,29 @@
                                         <div class="store-card">
                                             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
                                                 <div>
-                                                    <span class="store-pill ${pillClass}" style="font-size: 13px; padding: 4px 10px;">${escapeHtml(store.name)}</span>
-                                                    ${store.notes ? `<div style="font-size: 12px; color: #888; margin-top: 4px;">${escapeHtml(store.notes)}</div>` : ''}
+                                                    <span class="store-pill ${pillClass}" style="font-size: 13.5px; padding: 4px 10px; font-weight: 700;">${escapeHtml(store.name)}</span>
+                                                    ${store.notes ? `<div style="font-size: 12px; color: #94a3b8; margin-top: 4px;">${escapeHtml(store.notes)}</div>` : ''}
                                                 </div>
-                                                <button class="remove-btn" onclick="deleteGroceryStore('${store.id}')" style="margin: 0; padding: 4px 8px; font-size: 12px;">🗑️</button>
+                                                <button class="remove-btn" onclick="deleteGroceryStore('${store.id}')" style="margin: 0; padding: 4px 8px; font-size: 12px;" title="Delete Store">🗑️</button>
                                             </div>
                                             <div style="font-size: 12.5px; color: #94a3b8; margin-bottom: 12px; word-break: break-all;">
-                                                <a href="${escapeHtml(store.ad_url)}" target="_blank" rel="noopener noreferrer" style="color: #60a5fa; text-decoration: underline;">🔗 Open Ad Flyer</a>
+                                                ${store.ad_url ? `<a href="${escapeHtml(store.ad_url)}" target="_blank" rel="noopener noreferrer" style="color: #60a5fa; text-decoration: underline;">🔗 View Digital Circular</a>` : '<span style="color:#64748b;">No direct link</span>'}
                                             </div>
                                             <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #aaa; margin-bottom: 12px; background: rgba(0,0,0,0.25); padding: 8px 10px; border-radius: 4px;">
-                                                <span>🏷️ Deals: <strong style="color: #34d399;">${dealsCount}</strong></span>
+                                                <span>🏷️ Deals: <strong style="color: #34d399; font-size: 13px;">${dealsCount}</strong></span>
                                                 <span>🕒 ${escapeHtml(scannedStr)}</span>
                                             </div>
-                                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
                                                 <button class="save-btn" onclick="scanGroceryStore('${store.id}', '${escapeHtml(store.name)}', this)" style="margin: 0; padding: 8px 10px; font-size: 12.5px; background: #2563eb;">
-                                                    🔄 Scan URL
+                                                    🔄 Refresh
                                                 </button>
-                                                <button class="add-btn" onclick="openPasteDealsModal('${store.id}', '${escapeHtml(store.name)}')" style="margin: 0; padding: 8px 10px; font-size: 12.5px; background: #8b5cf6;">
-                                                    📋 Paste Deals
+                                                <button class="add-btn" onclick="openBrowseDealsModal('${store.id}')" style="margin: 0; padding: 8px 10px; font-size: 12.5px; background: #059669;" ${dealsCount === 0 ? 'disabled style="opacity:0.4; cursor:not-allowed;"' : ''}>
+                                                    👁️ Deals (${dealsCount})
+                                                </button>
+                                            </div>
+                                            <div style="display: flex; gap: 8px;">
+                                                <button class="copy-btn" onclick="openPasteDealsModal('${store.id}', '${escapeHtml(store.name)}')" style="flex: 1; margin: 0; padding: 6px 10px; font-size: 11.5px; background: #374151; color: #e5e7eb;">
+                                                    📋 Paste Text
                                                 </button>
                                             </div>
                                         </div>
@@ -2482,11 +2569,11 @@
                 if (toggleContainer) {
                     if (allGroceryStores.length > 0) {
                         toggleContainer.innerHTML = `
-                            <span style="color: #888; align-self: center;">Stores configured:</span>
-                            ${allGroceryStores.map(s => `<span class="store-pill ${getStorePillClass(s.name)}">${escapeHtml(s.name)}</span>`).join(' ')}
+                            <span style="color: #888; align-self: center;">Stores synced:</span>
+                            ${allGroceryStores.map(s => `<span class="store-pill ${getStorePillClass(s.name)}">${escapeHtml(s.name)} (${s.deals_count || 0})</span>`).join(' ')}
                         `;
                     } else {
-                        toggleContainer.innerHTML = `<span style="color: #888;">(No stores saved yet — click 'Store Ads' tab to add your local stores)</span>`;
+                        toggleContainer.innerHTML = `<span style="color: #888;">(No stores saved yet — click 'Store Ads' tab to auto-fetch your local stores)</span>`;
                     }
                 }
 
@@ -2500,6 +2587,235 @@
 
             } catch(e) {
                 if (e.message !== "Unauthorized") console.error("Error loading grocery stores", e);
+            }
+        }
+
+        async function triggerAutoFetchByZip() {
+            const input = document.getElementById('postal-code-input');
+            const zip = input ? input.value.trim() : '76262';
+            if (!zip) return alert("Please enter a valid zip code.");
+
+            const btn = document.getElementById('btn-auto-fetch-deals');
+            const orig = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.innerHTML = '<span>⏳</span> Scanning Circulars...';
+                btn.disabled = true;
+            }
+
+            showGroceryMsg(`🚀 Scanning local weekly circulars for zip ${zip}...`, "info");
+
+            try {
+                const response = await fetch('/api/groceries/auto_fetch', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({postal_code: zip})
+                });
+                await handleApiError(response);
+                const data = await response.json();
+                
+                if (data.status === 'warning') {
+                    showGroceryMsg(data.message, "warning");
+                } else {
+                    showGroceryMsg(`✓ Auto-fetched ${data.total_deals || 0} weekly deals across ${data.stores_count || 0} local supermarkets for zip ${data.postal_code}!`, "success");
+                }
+                await loadGroceryStores();
+            } catch(e) {
+                if (e.message !== "Unauthorized") alert(e.message || "Failed to auto-fetch weekly deals.");
+            } finally {
+                if (btn) {
+                    btn.innerHTML = orig;
+                    btn.disabled = false;
+                }
+            }
+        }
+
+        // --- Browse Store Deals Modal Logic ---
+        let currentBrowseStore = null;
+        let currentBrowseCategory = 'all';
+        let currentBrowseSearch = '';
+
+        function openBrowseDealsModal(storeId) {
+            const store = allGroceryStores.find(s => s.id === storeId);
+            if (!store) return;
+            currentBrowseStore = store;
+            currentBrowseCategory = 'all';
+            currentBrowseSearch = '';
+
+            const pillEl = document.getElementById('browse-modal-store-pill');
+            if (pillEl) {
+                pillEl.className = `store-pill ${getStorePillClass(store.name)}`;
+                pillEl.innerText = store.name;
+            }
+
+            const titleEl = document.getElementById('browse-modal-title');
+            if (titleEl) titleEl.innerText = `${store.name} Weekly Deals`;
+
+            const subtitleEl = document.getElementById('browse-modal-subtitle');
+            if (subtitleEl) {
+                const deals = getStoreDealsArray(store);
+                const notesStr = store.notes ? `${store.notes} • ` : '';
+                subtitleEl.innerText = `${notesStr}${deals.length} active deals found`;
+            }
+
+            const flyerLink = document.getElementById('browse-modal-flyer-link');
+            if (flyerLink) {
+                if (store.ad_url) {
+                    flyerLink.href = store.ad_url;
+                    flyerLink.style.display = 'inline-block';
+                } else {
+                    flyerLink.style.display = 'none';
+                }
+            }
+
+            const searchInput = document.getElementById('browse-modal-search');
+            if (searchInput) searchInput.value = '';
+
+            // Update Target list dropdown
+            const listSelect = document.getElementById('browse-modal-target-list');
+            if (listSelect) {
+                listSelect.innerHTML = allGroceryLists.map(l => `<option value="${l.id}" ${l.id === activeGroceryListId ? 'selected' : ''}>${escapeHtml(l.title)}</option>`).join('');
+            }
+
+            renderBrowseModalCategories();
+            renderBrowseModalDeals();
+
+            document.getElementById('browse-deals-modal').style.display = 'flex';
+        }
+
+        function closeBrowseDealsModal() {
+            document.getElementById('browse-deals-modal').style.display = 'none';
+            currentBrowseStore = null;
+        }
+
+        function getStoreDealsArray(store) {
+            if (!store) return [];
+            if (Array.isArray(store.cached_deals)) return store.cached_deals;
+            if (typeof store.cached_deals === 'string') {
+                try { return JSON.parse(store.cached_deals); } catch(e) { return []; }
+            }
+            if (Array.isArray(store.deals)) return store.deals;
+            return [];
+        }
+
+        function renderBrowseModalCategories() {
+            const catContainer = document.getElementById('browse-modal-categories');
+            if (!catContainer || !currentBrowseStore) return;
+
+            const deals = getStoreDealsArray(currentBrowseStore);
+            const categories = new Set();
+            deals.forEach(d => {
+                if (d.category) categories.add(d.category);
+            });
+
+            const sortedCats = Array.from(categories).sort();
+            catContainer.innerHTML = `
+                <button class="filter-chip ${currentBrowseCategory === 'all' ? 'active' : ''}" onclick="setBrowseCategoryFilter('all')">All (${deals.length})</button>
+                ${sortedCats.map(cat => {
+                    const count = deals.filter(d => d.category === cat).length;
+                    return `<button class="filter-chip ${currentBrowseCategory === cat ? 'active' : ''}" onclick="setBrowseCategoryFilter('${escapeHtml(cat)}')">${escapeHtml(cat)} (${count})</button>`;
+                }).join('')}
+            `;
+        }
+
+        function setBrowseCategoryFilter(cat) {
+            currentBrowseCategory = cat;
+            renderBrowseModalCategories();
+            renderBrowseModalDeals();
+        }
+
+        function filterBrowseModalDeals() {
+            const input = document.getElementById('browse-modal-search');
+            currentBrowseSearch = input ? input.value.trim().toLowerCase() : '';
+            renderBrowseModalDeals();
+        }
+
+        function renderBrowseModalDeals() {
+            const container = document.getElementById('browse-modal-deals-list');
+            const countEl = document.getElementById('browse-modal-footer-count');
+            if (!container || !currentBrowseStore) return;
+
+            const allDeals = getStoreDealsArray(currentBrowseStore);
+            let filtered = allDeals;
+
+            if (currentBrowseCategory !== 'all') {
+                filtered = filtered.filter(d => (d.category || '').toLowerCase() === currentBrowseCategory.toLowerCase());
+            }
+
+            if (currentBrowseSearch) {
+                filtered = filtered.filter(d => 
+                    (d.item || '').toLowerCase().includes(currentBrowseSearch) || 
+                    (d.notes || '').toLowerCase().includes(currentBrowseSearch) ||
+                    (d.category || '').toLowerCase().includes(currentBrowseSearch)
+                );
+            }
+
+            if (countEl) {
+                countEl.innerText = `Showing ${filtered.length} of ${allDeals.length} deals`;
+            }
+
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div style="grid-column: 1 / -1; text-align: center; color: #888; padding: 30px;">
+                        No matching deals found for "${escapeHtml(currentBrowseSearch)}".
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = filtered.map((deal, idx) => `
+                <div style="background: #0d1117; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px 14px; display: flex; flex-direction: column; justify-content: space-between;">
+                    <div>
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; margin-bottom: 6px;">
+                            <span class="category-pill" style="font-size: 11px;">${escapeHtml(deal.category || 'General')}</span>
+                            ${deal.price ? `<span class="price-pill" style="font-size: 13px; font-weight: bold;">${escapeHtml(deal.price)}</span>` : ''}
+                        </div>
+                        <div style="font-weight: 600; color: #fff; font-size: 13.5px; margin-bottom: 6px; line-height: 1.35;">
+                            ${escapeHtml(deal.item)}
+                        </div>
+                        ${deal.notes ? `<div style="font-size: 12px; color: #94a3b8; margin-bottom: 8px; line-height: 1.3;">${escapeHtml(deal.notes)}</div>` : ''}
+                    </div>
+                    <div style="display: flex; justify-content: flex-end; margin-top: 8px; border-top: 1px dashed rgba(255,255,255,0.08); padding-top: 8px;">
+                        <button class="add-btn" onclick="addDealToTargetList('${escapeHtml(deal.item).replace(/'/g, "\\'")}', '${escapeHtml(currentBrowseStore.name).replace(/'/g, "\\'")}', '${escapeHtml(deal.price || '').replace(/'/g, "\\'")}', '${escapeHtml(deal.category || 'General').replace(/'/g, "\\'")}', this)" style="margin: 0; padding: 4px 10px; font-size: 12px; background: #2563eb;">
+                            + Add to List
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function addDealToTargetList(itemName, storeName, priceNotes, category, btn) {
+            const listSelect = document.getElementById('browse-modal-target-list');
+            const targetListId = (listSelect ? listSelect.value : null) || activeGroceryListId;
+            if (!targetListId) return alert("Please select or create a grocery list first.");
+
+            const origText = btn ? btn.innerText : '';
+            if (btn) btn.innerText = "Adding...";
+
+            try {
+                const response = await fetch(`/api/groceries/lists/${targetListId}/items`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        list_id: targetListId,
+                        item_name: itemName,
+                        store_name: storeName || 'Any',
+                        price_notes: priceNotes || '',
+                        category: category || 'General'
+                    })
+                });
+                await handleApiError(response);
+                if (btn) {
+                    btn.innerText = "✓ Added!";
+                    btn.style.background = "#10b981";
+                    setTimeout(() => {
+                        btn.innerText = origText;
+                        btn.style.background = "#2563eb";
+                    }, 2000);
+                }
+                if (currentGrocerySubTab === 'lists') loadActiveListItems();
+            } catch(e) {
+                if (e.message !== "Unauthorized") alert(e.message || "Failed to add item.");
+                if (btn) btn.innerText = origText;
             }
         }
 
