@@ -2099,13 +2099,17 @@ def format_deal_price_and_notes(raw_price, sale_story: Optional[str], descriptio
                     price_str = 'Coupon Deal'
                 else:
                     price_str = 'Special Offer'
-            notes_parts.append(ss)
+            # Only add to notes if not identical or redundant with the item name or price
+            if ss.lower() != clean_name.lower() and clean_name.lower() not in ss.lower() and ss.lower() != price_str.lower():
+                notes_parts.append(ss)
             
     if not price_str:
         price_str = 'Sale'
         
-    if description and description.strip() and description.strip() not in notes_parts:
-        notes_parts.append(description.strip())
+    if description and description.strip():
+        d_clean = description.strip()
+        if d_clean not in notes_parts and d_clean.lower() != clean_name.lower() and clean_name.lower() not in d_clean.lower() and d_clean.lower() != price_str.lower():
+            notes_parts.append(d_clean)
     if brand and brand.strip() and brand.strip().lower() not in clean_name.lower():
         notes_parts.append(f"Brand: {brand.strip()}")
         
