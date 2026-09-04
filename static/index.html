@@ -436,19 +436,22 @@
         .deal-card {
             background: #161b22;
             border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 14px;
+            border-radius: 8px;
+            padding: 10px 12px;
             display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            transition: all 0.2s ease;
+            flex-direction: row;
+            align-items: center;
+            gap: 12px;
+            transition: all 0.15s ease;
             position: relative;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+            min-height: 80px;
+            box-sizing: border-box;
         }
         .deal-card:hover {
             border-color: #3b82f6;
-            transform: translateY(-3px);
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.45);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
         }
         .deal-card.feedback-dismissed {
             opacity: 0;
@@ -457,112 +460,97 @@
             pointer-events: none;
         }
 
-        .deal-hero-box {
-            position: relative;
-            width: 100%;
-            height: 95px;
+        .deal-thumb-box {
+            width: 58px;
+            height: 58px;
+            min-width: 58px;
+            min-height: 58px;
             background: #0d1117;
-            border-radius: 8px;
-            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
             display: flex;
             align-items: center;
             justify-content: center;
             overflow: hidden;
-            margin-bottom: 10px;
-            padding: 6px;
+            padding: 3px;
             box-sizing: border-box;
+            flex-shrink: 0;
         }
-        .deal-hero-img {
-            max-width: 85%;
-            max-height: 80px;
+        .deal-thumb-img {
+            max-width: 100%;
+            max-height: 100%;
             object-fit: contain;
-            transition: transform 0.25s ease;
+            transition: transform 0.2s ease;
         }
-        .deal-card:hover .deal-hero-img {
-            transform: scale(1.05);
+        .deal-card:hover .deal-thumb-img {
+            transform: scale(1.08);
         }
-        .deal-hero-fallback {
-            font-size: 28px;
+        .deal-thumb-fallback {
+            font-size: 24px;
             user-select: none;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .deal-badge-top-left {
-            position: absolute;
-            top: 6px;
-            left: 6px;
-            z-index: 2;
-        }
-        .deal-badge-top-right {
-            position: absolute;
-            top: 6px;
-            right: 6px;
-            z-index: 2;
         }
 
-        .deal-content-body {
+        .deal-main-info {
             flex: 1;
+            min-width: 0;
             display: flex;
             flex-direction: column;
+            gap: 3px;
+            justify-content: center;
         }
-        .deal-price-header {
+        .deal-top-line {
             display: flex;
-            justify-content: space-between;
-            align-items: baseline;
-            margin-bottom: 3px;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
         }
-        .deal-price-text {
-            font-size: 18px;
+        .deal-price-badge {
+            font-size: 14.5px;
             font-weight: 800;
-            color: #10b981;
-            letter-spacing: -0.3px;
-            line-height: 1.1;
+            color: #34d399;
+            line-height: 1;
         }
-        .deal-dept-tag {
-            font-size: 10.5px;
-            color: #8b949e;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.3px;
-        }
-        .deal-product-title {
-            font-size: 13.5px;
+        .deal-title-text {
+            font-size: 13px;
             font-weight: 700;
             color: #ffffff;
-            line-height: 1.35;
-            margin: 3px 0 6px 0;
-            word-break: break-word;
-            min-height: 36px;
+            line-height: 1.3;
             display: -webkit-box;
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
-        }
-        .deal-notes-box {
-            font-size: 11.5px;
-            color: #94a3b8;
-            line-height: 1.35;
-            margin-bottom: 8px;
-            background: rgba(0,0,0,0.3);
-            border: 1px solid rgba(255,255,255,0.04);
-            padding: 5px 8px;
-            border-radius: 5px;
             word-break: break-word;
+        }
+        .deal-compact-notes {
+            font-size: 11px;
+            color: #94a3b8;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            line-height: 1.2;
+        }
+        .deal-badges-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            align-items: center;
+            margin-top: 1px;
         }
 
         .comp-pill {
-            display: flex;
+            display: inline-flex;
             align-items: center;
-            gap: 5px;
-            padding: 5px 9px;
-            border-radius: 6px;
-            font-size: 11px;
+            gap: 3px;
+            padding: 1.5px 6px;
+            border-radius: 4px;
+            font-size: 10px;
             font-weight: 600;
-            line-height: 1.3;
-            margin-bottom: 5px;
-            width: 100%;
-            box-sizing: border-box;
+            line-height: 1.2;
+            width: fit-content;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
         }
         .comp-pill-green {
             background: rgba(16, 185, 129, 0.15);
@@ -579,76 +567,75 @@
             color: #cbd5e1;
             border: 1px solid rgba(148, 163, 184, 0.2);
         }
+
         .grade-pill {
             display: inline-flex;
             align-items: center;
-            padding: 2px 7px;
-            border-radius: 4px;
-            font-size: 11px;
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-size: 10px;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.3px;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-            backdrop-filter: blur(6px);
         }
         .grade-pill-prime {
             background: rgba(245, 158, 11, 0.25);
             color: #fbbf24;
-            border: 1px solid rgba(245, 158, 11, 0.6);
+            border: 1px solid rgba(245, 158, 11, 0.5);
         }
         .grade-pill-choice {
             background: rgba(59, 130, 246, 0.25);
             color: #93c5fd;
-            border: 1px solid rgba(59, 130, 246, 0.5);
+            border: 1px solid rgba(59, 130, 246, 0.4);
         }
         .grade-pill-select {
             background: rgba(148, 163, 184, 0.2);
             color: #cbd5e1;
-            border: 1px solid rgba(148, 163, 184, 0.4);
+            border: 1px solid rgba(148, 163, 184, 0.3);
         }
         .grade-pill-wagyu {
             background: rgba(244, 63, 94, 0.25);
             color: #fda4af;
-            border: 1px solid rgba(244, 63, 94, 0.6);
+            border: 1px solid rgba(244, 63, 94, 0.5);
         }
         .grade-pill-angus {
             background: rgba(20, 184, 166, 0.25);
             color: #5eead4;
-            border: 1px solid rgba(20, 184, 166, 0.5);
+            border: 1px solid rgba(20, 184, 166, 0.4);
         }
+
         .history-pill {
-            display: flex;
+            display: inline-flex;
             align-items: center;
-            gap: 5px;
-            padding: 4px 9px;
-            border-radius: 6px;
-            font-size: 11px;
+            gap: 3px;
+            padding: 1.5px 6px;
+            border-radius: 4px;
+            font-size: 10px;
             font-weight: 600;
-            line-height: 1.3;
-            margin-bottom: 5px;
-            width: 100%;
-            box-sizing: border-box;
+            line-height: 1.2;
+            width: fit-content;
+            white-space: nowrap;
         }
         .history-pill-best {
             background: rgba(239, 68, 68, 0.2);
             color: #fca5a5;
-            border: 1px solid rgba(239, 68, 68, 0.5);
+            border: 1px solid rgba(239, 68, 68, 0.4);
             font-weight: 700;
         }
         .history-pill-low {
             background: rgba(16, 185, 129, 0.15);
             color: #6ee7b7;
-            border: 1px solid rgba(16, 185, 129, 0.35);
+            border: 1px solid rgba(16, 185, 129, 0.3);
         }
         .history-pill-below {
             background: rgba(14, 165, 233, 0.15);
             color: #7dd3fc;
-            border: 1px solid rgba(14, 165, 233, 0.35);
+            border: 1px solid rgba(14, 165, 233, 0.3);
         }
         .history-pill-above {
             background: rgba(245, 158, 11, 0.15);
             color: #fcd34d;
-            border: 1px solid rgba(245, 158, 11, 0.35);
+            border: 1px solid rgba(245, 158, 11, 0.3);
         }
         .history-pill-typical {
             background: rgba(148, 163, 184, 0.1);
@@ -656,61 +643,53 @@
             border: 1px solid rgba(148, 163, 184, 0.2);
         }
 
-        .deal-action-footer {
-            margin-top: 10px;
-            padding-top: 10px;
-            border-top: 1px solid rgba(255,255,255,0.06);
+        .deal-right-actions {
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            align-items: flex-end;
+            justify-content: center;
+            gap: 5px;
+            flex-shrink: 0;
         }
-        .deal-add-btn-primary {
-            width: 100%;
+        .deal-add-btn-compact {
             background: #2563eb;
             color: #fff;
             border: none;
-            border-radius: 6px;
-            padding: 9px 12px;
-            font-size: 13px;
+            border-radius: 5px;
+            padding: 5px 11px;
+            font-size: 12px;
             font-weight: 600;
             cursor: pointer;
-            display: flex;
+            display: inline-flex;
             align-items: center;
-            justify-content: center;
-            gap: 6px;
+            gap: 4px;
             transition: all 0.15s ease;
+            white-space: nowrap;
         }
-        .deal-add-btn-primary:hover {
+        .deal-add-btn-compact:hover {
             background: #1d4ed8;
             transform: translateY(-1px);
         }
-        .deal-feedback-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 4px;
-        }
-        .deal-feedback-btn {
+        .deal-feedback-btn-mini {
             background: rgba(255,255,255,0.03);
             border: 1px solid rgba(255,255,255,0.08);
             color: #8b949e;
-            padding: 4px 8px;
-            border-radius: 4px;
+            padding: 2px 5px;
+            border-radius: 3px;
             font-size: 11px;
             cursor: pointer;
             transition: all 0.15s ease;
             display: inline-flex;
             align-items: center;
-            gap: 3px;
-            flex: 1;
             justify-content: center;
+            line-height: 1;
         }
-        .deal-feedback-btn:hover {
-            background: rgba(255,255,255,0.08);
+        .deal-feedback-btn-mini:hover {
+            background: rgba(255,255,255,0.1);
             color: #fff;
-            border-color: rgba(255,255,255,0.2);
+            border-color: rgba(255,255,255,0.25);
         }
-        .deal-feedback-btn.active-up {
+        .deal-feedback-btn-mini.active-up {
             background: rgba(16, 185, 129, 0.2);
             color: #34d399;
             border-color: #10b981;
@@ -894,7 +873,7 @@
                     </div>
 
                     <!-- Deal Cards Grid Container -->
-                    <div id="my-deals-feed-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 16px;">
+                    <div id="my-deals-feed-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 10px;">
                         Loading personalized feed...
                     </div>
                 </div>
@@ -3179,52 +3158,41 @@
 
                 return `
                     <div class="deal-card" id="deal-card-${idx}">
-                        <div>
-                            <div class="deal-hero-box">
-                                <div class="deal-badge-top-left">
-                                    <span class="store-pill ${pillClass}">${escapeHtml(deal.store)}</span>
-                                </div>
-                                ${gradePillHtml ? `<div class="deal-badge-top-right">${gradePillHtml}</div>` : ''}
-                                
-                                ${deal.image_url ? `
-                                    <img src="${escapeHtml(deal.image_url)}" class="deal-hero-img" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                                    <div class="deal-hero-fallback" style="display:none;">${emoji}</div>
-                                ` : `<div class="deal-hero-fallback">${emoji}</div>`}
+                        <div class="deal-thumb-box">
+                            ${deal.image_url ? `
+                                <img src="${escapeHtml(deal.image_url)}" class="deal-thumb-img" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                <div class="deal-thumb-fallback" style="display:none;">${emoji}</div>
+                            ` : `<div class="deal-thumb-fallback">${emoji}</div>`}
+                        </div>
+
+                        <div class="deal-main-info">
+                            <div class="deal-top-line">
+                                <span class="store-pill ${pillClass}" style="font-size: 10px; padding: 1px 6px;">${escapeHtml(deal.store)}</span>
+                                <span class="deal-price-badge">${escapeHtml(cleanedPrice || 'Sale')}</span>
+                                ${gradePillHtml}
+                                <span style="font-size: 10px; color: #8b949e; margin-left: auto;">${escapeHtml(deal.category || '')}</span>
                             </div>
 
-                            <div class="deal-content-body">
-                                <div class="deal-price-header">
-                                    <span class="deal-price-text">${escapeHtml(cleanedPrice || 'Sale')}</span>
-                                    <span class="deal-dept-tag">${escapeHtml(deal.category || 'General')}</span>
-                                </div>
+                            <div class="deal-title-text" title="${escapeHtml(deal.item)}">
+                                ${escapeHtml(deal.item)}
+                            </div>
 
-                                <div class="deal-product-title" title="${escapeHtml(deal.item)}">
-                                    ${escapeHtml(deal.item)}
-                                </div>
+                            ${cleanNotes ? `<div class="deal-compact-notes" title="${escapeHtml(cleanNotes)}">${escapeHtml(cleanNotes)}</div>` : ''}
 
-                                ${cleanNotes ? `<div class="deal-notes-box">${escapeHtml(cleanNotes)}</div>` : ''}
-
-                                <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 4px;">
-                                    ${compPillHtml}
-                                    ${historyPillHtml}
-                                </div>
+                            <div class="deal-badges-row">
+                                ${compPillHtml}
+                                ${historyPillHtml}
                             </div>
                         </div>
 
-                        <div class="deal-action-footer">
-                            <button class="deal-add-btn-primary" onclick="addFeedDealToList('${safeItemName}', '${safeStoreName}', '${safePrice}', '${safeCategory}', '${safeImageUrl}', this)">
-                                ➕ Add to List
+                        <div class="deal-right-actions">
+                            <button class="deal-add-btn-compact" onclick="addFeedDealToList('${safeItemName}', '${safeStoreName}', '${safePrice}', '${safeCategory}', '${safeImageUrl}', this)">
+                                ➕ Add
                             </button>
-                            <div class="deal-feedback-row">
-                                <button class="deal-feedback-btn" onclick="submitDealFeedback('${safeItemName}', '${safeCategory}', 'more', this, ${idx})" title="Show more deals like this item">
-                                    👍 More
-                                </button>
-                                <button class="deal-feedback-btn" onclick="submitDealFeedback('${safeItemName}', '${safeCategory}', 'less', this, ${idx})" title="Show less deals like this item">
-                                    👎 Less
-                                </button>
-                                <button class="deal-feedback-btn" onclick="submitDealFeedback('${safeItemName}', '${safeCategory}', 'hide_category', this, ${idx})" title="Hide this category completely">
-                                    🚫 Hide
-                                </button>
+                            <div style="display: flex; gap: 3px; align-items: center;">
+                                <button class="deal-feedback-btn-mini" onclick="submitDealFeedback('${safeItemName}', '${safeCategory}', 'more', this, ${idx})" title="More like this">👍</button>
+                                <button class="deal-feedback-btn-mini" onclick="submitDealFeedback('${safeItemName}', '${safeCategory}', 'less', this, ${idx})" title="Less like this">👎</button>
+                                <button class="deal-feedback-btn-mini" onclick="submitDealFeedback('${safeItemName}', '${safeCategory}', 'hide_category', this, ${idx})" title="Hide category">🚫</button>
                             </div>
                         </div>
                     </div>
