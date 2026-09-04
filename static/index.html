@@ -201,6 +201,11 @@
             color: #34d399;
             border: 1px solid rgba(16, 185, 129, 0.4);
         }
+        .badge-warning {
+            background: rgba(245, 158, 11, 0.18);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.4);
+        }
         .badge-no-event {
             background: rgba(148, 163, 184, 0.12);
             color: #cbd5e1;
@@ -242,6 +247,14 @@
             border-top: 1px solid rgba(16, 185, 129, 0.2);
             border-right: 1px solid rgba(16, 185, 129, 0.2);
             border-bottom: 1px solid rgba(16, 185, 129, 0.2);
+            color: #e2e4e9;
+        }
+        .reason-box-error {
+            background: rgba(245, 158, 11, 0.08);
+            border-left: 4px solid #f59e0b;
+            border-top: 1px solid rgba(245, 158, 11, 0.2);
+            border-right: 1px solid rgba(245, 158, 11, 0.2);
+            border-bottom: 1px solid rgba(245, 158, 11, 0.2);
             color: #e2e4e9;
         }
         .reason-box-no-event {
@@ -491,12 +504,15 @@
                     </div>
                 </div>
 
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; background: rgba(255,255,255,0.03); padding: 12px 16px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; background: rgba(255,255,255,0.03); padding: 12px 16px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); flex-wrap: wrap; gap: 10px;">
                     <div style="display: flex; align-items: center;">
                         <input type="checkbox" id="selectAllHistory" onchange="toggleSelectAll('history-checkbox')" style="transform: scale(1.2); cursor: pointer;">
                         <label for="selectAllHistory" style="margin-left: 8px; cursor: pointer; color: #ccc; font-size: 14px; font-weight: 500;">Select All</label>
                     </div>
-                    <button class="remove-btn" onclick="bulkDeleteHistory()" style="padding: 6px 14px; font-size: 13px; margin: 0;">Delete Selected Memory</button>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button class="add-btn" onclick="bulkSyncHistory()" style="padding: 6px 14px; font-size: 13px; margin: 0; background: #2563eb;">⚡ Push Selected to Calendar</button>
+                        <button class="remove-btn" onclick="bulkDeleteHistory()" style="padding: 6px 14px; font-size: 13px; margin: 0;">Delete Selected Memory</button>
+                    </div>
                 </div>
                 <div id="history-container">
                     Loading history...
@@ -1109,11 +1125,34 @@
             }
         }
 
+        function hasSyncError(item) {
+            const reason = (item.reason || '').toLowerCase();
+            if (reason.includes('error') || reason.includes('token expired') || reason.includes('saved to dashboard') || reason.includes('reconnect in settings')) {
+                return true;
+            }
+            if (item.events && item.events.length > 0) {
+                if (item.events.some(e => e.status === 'pending')) return true;
+            }
+            return false;
+        }
+
         function isItemAdded(item) {
+            if (item.events && item.events.length > 0) {
+                return item.events.some(e => e.status === 'added' || e.status === 'pending');
+            }
             if (item.status === 'added') return true;
             if (item.status === 'no_event') return false;
             const r = (item.reason || '').toLowerCase();
-            return r.includes('extracted') || r.includes('auto-synced') || r.includes('added to calendar');
+            return r.includes('extracted') || r.includes('auto-synced') || r.includes('added to calendar') || r.includes('pushed');
+        }
+
+        function isItemFullySynced(item) {
+            if (hasSyncError(item)) return false;
+            if (item.events && item.events.length > 0) {
+                return item.events.every(e => e.status === 'added');
+            }
+            const r = (item.reason || '').toLowerCase();
+            return (item.status === 'added') && (r.includes('auto-synced') || r.includes('successfully pushed') || r.includes('already exists'));
         }
 
         function updateHistoryCounts() {
@@ -1197,25 +1236,44 @@
 
             container.innerHTML = '';
             items.forEach((item, idx) => {
+                const hasError = hasSyncError(item);
                 const isAdded = isItemAdded(item);
+                const isFullySynced = isItemFullySynced(item);
                 const dateStr = item.date ? new Date(item.date).toLocaleString() : 'Unknown Date';
                 const subject = item.subject || '(No Subject)';
                 const sender = item.sender ? item.sender : item.account;
-                const reasonText = item.reason || (isAdded ? 'Calendar events were detected and added.' : 'No calendar events or deadlines detected.');
+                const reasonText = item.reason || (isAdded ? 'Calendar events were detected.' : 'No calendar events or deadlines detected.');
                 const bodyText = item.body;
+                const hasEventsList = item.events && item.events.length > 0;
 
                 const card = document.createElement('div');
                 card.className = 'history-card';
                 card.id = `history-card-${idx}`;
                 card.onclick = (e) => toggleHistoryCard(idx, e);
 
-                const badgeHtml = isAdded 
-                    ? `<span class="history-badge badge-added">✓ Events Added</span>`
-                    : `<span class="history-badge badge-no-event">○ No Events Added</span>`;
+                let badgeHtml = '';
+                let reasonBoxClass = 'reason-box reason-box-no-event';
+                let reasonIcon = 'ℹ️';
+                let reasonTitle = 'Not on Google Calendar';
 
-                const reasonBoxClass = isAdded ? 'reason-box reason-box-added' : 'reason-box reason-box-no-event';
-                const reasonIcon = isAdded ? '🟢' : 'ℹ️';
-                const reasonTitle = isAdded ? 'Events Added to Calendar' : 'Not Added to Calendar';
+                if (isFullySynced) {
+                    badgeHtml = '<span class="history-badge badge-added">✓ On Google Calendar</span>';
+                    reasonBoxClass = 'reason-box reason-box-added';
+                    reasonIcon = '🟢';
+                    reasonTitle = 'Synced to Google Calendar';
+                } else if (hasError) {
+                    badgeHtml = '<span class="history-badge badge-warning">⚠️ Sync Notice / Pending</span>';
+                    reasonBoxClass = 'reason-box reason-box-error';
+                    reasonIcon = '⚠️';
+                    reasonTitle = 'Calendar Sync Notice / Error';
+                } else if (isAdded) {
+                    badgeHtml = '<span class="history-badge badge-warning">⏳ Ready to Push</span>';
+                    reasonBoxClass = 'reason-box reason-box-error';
+                    reasonIcon = '⏳';
+                    reasonTitle = 'Event Detected (Not Yet Synced)';
+                } else {
+                    badgeHtml = '<span class="history-badge badge-no-event">○ No Events</span>';
+                }
 
                 const emailBodyHtml = formatEmailBodyHtml(bodyText);
 
@@ -1238,7 +1296,7 @@
                                     <span><strong>UID:</strong>&nbsp;${escapeHtml(item.id)}</span>
                                 </div>
                                 <div class="history-reason-preview">
-                                    <span style="font-weight: 600; color: #60a5fa; flex-shrink: 0;">AI Reason:</span>
+                                    <span style="font-weight: 600; color: ${hasError ? '#fbbf24' : '#60a5fa'}; flex-shrink: 0;">AI Reason:</span>
                                     <span style="color: #cbd5e1;">${escapeHtml(reasonText)}</span>
                                 </div>
                                 <div class="history-expand-indicator">
@@ -1247,7 +1305,12 @@
                                 </div>
                             </div>
                         </div>
-                        <button class="remove-btn" style="margin: 0; flex-shrink: 0;" onclick="event.stopPropagation(); deleteHistoryItem('${escapeHtml(item.account)}', '${escapeHtml(item.id)}')">Delete Memory</button>
+                        <div style="display: flex; gap: 6px; align-items: center; flex-shrink: 0; flex-wrap: wrap;">
+                            <button class="add-btn" id="sync-history-btn-${idx}" style="margin: 0; padding: 7px 14px; font-size: 13px; font-weight: 600; background: ${isFullySynced ? '#059669' : '#2563eb'};" onclick="event.stopPropagation(); syncHistoryItem('${escapeHtml(item.account)}', '${escapeHtml(item.id)}', ${idx})">
+                                ${isFullySynced ? '🔄 Re-Push' : '⚡ Push to Calendar'}
+                            </button>
+                            <button class="remove-btn" style="margin: 0; padding: 7px 12px; font-size: 13px;" onclick="event.stopPropagation(); deleteHistoryItem('${escapeHtml(item.account)}', '${escapeHtml(item.id)}')">Delete Memory</button>
+                        </div>
                     </div>
 
                     <div class="history-details" id="history-details-${idx}" onclick="event.stopPropagation()">
@@ -1257,10 +1320,43 @@
                                 <span>${reasonIcon}</span>
                                 <span>${reasonTitle}</span>
                             </div>
-                            <div style="margin-top: 4px; font-size: 13.5px;">
+                            <div style="margin-top: 4px; font-size: 13.5px; line-height: 1.6;">
                                 <strong>Reason / Details:</strong> ${escapeHtml(reasonText)}
                             </div>
+                            ${!isFullySynced ? `
+                                <div style="margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                                    <span style="font-size: 13px; color: #fbbf24;">⚠️ Failed to push or pending calendar sync.</span>
+                                    <button class="add-btn" style="margin: 0; padding: 8px 18px; font-size: 13.5px; background: #2563eb;" onclick="event.stopPropagation(); syncHistoryItem('${escapeHtml(item.account)}', '${escapeHtml(item.id)}', ${idx})">
+                                        ⚡ Push Event to Google Calendar Now
+                                    </button>
+                                </div>
+                            ` : ''}
                         </div>
+
+                        <!-- Detected Events List (if available) -->
+                        ${hasEventsList ? `
+                            <div style="margin-bottom: 18px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 14px 16px;">
+                                <div style="font-weight: 700; color: #fff; font-size: 14px; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+                                    <span>📅</span> Extracted Calendar Event(s)
+                                </div>
+                                ${item.events.map(ev => {
+                                    const evDateStr = ev.date ? new Date(ev.date).toLocaleString() : 'No Date';
+                                    const isEvAdded = ev.status === 'added';
+                                    return `
+                                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 13.5px; flex-wrap: wrap; gap: 8px;">
+                                            <div>
+                                                <strong style="color: #60a5fa;">${escapeHtml(ev.title)}</strong>
+                                                <span style="color: #94a3b8; margin-left: 8px;">(${escapeHtml(evDateStr)})</span>
+                                                ${ev.location ? `<span style="color: #64748b; margin-left: 8px;">📍 ${escapeHtml(ev.location)}</span>` : ''}
+                                            </div>
+                                            <div>
+                                                ${isEvAdded ? '<span style="color: #34d399; font-weight: 700; font-size: 12px; background: rgba(16,185,129,0.15); padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(16,185,129,0.3);">✓ On Calendar</span>' : '<span style="color: #fbbf24; font-weight: 700; font-size: 12px; background: rgba(245,158,11,0.15); padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(245,158,11,0.3);">⏳ Pending Push</span>'}
+                                            </div>
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        ` : ''}
 
                         <!-- Full Email Message Box -->
                         <div class="email-viewer">
@@ -1323,6 +1419,71 @@
         function toggleSelectAll(className) {
             const isChecked = event.target.checked;
             document.querySelectorAll('.' + className).forEach(cb => cb.checked = isChecked);
+        }
+
+        async function syncHistoryItem(account, uid, idx) {
+            const btn = document.getElementById(`sync-history-btn-${idx}`);
+            const origHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.innerHTML = "⏳ Pushing...";
+                btn.disabled = true;
+            }
+            
+            try {
+                const response = await fetch(`/api/history/${encodeURIComponent(account)}/${encodeURIComponent(uid)}/sync`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.detail || data.error || "Failed to push event to Google Calendar.");
+                }
+                
+                let msg = `✓ Successfully pushed to Google Calendar!`;
+                if (data.already_exists && data.synced === 0) {
+                    msg = `ℹ️ Event is already on your Google Calendar!`;
+                }
+                if (data.errors && data.errors.length > 0) {
+                    msg += `\nWarnings: ${data.errors.join("; ")}`;
+                }
+                alert(msg);
+                loadHistory();
+            } catch(err) {
+                alert("Calendar Push Notice: " + err.message);
+                if (btn) {
+                    btn.innerHTML = origHtml;
+                    btn.disabled = false;
+                }
+            }
+        }
+
+        async function bulkSyncHistory() {
+            const selected = Array.from(document.querySelectorAll('.history-checkbox:checked')).map(cb => JSON.parse(cb.value));
+            if (selected.length === 0) return alert("No history items selected. Please check one or more emails first.");
+            
+            if (!confirm(`Push calendar events from ${selected.length} selected email(s) to Google Calendar?`)) return;
+            
+            try {
+                const response = await fetch('/api/history/bulk_sync', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ items: selected })
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.detail || data.error || "Failed to push events.");
+                }
+                
+                let msg = `✓ Successfully pushed ${data.synced || 0} event(s) to Google Calendar!`;
+                if (data.errors && data.errors.length > 0) {
+                    msg += `\n\nNotices / Warnings:\n` + data.errors.join("\n");
+                }
+                alert(msg);
+                const selAll = document.getElementById('selectAllHistory');
+                if (selAll) selAll.checked = false;
+                loadHistory();
+            } catch(err) {
+                alert("Bulk Calendar Push Failed: " + err.message);
+            }
         }
 
         async function bulkDeleteHistory() {

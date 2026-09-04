@@ -131,6 +131,11 @@ def init_db():
     except sqlite3.OperationalError:
         pass # Column already exists
         
+    try:
+        c.execute("ALTER TABLE events ADD COLUMN email_id TEXT")
+    except sqlite3.OperationalError:
+        pass # Column already exists
+        
     c.execute('''CREATE TABLE IF NOT EXISTS grocery_stores (
                     id TEXT PRIMARY KEY,
                     user_id TEXT,
@@ -475,9 +480,28 @@ async def get_history(user_id: str = Depends(verify_auth)):
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
     c.execute("SELECT id, account, subject, date, body, sender, reason, status FROM processed_emails_v2 WHERE user_id=? ORDER BY date DESC LIMIT 100", (user_id,))
-    rows = c.fetchall()
+    history_rows = [dict(r) for r in c.fetchall()]
+    
+    # Fetch user events to associate with history entries
+    c.execute("SELECT id, email_id, account, title, date, description, location, status FROM events WHERE user_id=?", (user_id,))
+    all_events = [dict(r) for r in c.fetchall()]
     conn.close()
-    return [dict(r) for r in rows]
+    
+    events_by_key = {}
+    for ev in all_events:
+        eid = ev.get("email_id")
+        acc = ev.get("account")
+        if eid and acc:
+            key = f"{acc}_{eid}"
+            if key not in events_by_key:
+                events_by_key[key] = []
+            events_by_key[key].append(ev)
+            
+    for item in history_rows:
+        key = f"{item['account']}_{item['id']}"
+        item["events"] = events_by_key.get(key, [])
+        
+    return history_rows
 
 @app.delete("/api/history/{account}/{uid}", dependencies=[Depends(verify_auth)])
 async def delete_history_item(account: str, uid: str, user_id: str = Depends(verify_auth)):
@@ -895,8 +919,8 @@ async def process_user_emails(user_id: str):
                                 sync_details = []
                                 for event_data in event_data_list:
                                     event_id = str(uuid.uuid4())
-                                    c.execute("INSERT INTO events (id, user_id, account, title, date, description, location, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')", 
-                                              (event_id, user_id, email_user, 
+                                    c.execute("INSERT INTO events (id, user_id, account, email_id, title, date, description, location, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')", 
+                                              (event_id, user_id, email_user, msg.uid,
                                                event_data.get("title", "Untitled"),
                                                event_data.get("date", ""),
                                                event_data.get("description", ""),
@@ -1211,6 +1235,194 @@ async def bulk_dismiss_events(req: BulkEventAction, user_id: str = Depends(verif
     conn.commit()
     conn.close()
     return {"status": "success"}
+
+class BulkHistorySync(BaseModel):
+    items: List[dict]
+
+@app.post("/api/history/{account}/{uid}/sync", dependencies=[Depends(verify_auth)])
+async def sync_history_email(account: str, uid: str, user_id: str = Depends(verify_auth)):
+    token_file = os.path.join(DATA_DIR, f"token_{user_id}.json")
+    if not os.path.exists(token_file):
+        raise HTTPException(status_code=400, detail="Google Calendar not connected. Please connect your Google account in Settings.")
+        
+    try:
+        creds = Credentials.from_authorized_user_file(token_file, SCOPES)
+        service = build('calendar', 'v3', credentials=creds)
+    except Exception as e:
+        err_str = str(e)
+        if "invalid_grant" in err_str:
+            raise HTTPException(status_code=400, detail="Google Calendar token has expired or was revoked. Please reconnect Google Calendar in Settings.")
+        raise HTTPException(status_code=500, detail=f"Failed to authenticate with Google: {err_str}")
+        
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    
+    # Check for existing events linked to this email
+    c.execute("SELECT id, title, date, description, location, status FROM events WHERE user_id=? AND account=? AND email_id=?", (user_id, account, uid))
+    event_rows = [dict(r) for r in c.fetchall()]
+    
+    # If none found by email_id, check processed_emails_v2 and extract
+    if not event_rows:
+        c.execute("SELECT subject, date, body, sender FROM processed_emails_v2 WHERE user_id=? AND account=? AND id=?", (user_id, account, uid))
+        email_row = c.fetchone()
+        if not email_row:
+            conn.close()
+            raise HTTPException(status_code=404, detail="Email record not found in history.")
+            
+        c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
+        s_row = c.fetchone()
+        settings = json.loads(s_row['settings']) if s_row and s_row['settings'] else {}
+        
+        email_date = None
+        if email_row["date"]:
+            try: email_date = datetime.fromisoformat(email_row["date"])
+            except Exception: pass
+            
+        ai_result = extract_event(email_row["body"] or email_row["subject"], email_date, email_row["subject"] or "", settings)
+        extracted = ai_result.get("events", [])
+        if not extracted:
+            conn.close()
+            raise HTTPException(status_code=400, detail=f"No calendar events detected in this email: {ai_result.get('reason', '')}")
+            
+        for ed in extracted:
+            eid = str(uuid.uuid4())
+            c.execute("INSERT INTO events (id, user_id, account, email_id, title, date, description, location, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
+                      (eid, user_id, account, uid, ed.get("title", "Untitled"), ed.get("date", ""), ed.get("description", ""), ed.get("location", "")))
+            event_rows.append({
+                "id": eid,
+                "title": ed.get("title", "Untitled"),
+                "date": ed.get("date", ""),
+                "description": ed.get("description", ""),
+                "location": ed.get("location", ""),
+                "status": "pending"
+            })
+        conn.commit()
+        
+    synced_count = 0
+    already_on_cal = 0
+    errors = []
+    for ev in event_rows:
+        try:
+            res = push_event_to_gcal(service, ev["title"], ev["description"], ev["date"], ev.get("location", ""))
+            c.execute("UPDATE events SET status='added' WHERE id=?", (ev["id"],))
+            if res.get("status") == "already_exists":
+                already_on_cal += 1
+            else:
+                synced_count += 1
+        except Exception as pe:
+            err_str = str(pe)
+            if "invalid_grant" in err_str:
+                conn.commit()
+                conn.close()
+                raise HTTPException(status_code=400, detail="Google Calendar token has expired or was revoked. Please reconnect Google Calendar in Settings.")
+            errors.append(f"Could not sync '{ev['title']}': {err_str}")
+            
+    now_str = datetime.now().strftime("%b %d, %I:%M %p")
+    if synced_count > 0:
+        new_reason = f"Successfully pushed {synced_count} event(s) to Google Calendar on {now_str}."
+    elif already_on_cal > 0:
+        new_reason = f"Event already exists on Google Calendar (verified on {now_str})."
+    else:
+        new_reason = f"Sync attempted on {now_str}."
+        
+    if errors:
+        new_reason += f" (Warnings: {'; '.join(errors)})"
+        
+    c.execute("UPDATE processed_emails_v2 SET status='added', reason=? WHERE user_id=? AND account=? AND id=?", (new_reason, user_id, account, uid))
+    conn.commit()
+    conn.close()
+    
+    return {
+        "status": "success",
+        "synced": synced_count,
+        "already_exists": already_on_cal,
+        "errors": errors,
+        "reason": new_reason
+    }
+
+@app.post("/api/history/bulk_sync", dependencies=[Depends(verify_auth)])
+async def bulk_sync_history(req: BulkHistorySync, user_id: str = Depends(verify_auth)):
+    if not req.items:
+        return {"status": "success", "synced": 0}
+        
+    token_file = os.path.join(DATA_DIR, f"token_{user_id}.json")
+    if not os.path.exists(token_file):
+        raise HTTPException(status_code=400, detail="Google Calendar not connected. Please connect in Settings.")
+        
+    try:
+        creds = Credentials.from_authorized_user_file(token_file, SCOPES)
+        service = build('calendar', 'v3', credentials=creds)
+    except Exception as e:
+        err_str = str(e)
+        if "invalid_grant" in err_str:
+            raise HTTPException(status_code=400, detail="Google Calendar token has expired or was revoked. Please reconnect Google Calendar in Settings.")
+        raise HTTPException(status_code=500, detail=f"Failed to authenticate with Google: {err_str}")
+        
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    
+    c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
+    s_row = c.fetchone()
+    settings = json.loads(s_row['settings']) if s_row and s_row['settings'] else {}
+    
+    total_synced = 0
+    all_errors = []
+    
+    for item in req.items:
+        acc = item.get("account")
+        uid = item.get("id")
+        if not acc or not uid:
+            continue
+            
+        c.execute("SELECT id, title, date, description, location, status FROM events WHERE user_id=? AND account=? AND email_id=?", (user_id, acc, uid))
+        event_rows = [dict(r) for r in c.fetchall()]
+        
+        if not event_rows:
+            c.execute("SELECT subject, date, body, sender FROM processed_emails_v2 WHERE user_id=? AND account=? AND id=?", (user_id, acc, uid))
+            email_row = c.fetchone()
+            if not email_row:
+                continue
+                
+            email_date = None
+            if email_row["date"]:
+                try: email_date = datetime.fromisoformat(email_row["date"])
+                except Exception: pass
+                
+            try:
+                ai_result = extract_event(email_row["body"] or email_row["subject"], email_date, email_row["subject"] or "", settings)
+                for ed in ai_result.get("events", []):
+                    eid = str(uuid.uuid4())
+                    c.execute("INSERT INTO events (id, user_id, account, email_id, title, date, description, location, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
+                              (eid, user_id, acc, uid, ed.get("title", "Untitled"), ed.get("date", ""), ed.get("description", ""), ed.get("location", "")))
+                    event_rows.append({"id": eid, "title": ed.get("title", "Untitled"), "date": ed.get("date", ""), "description": ed.get("description", ""), "location": ed.get("location", "")})
+            except Exception as ex:
+                all_errors.append(f"AI parse error on email {uid}: {ex}")
+                continue
+                
+        synced_this = 0
+        for ev in event_rows:
+            try:
+                res = push_event_to_gcal(service, ev["title"], ev["description"], ev["date"], ev.get("location", ""))
+                c.execute("UPDATE events SET status='added' WHERE id=?", (ev["id"],))
+                total_synced += 1
+                synced_this += 1
+            except Exception as pe:
+                err_str = str(pe)
+                if "invalid_grant" in err_str:
+                    conn.commit()
+                    conn.close()
+                    raise HTTPException(status_code=400, detail="Google Calendar token has expired or was revoked. Please reconnect Google Calendar in Settings.")
+                all_errors.append(f"Failed to sync '{ev['title']}': {err_str}")
+                
+        now_str = datetime.now().strftime("%b %d, %I:%M %p")
+        new_reason = f"Pushed {synced_this} event(s) to Google Calendar on {now_str}."
+        c.execute("UPDATE processed_emails_v2 SET status='added', reason=? WHERE user_id=? AND account=? AND id=?", (new_reason, user_id, acc, uid))
+        
+    conn.commit()
+    conn.close()
+    return {"status": "success", "synced": total_synced, "errors": all_errors}
 
 @app.get("/api/logs", dependencies=[Depends(verify_auth)])
 async def get_logs():

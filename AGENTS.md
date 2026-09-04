@@ -211,6 +211,8 @@ All tables are initialized and automatically migrated on startup in `init_db()` 
 | `POST` | `/api/events/bulk_dismiss`| Bulk dismiss events | Yes |
 | `GET` | `/api/fetch_emails` | Trigger manual email fetching & AI parsing | Yes |
 | `GET` | `/api/history` | Retrieve up to 100 processed email records | Yes |
+| `POST` | `/api/history/{account}/{uid}/sync` | Push specific email event(s) to Google Calendar | Yes |
+| `POST` | `/api/history/bulk_sync` | Bulk push selected history email events to Google Calendar | Yes |
 | `DELETE` | `/api/history/{account}/{uid}` | Remove specific email from memory | Yes |
 | `POST` | `/api/history/bulk_delete` | Bulk remove emails from memory | Yes |
 | `DELETE` | `/api/settings/reset_history` | Wipe all email processing memory | Yes |
