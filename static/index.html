@@ -325,7 +325,98 @@
             word-wrap: break-word;
             border: 1px solid #30363d;
             box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);
-            line-height: 1.4;
+        /* Grocery & Deals Styles */
+        .prompt-suggestion {
+            display: inline-block;
+            background: #21262d;
+            border: 1px solid #30363d;
+            color: #cbd5e1;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12.5px;
+            cursor: pointer;
+            transition: all 0.2s;
+            user-select: none;
+        }
+        .prompt-suggestion:hover {
+            background: #30363d;
+            color: #fff;
+            border-color: #60a5fa;
+            transform: translateY(-1px);
+        }
+        .store-pill {
+            display: inline-flex;
+            align-items: center;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11.5px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        .store-pill-heb { background: rgba(225, 29, 72, 0.2); color: #fb7185; border: 1px solid rgba(225, 29, 72, 0.4); }
+        .store-pill-kroger { background: rgba(37, 99, 235, 0.2); color: #60a5fa; border: 1px solid rgba(37, 99, 235, 0.4); }
+        .store-pill-tom-thumb { background: rgba(8, 145, 178, 0.2); color: #38bdf8; border: 1px solid rgba(8, 145, 178, 0.4); }
+        .store-pill-costco { background: rgba(185, 28, 28, 0.2); color: #f87171; border: 1px solid rgba(185, 28, 28, 0.4); }
+        .store-pill-sprouts { background: rgba(5, 150, 105, 0.2); color: #34d399; border: 1px solid rgba(5, 150, 105, 0.4); }
+        .store-pill-whole-foods { background: rgba(4, 120, 87, 0.2); color: #6ee7b7; border: 1px solid rgba(4, 120, 87, 0.4); }
+        .store-pill-walmart { background: rgba(217, 119, 6, 0.2); color: #fbbf24; border: 1px solid rgba(217, 119, 6, 0.4); }
+        .store-pill-aldi { background: rgba(29, 78, 216, 0.2); color: #93c5fd; border: 1px solid rgba(29, 78, 216, 0.4); }
+        .store-pill-trader-joes, .store-pill-trader-joe { background: rgba(194, 65, 12, 0.2); color: #fdba74; border: 1px solid rgba(194, 65, 12, 0.4); }
+        .store-pill-any { background: rgba(100, 116, 139, 0.2); color: #cbd5e1; border: 1px solid rgba(100, 116, 139, 0.4); }
+
+        .price-pill {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            font-weight: 600;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            border-radius: 4px;
+            padding: 2px 7px;
+            font-size: 12px;
+        }
+
+        .category-pill {
+            background: rgba(148, 163, 184, 0.12);
+            color: #94a3b8;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-size: 11.5px;
+        }
+
+        .grocery-item-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+            background: #161b22;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            margin-bottom: 8px;
+            transition: all 0.15s ease;
+        }
+        .grocery-item-row:hover {
+            background: #1c2128;
+            border-color: #3b82f6;
+        }
+        .grocery-item-row.checked {
+            opacity: 0.55;
+            background: rgba(22, 27, 34, 0.5);
+        }
+        .grocery-item-row.checked .grocery-item-title {
+            text-decoration: line-through;
+            color: #8b949e;
+        }
+
+        .store-card {
+            background: #161b22;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 18px;
+            transition: all 0.2s ease;
+        }
+        .store-card:hover {
+            border-color: #3b82f6;
         }
     </style>
 </head>
@@ -349,6 +440,7 @@
             <div class="nav-left">
                 <button class="tab-link active" onclick="openTab('dashboard', event)">Dashboard</button>
                 <button class="tab-link" onclick="openTab('history', event)">History</button>
+                <button class="tab-link" onclick="openTab('groceries', event)">🛒 Deals &amp; Groceries</button>
                 <button class="tab-link" onclick="openTab('settings', event)">Settings</button>
                 <button class="tab-link" onclick="openTab('users', event)">Users</button>
                 <button class="tab-link" onclick="openTab('logs', event)">Logs</button>
@@ -408,6 +500,236 @@
                 </div>
                 <div id="history-container">
                     Loading history...
+                </div>
+            </div>
+
+            <!-- Groceries & Deals View -->
+            <div id="groceries" class="view">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 20px;">
+                    <div>
+                        <h1 style="margin: 0 0 5px 0;">🛒 Local Deals &amp; Smart Groceries</h1>
+                        <p style="color: #ccc; margin: 0;">Compare prices across Kroger, HEB, Tom Thumb, Costco, Sprouts, Whole Foods, and Walmart, and build smart grocery lists.</p>
+                    </div>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button class="filter-chip active" id="groc-tab-deals" onclick="switchGrocerySubTab('deals')">🔍 Deal &amp; Price Finder</button>
+                        <button class="filter-chip" id="groc-tab-lists" onclick="switchGrocerySubTab('lists')">📝 My Grocery Lists</button>
+                        <button class="filter-chip" id="groc-tab-stores" onclick="switchGrocerySubTab('stores')">🏪 Store Ads &amp; Circulars</button>
+                    </div>
+                </div>
+
+                <div id="groceries-msg"></div>
+
+                <!-- SUB-SECTION 1: AI Deal & Price Finder -->
+                <div id="grocery-section-deals" class="grocery-sub-section">
+                    <div class="account-box" style="margin-bottom: 25px;">
+                        <h3 style="margin-top: 0; margin-bottom: 8px; color: #fff; display: flex; align-items: center; gap: 8px;">
+                            <span>✨</span> Ask AI to Find Best Prices &amp; Deals
+                        </h3>
+                        <p style="color: #aaa; font-size: 13.5px; margin-top: 0; margin-bottom: 14px;">
+                            Prompt the AI to search across your configured local weekly ads, compare unit prices, and suggest where to buy.
+                        </p>
+                        
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 15px;">
+                            <span style="font-size: 12.5px; color: #888; align-self: center;">Quick Prompts:</span>
+                            <span class="prompt-suggestion" onclick="setDealPrompt('Where can I get the best prices on ribeye steak, chicken breast, eggs, and avocados this week?')">🥩 Meat &amp; Produce Best Prices</span>
+                            <span class="prompt-suggestion" onclick="setDealPrompt('Compare organic milk, butter, cage-free eggs, and sourdough across HEB, Sprouts, and Whole Foods')">🥛 Organic &amp; Dairy Comparison</span>
+                            <span class="prompt-suggestion" onclick="setDealPrompt('What are the top 10 best discount deals across all my stores this week?')">🔥 Top 10 Weekly Sales</span>
+                            <span class="prompt-suggestion" onclick="setDealPrompt('Plan a healthy high-protein meal prep grocery list under $75 using sale items')">🥗 Budget Meal Prep Plan</span>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <textarea id="deal-search-query" rows="3" placeholder="e.g. Find the best price for ground beef 80/20, honeycrisp apples, paper towels, and coffee beans across HEB, Kroger, and Costco..." style="width: 100%; box-sizing: border-box; font-size: 14px;"></textarea>
+                        </div>
+
+                        <div style="display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 10px;">
+                            <button class="save-btn" id="deal-search-btn" onclick="runDealQuery()" style="margin: 0; padding: 12px 24px; font-size: 15px; background: #2563eb;">
+                                🔍 Find Best Prices &amp; Deals
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Deal Search Result Card -->
+                    <div id="deal-results-container" style="display: none;">
+                        <div class="account-box" style="border-left: 4px solid #3b82f6; margin-bottom: 25px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 15px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
+                                <h3 style="margin: 0; color: #60a5fa; display: flex; align-items: center; gap: 8px;">
+                                    <span>🧠</span> AI Price Analysis &amp; Shopping Strategy
+                                </h3>
+                                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                                    <label for="deal-target-list" style="font-size: 13px; color: #aaa;">Add to list:</label>
+                                    <select id="deal-target-list" style="padding: 6px 10px; font-size: 13px; border-radius: 4px; background: var(--input-bg); color: #fff; border: 1px solid var(--border-color);"></select>
+                                    <button class="add-btn" id="add-all-deals-btn" onclick="addAllRecommendedDealsToList()" style="margin: 0; padding: 7px 14px; font-size: 13px; background: #10b981;">➕ Add All Items to List</button>
+                                </div>
+                            </div>
+                            
+                            <div id="deal-analysis-markdown" style="font-size: 14px; line-height: 1.65; color: #e2e8f0; margin-bottom: 20px; white-space: pre-wrap; word-break: break-word;"></div>
+
+                            <div id="deal-recommended-items-section" style="display: none; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 16px;">
+                                <h4 style="margin: 0 0 12px 0; color: #fff; font-size: 14px;">🛍️ Recommended Items to Add:</h4>
+                                <div id="deal-recommended-items-list" style="display: grid; gap: 8px;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SUB-SECTION 2: My Grocery Lists -->
+                <div id="grocery-section-lists" class="grocery-sub-section" style="display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; background: rgba(255,255,255,0.02); padding: 14px 18px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                            <label style="color: #bbb; font-weight: 600; font-size: 14px;">Current List:</label>
+                            <select id="active-grocery-list-select" onchange="onActiveListChange()" style="padding: 8px 14px; font-size: 14px; border-radius: var(--radius-sm); background: var(--input-bg); color: #fff; border: 1px solid var(--border-color); min-width: 180px; font-weight: 600;"></select>
+                            <button class="add-btn" onclick="promptCreateNewList()" style="margin: 0; padding: 8px 14px; font-size: 13px;">+ New List</button>
+                            <button class="remove-btn" onclick="deleteCurrentList()" style="margin: 0; padding: 8px 12px; font-size: 13px;">🗑️ Delete</button>
+                        </div>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <button class="add-btn" onclick="openAIGenerateListModal()" style="margin: 0; padding: 8px 14px; font-size: 13px; background: #8b5cf6;">🤖 Generate with AI</button>
+                            <button class="copy-btn" onclick="copyGroceryListToClipboard()" style="padding: 8px 14px; font-size: 13px;">📋 Copy Text List</button>
+                            <button class="remove-btn" onclick="clearCheckedGroceryItems()" style="margin: 0; padding: 8px 14px; font-size: 13px; background: #374151; color: #e5e7eb;">🧹 Clear Checked</button>
+                        </div>
+                    </div>
+
+                    <!-- Quick Add Item Form -->
+                    <div class="account-box" style="margin-bottom: 20px; padding: 16px 20px;">
+                        <h4 style="margin: 0 0 12px 0; color: #fff; font-size: 14px;">+ Quick Add Item</h4>
+                        <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1.2fr auto; gap: 10px; align-items: end;">
+                            <div>
+                                <label style="font-size: 12px; color: #888; display: block; margin-bottom: 4px;">Item Name</label>
+                                <input type="text" id="new-item-name" placeholder="e.g. Ribeye Steaks, Eggs, Milk" onkeypress="if(event.key === 'Enter') addSingleGroceryItem()" style="width: 100%; box-sizing: border-box; margin-bottom: 0;">
+                            </div>
+                            <div>
+                                <label style="font-size: 12px; color: #888; display: block; margin-bottom: 4px;">Store</label>
+                                <select id="new-item-store" style="width: 100%; box-sizing: border-box; margin-bottom: 0;">
+                                    <option value="Any">Any Store</option>
+                                    <option value="HEB">HEB</option>
+                                    <option value="Kroger">Kroger</option>
+                                    <option value="Tom Thumb">Tom Thumb</option>
+                                    <option value="Costco">Costco</option>
+                                    <option value="Sprouts">Sprouts</option>
+                                    <option value="Whole Foods">Whole Foods</option>
+                                    <option value="Walmart">Walmart</option>
+                                    <option value="Aldi">Aldi</option>
+                                    <option value="Trader Joe's">Trader Joe's</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="font-size: 12px; color: #888; display: block; margin-bottom: 4px;">Price / Notes</label>
+                                <input type="text" id="new-item-price" placeholder="e.g. $5.99/lb, BOGO" onkeypress="if(event.key === 'Enter') addSingleGroceryItem()" style="width: 100%; box-sizing: border-box; margin-bottom: 0;">
+                            </div>
+                            <div>
+                                <label style="font-size: 12px; color: #888; display: block; margin-bottom: 4px;">Category</label>
+                                <select id="new-item-category" style="width: 100%; box-sizing: border-box; margin-bottom: 0;">
+                                    <option value="Produce">Produce</option>
+                                    <option value="Meat & Seafood">Meat &amp; Seafood</option>
+                                    <option value="Dairy & Eggs">Dairy &amp; Eggs</option>
+                                    <option value="Pantry & Dry Goods">Pantry &amp; Dry Goods</option>
+                                    <option value="Bakery & Deli">Bakery &amp; Deli</option>
+                                    <option value="Frozen">Frozen</option>
+                                    <option value="Beverages">Beverages</option>
+                                    <option value="Household & Personal">Household</option>
+                                    <option value="Snacks">Snacks</option>
+                                    <option value="General">General</option>
+                                </select>
+                            </div>
+                            <div>
+                                <button class="save-btn" onclick="addSingleGroceryItem()" style="margin: 0; padding: 10px 18px; font-size: 13.5px; height: 42px;">Add</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Items Display View Mode & List Container -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+                        <div style="font-size: 14px; color: #bbb;">
+                            Total Items: <strong id="grocery-total-count" style="color: #fff;">0</strong> &bull; Checked: <strong id="grocery-checked-count" style="color: #10b981;">0</strong>
+                        </div>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <span style="font-size: 12.5px; color: #888;">Group by:</span>
+                            <button class="filter-chip active" id="group-by-category" onclick="setGroceryGrouping('category')" style="padding: 4px 12px; font-size: 12px;">Category</button>
+                            <button class="filter-chip" id="group-by-store" onclick="setGroceryGrouping('store')" style="padding: 4px 12px; font-size: 12px;">Store</button>
+                        </div>
+                    </div>
+
+                    <div id="grocery-items-container">
+                        Loading grocery list...
+                    </div>
+                </div>
+
+                <!-- SUB-SECTION 3: Store Ads & Circulars -->
+                <div id="grocery-section-stores" class="grocery-sub-section" style="display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 20px;">
+                        <div>
+                            <h3 style="margin: 0 0 4px 0; color: #fff;">Configured Stores &amp; Weekly Ads</h3>
+                            <p style="color: #aaa; font-size: 13.5px; margin: 0;">Add your local store circular URLs to let AI extract weekly sales automatically.</p>
+                        </div>
+                        <button class="save-btn" onclick="scanAllStoreAds()" style="margin: 0; padding: 10px 18px; font-size: 13.5px; background: #2563eb;">🔄 Scan All Weekly Ads</button>
+                    </div>
+
+                    <!-- 1-Click Template Bar -->
+                    <div class="account-box" style="margin-bottom: 20px; background: rgba(59, 130, 246, 0.05); border-color: rgba(59, 130, 246, 0.2);">
+                        <h4 style="margin: 0 0 10px 0; color: #93c5fd; font-size: 13.5px;">⚡ Quick Add Popular Stores (1-Click Template)</h4>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <button class="add-btn" onclick="quickAddStore('HEB', 'https://www.heb.com/weekly-ads')" style="margin: 0; font-size: 12px; background: #e11d48;">+ HEB</button>
+                            <button class="add-btn" onclick="quickAddStore('Kroger', 'https://www.kroger.com/weeklyad')" style="margin: 0; font-size: 12px; background: #2563eb;">+ Kroger</button>
+                            <button class="add-btn" onclick="quickAddStore('Tom Thumb', 'https://www.tomthumb.com/weeklyad')" style="margin: 0; font-size: 12px; background: #0891b2;">+ Tom Thumb</button>
+                            <button class="add-btn" onclick="quickAddStore('Costco', 'https://www.costco.com/warehouse-savings.html')" style="margin: 0; font-size: 12px; background: #b91c1c;">+ Costco</button>
+                            <button class="add-btn" onclick="quickAddStore('Sprouts', 'https://www.sprouts.com/weekly-specials/')" style="margin: 0; font-size: 12px; background: #059669;">+ Sprouts</button>
+                            <button class="add-btn" onclick="quickAddStore('Whole Foods', 'https://www.wholefoodsmarket.com/sales-flyer')" style="margin: 0; font-size: 12px; background: #047857;">+ Whole Foods</button>
+                            <button class="add-btn" onclick="quickAddStore('Walmart', 'https://www.walmart.com/shop/deals')" style="margin: 0; font-size: 12px; background: #d97706;">+ Walmart</button>
+                            <button class="add-btn" onclick="quickAddStore('Aldi', 'https://www.aldi.us/weekly-specials/our-weekly-ads/')" style="margin: 0; font-size: 12px; background: #1d4ed8;">+ Aldi</button>
+                            <button class="add-btn" onclick="quickAddStore('Trader Joe\'s', 'https://www.traderjoes.com/home/discover/fearless-flyer')" style="margin: 0; font-size: 12px; background: #c2410c;">+ Trader Joe's</button>
+                        </div>
+                    </div>
+
+                    <!-- Custom Store Form -->
+                    <div class="account-box" style="margin-bottom: 25px;">
+                        <h4 style="margin: 0 0 12px 0; color: #fff;">+ Add Custom Store or Circular Link</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 2fr 1fr auto; gap: 10px; align-items: end;">
+                            <div>
+                                <label style="font-size: 12px; color: #888; display: block; margin-bottom: 4px;">Store Name</label>
+                                <input type="text" id="new-store-name" placeholder="e.g. Fiesta, Central Market" style="margin-bottom: 0;">
+                            </div>
+                            <div>
+                                <label style="font-size: 12px; color: #888; display: block; margin-bottom: 4px;">Weekly Ad / Deals URL</label>
+                                <input type="url" id="new-store-url" placeholder="https://store.com/weekly-ad" style="margin-bottom: 0;">
+                            </div>
+                            <div>
+                                <label style="font-size: 12px; color: #888; display: block; margin-bottom: 4px;">Notes (Optional)</label>
+                                <input type="text" id="new-store-notes" placeholder="e.g. Local store on Main St" style="margin-bottom: 0;">
+                            </div>
+                            <div>
+                                <button class="save-btn" onclick="saveCustomStore()" style="margin: 0; padding: 10px 18px; font-size: 13.5px; height: 42px;">Save Store</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Stores Grid -->
+                    <div id="stores-grid-container">
+                        Loading configured stores...
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Grocery List Modal -->
+            <div id="ai-list-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 999; justify-content: center; align-items: center;">
+                <div class="account-box" style="width: 90%; max-width: 540px; background: #161b22; border: 1px solid #30363d; border-radius: var(--radius-md); padding: 24px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+                    <h3 style="margin-top: 0; color: #a78bfa; display: flex; align-items: center; gap: 8px;">
+                        <span>🤖</span> Generate Smart Grocery List with AI
+                    </h3>
+                    <p style="color: #aaa; font-size: 13.5px; margin-bottom: 15px;">
+                        Enter a recipe, meal idea, dietary goal, or party plan. AI will generate ingredients and tag matching store sales.
+                    </p>
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label style="font-size: 13px; color: #ccc;">List Name</label>
+                        <input type="text" id="ai-modal-list-title" placeholder="e.g. Keto Meal Prep, Summer BBQ, Weekly Essentials" style="width: 100%; box-sizing: border-box;">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 20px;">
+                        <label style="font-size: 13px; color: #ccc;">What are you making or planning?</label>
+                        <textarea id="ai-modal-prompt" rows="4" placeholder="e.g. 5 dinners for a family of 4 focusing on chicken, ground beef, fresh greens, and budget staples on sale..." style="width: 100%; box-sizing: border-box;"></textarea>
+                    </div>
+                    <div id="ai-modal-msg" style="margin-bottom: 10px;"></div>
+                    <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                        <button class="remove-btn" onclick="closeAIGenerateListModal()" style="margin: 0;">Cancel</button>
+                        <button class="save-btn" id="ai-modal-submit-btn" onclick="submitAIGenerateList()" style="margin: 0; background: #8b5cf6;">✨ Generate List</button>
+                    </div>
                 </div>
             </div>
 
@@ -747,6 +1069,8 @@
                 renderLocalEvents();
             } else if (tabName === 'history') {
                 loadHistory();
+            } else if (tabName === 'groceries') {
+                initGroceriesTab();
             } else if (tabName === 'settings') {
                 loadSettings();
             } else if (tabName === 'users') {
@@ -1792,6 +2116,686 @@
             } catch(e) {
                 if (e.message !== "Unauthorized") output.innerText = "Failed to fetch logs.";
             }
+        }
+
+        // =====================================================================
+        // --- GROCERY DEALS & SMART LISTS JAVASCRIPT ---
+        // =====================================================================
+        let currentGrocerySubTab = 'deals'; // 'deals', 'lists', 'stores'
+        let currentGroceryGrouping = 'category'; // 'category' or 'store'
+        let activeGroceryListId = null;
+        let allGroceryLists = [];
+        let allGroceryStores = [];
+        let latestRecommendedDeals = [];
+
+        function initGroceriesTab() {
+            loadGroceryStores();
+            loadGroceryLists().then(() => {
+                if (currentGrocerySubTab === 'lists') loadActiveListItems();
+            });
+        }
+
+        function switchGrocerySubTab(tab) {
+            currentGrocerySubTab = tab;
+            document.querySelectorAll('.grocery-sub-section').forEach(el => el.style.display = 'none');
+            document.querySelectorAll('#groceries .filter-chip').forEach(el => el.classList.remove('active'));
+            
+            const btn = document.getElementById(`groc-tab-${tab}`);
+            if (btn) btn.classList.add('active');
+            
+            const section = document.getElementById(`grocery-section-${tab}`);
+            if (section) section.style.display = 'block';
+
+            if (tab === 'lists') {
+                loadActiveListItems();
+            } else if (tab === 'stores') {
+                loadGroceryStores();
+            }
+        }
+
+        function setDealPrompt(text) {
+            const textarea = document.getElementById('deal-search-query');
+            if (textarea) {
+                textarea.value = text;
+                textarea.focus();
+            }
+        }
+
+        // --- Store Management ---
+        function getStorePillClass(storeName) {
+            const s = (storeName || '').toLowerCase().replace(/[^a-z0-9]/g, '-');
+            if (s.includes('heb')) return 'store-pill-heb';
+            if (s.includes('kroger')) return 'store-pill-kroger';
+            if (s.includes('tom-thumb') || s.includes('tomthumb') || s.includes('safeway') || s.includes('albertsons')) return 'store-pill-tom-thumb';
+            if (s.includes('costco')) return 'store-pill-costco';
+            if (s.includes('sprout')) return 'store-pill-sprouts';
+            if (s.includes('whole-food') || s.includes('wholefood')) return 'store-pill-whole-foods';
+            if (s.includes('walmart') || s.includes('wal-mart')) return 'store-pill-walmart';
+            if (s.includes('aldi')) return 'store-pill-aldi';
+            if (s.includes('trader-joe') || s.includes('traderjoe')) return 'store-pill-trader-joe';
+            return 'store-pill-any';
+        }
+
+        async function loadGroceryStores() {
+            const container = document.getElementById('stores-grid-container');
+            const toggleContainer = document.getElementById('deal-store-toggles');
+            const itemStoreSelect = document.getElementById('new-item-store');
+            
+            try {
+                const response = await fetch('/api/groceries/stores');
+                await handleApiError(response);
+                allGroceryStores = await response.json();
+                
+                // Populate Store Grid in Tab 3
+                if (container) {
+                    if (allGroceryStores.length === 0) {
+                        container.innerHTML = `
+                            <div style="color: #aaa; text-align: center; padding: 30px; border: 1px dashed var(--border-color); border-radius: var(--radius-md);">
+                                <h3 style="color: #fff; margin-top: 0;">No Stores Configured Yet</h3>
+                                <p>Click any of the quick-add buttons above (e.g. HEB, Kroger, Costco) or add a custom weekly ad URL to start comparing prices!</p>
+                            </div>
+                        `;
+                    } else {
+                        container.innerHTML = `
+                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;">
+                                ${allGroceryStores.map(store => {
+                                    const pillClass = getStorePillClass(store.name);
+                                    const scannedStr = store.last_scanned ? new Date(store.last_scanned).toLocaleString() : 'Never scanned';
+                                    const dealsCount = store.deals_count || 0;
+                                    return `
+                                        <div class="store-card">
+                                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+                                                <div>
+                                                    <span class="store-pill ${pillClass}" style="font-size: 13px; padding: 4px 10px;">${escapeHtml(store.name)}</span>
+                                                    ${store.notes ? `<div style="font-size: 12px; color: #888; margin-top: 4px;">${escapeHtml(store.notes)}</div>` : ''}
+                                                </div>
+                                                <button class="remove-btn" onclick="deleteGroceryStore('${store.id}')" style="margin: 0; padding: 4px 8px; font-size: 12px;">🗑️</button>
+                                            </div>
+                                            <div style="font-size: 12.5px; color: #94a3b8; margin-bottom: 12px; word-break: break-all;">
+                                                <a href="${escapeHtml(store.ad_url)}" target="_blank" rel="noopener noreferrer" style="color: #60a5fa; text-decoration: underline;">🔗 View Weekly Ad Flyer</a>
+                                            </div>
+                                            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #aaa; margin-bottom: 12px; background: rgba(0,0,0,0.25); padding: 8px 10px; border-radius: 4px;">
+                                                <span>🏷️ Deals: <strong style="color: #34d399;">${dealsCount}</strong></span>
+                                                <span>🕒 ${escapeHtml(scannedStr)}</span>
+                                            </div>
+                                            <button class="save-btn" onclick="scanGroceryStore('${store.id}', this)" style="width: 100%; margin: 0; padding: 8px 12px; font-size: 13px; background: #2563eb;">
+                                                🔄 Scan &amp; Extract Deals
+                                            </button>
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        `;
+                    }
+                }
+
+                // Update Deal Query Store Pills
+                if (toggleContainer) {
+                    if (allGroceryStores.length > 0) {
+                        toggleContainer.innerHTML = `
+                            <span style="color: #888; align-self: center;">Stores configured:</span>
+                            ${allGroceryStores.map(s => `<span class="store-pill ${getStorePillClass(s.name)}">${escapeHtml(s.name)}</span>`).join(' ')}
+                        `;
+                    } else {
+                        toggleContainer.innerHTML = `<span style="color: #888;">(No stores saved yet — click 'Store Ads' tab to add your local stores)</span>`;
+                    }
+                }
+
+                // Update Quick Add Item Store Dropdown
+                if (itemStoreSelect && allGroceryStores.length > 0) {
+                    const currentVal = itemStoreSelect.value;
+                    itemStoreSelect.innerHTML = `<option value="Any">Any Store</option>` + 
+                        allGroceryStores.map(s => `<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)}</option>`).join('');
+                    if (currentVal) itemStoreSelect.value = currentVal;
+                }
+
+            } catch(e) {
+                if (e.message !== "Unauthorized") console.error("Error loading grocery stores", e);
+            }
+        }
+
+        async function quickAddStore(name, url) {
+            try {
+                const response = await fetch('/api/groceries/stores', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name: name, ad_url: url, notes: "Weekly Circular"})
+                });
+                await handleApiError(response);
+                showGroceryMsg(`Added ${name} store!`, "success");
+                loadGroceryStores();
+            } catch(e) {
+                if (e.message !== "Unauthorized") alert(e.message || "Failed to add store.");
+            }
+        }
+
+        async function saveCustomStore() {
+            const nameInput = document.getElementById('new-store-name');
+            const urlInput = document.getElementById('new-store-url');
+            const notesInput = document.getElementById('new-store-notes');
+            
+            const name = nameInput.value.trim();
+            const url = urlInput.value.trim();
+            const notes = notesInput.value.trim();
+
+            if (!name || !url) {
+                return alert("Please enter both Store Name and Weekly Ad URL.");
+            }
+
+            try {
+                const response = await fetch('/api/groceries/stores', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name: name, ad_url: url, notes: notes})
+                });
+                await handleApiError(response);
+                nameInput.value = '';
+                urlInput.value = '';
+                notesInput.value = '';
+                showGroceryMsg(`Saved ${name} successfully!`, "success");
+                loadGroceryStores();
+            } catch(e) {
+                if (e.message !== "Unauthorized") alert(e.message || "Failed to save store.");
+            }
+        }
+
+        async function deleteGroceryStore(storeId) {
+            if (!confirm("Remove this store from your configured list?")) return;
+            try {
+                const response = await fetch(`/api/groceries/stores/${storeId}`, {method: 'DELETE'});
+                await handleApiError(response);
+                loadGroceryStores();
+            } catch(e) {
+                if (e.message !== "Unauthorized") alert("Failed to delete store.");
+            }
+        }
+
+        async function scanGroceryStore(storeId, btn) {
+            const orig = btn ? btn.innerText : '';
+            if (btn) btn.innerText = "Scanning with AI...";
+            try {
+                const response = await fetch(`/api/groceries/stores/${storeId}/scan`, {method: 'POST'});
+                await handleApiError(response);
+                const data = await response.json();
+                showGroceryMsg(`Extracted ${data.deals_found} weekly deals!`, "success");
+                loadGroceryStores();
+            } catch(e) {
+                if (e.message !== "Unauthorized") alert(e.message || "Failed to scan store ads. Verify the URL or check the Logs tab.");
+                if (btn) btn.innerText = orig;
+            }
+        }
+
+        async function scanAllStoreAds() {
+            const msgBox = document.getElementById('groceries-msg');
+            msgBox.innerHTML = '<span style="color: #60a5fa;">Scanning weekly ads across all stores with AI... Please wait!</span>';
+            try {
+                const response = await fetch('/api/groceries/stores/scan_all', {method: 'POST'});
+                await handleApiError(response);
+                const data = await response.json();
+                msgBox.innerHTML = '<div class="success">Completed scan across all stores!</div>';
+                loadGroceryStores();
+                setTimeout(() => msgBox.innerHTML = '', 4000);
+            } catch(e) {
+                if (e.message !== "Unauthorized") msgBox.innerHTML = `<div class="error">${e.message || 'Error scanning store ads.'}</div>`;
+            }
+        }
+
+        // --- AI Deal Finder & Comparison ---
+        async function runDealQuery() {
+            const queryInput = document.getElementById('deal-search-query');
+            const query = queryInput.value.trim();
+            if (!query) return alert("Please enter what items or prices you're looking for.");
+
+            const btn = document.getElementById('deal-search-btn');
+            const origText = btn.innerText;
+            btn.innerText = "Searching & Comparing Prices...";
+            btn.disabled = true;
+
+            const resultsContainer = document.getElementById('deal-results-container');
+            const mdContainer = document.getElementById('deal-analysis-markdown');
+            const recSection = document.getElementById('deal-recommended-items-section');
+            const recList = document.getElementById('deal-recommended-items-list');
+
+            resultsContainer.style.display = 'block';
+            mdContainer.innerHTML = '<span style="color: #f59e0b;">🤖 AI is comparing prices and analyzing deals across stores...</span>';
+            recSection.style.display = 'none';
+
+            try {
+                const response = await fetch('/api/groceries/query_deals', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({query: query})
+                });
+                await handleApiError(response);
+                const data = await response.json();
+
+                if (data.error) {
+                    mdContainer.innerHTML = `<div class="error">${escapeHtml(data.error)}</div>`;
+                    return;
+                }
+
+                // Render markdown text
+                let formattedMd = formatSimpleMarkdown(data.analysis_markdown || 'No analysis returned.');
+                mdContainer.innerHTML = formattedMd;
+
+                // Render recommended items
+                latestRecommendedDeals = data.items || [];
+                updateDealTargetListDropdown();
+
+                if (latestRecommendedDeals.length > 0) {
+                    recSection.style.display = 'block';
+                    recList.innerHTML = latestRecommendedDeals.map((item, idx) => `
+                        <div style="display: flex; justify-content: space-between; align-items: center; background: #161b22; padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); flex-wrap: wrap; gap: 8px;">
+                            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                <strong style="color: #fff;">${escapeHtml(item.item_name)}</strong>
+                                <span class="store-pill ${getStorePillClass(item.store_name)}">${escapeHtml(item.store_name)}</span>
+                                ${item.price_notes ? `<span class="price-pill">${escapeHtml(item.price_notes)}</span>` : ''}
+                                ${item.category ? `<span class="category-pill">${escapeHtml(item.category)}</span>` : ''}
+                            </div>
+                            <button class="add-btn" onclick="addSingleRecommendedDealToList(${idx}, this)" style="margin: 0; padding: 5px 12px; font-size: 12px; background: #2563eb;">+ Add to List</button>
+                        </div>
+                    `).join('');
+                } else {
+                    recSection.style.display = 'none';
+                }
+
+            } catch(e) {
+                if (e.message !== "Unauthorized") mdContainer.innerHTML = `<div class="error">${escapeHtml(e.message || 'Error running query. Ensure your AI API key is set in Settings.')}</div>`;
+            } finally {
+                btn.innerText = origText;
+                btn.disabled = false;
+            }
+        }
+
+        function formatSimpleMarkdown(mdText) {
+            let escaped = escapeHtml(mdText);
+            // Headers
+            escaped = escaped.replace(/^### (.*$)/gim, '<h3 style="color:#60a5fa; margin: 15px 0 8px 0;">$1</h3>');
+            escaped = escaped.replace(/^## (.*$)/gim, '<h2 style="color:#93c5fd; margin: 18px 0 10px 0;">$1</h2>');
+            escaped = escaped.replace(/^# (.*$)/gim, '<h1 style="color:#fff; margin: 20px 0 12px 0;">$1</h1>');
+            // Bold
+            escaped = escaped.replace(/\*\*(.*?)\*\*/g, '<strong style="color:#fff;">$1</strong>');
+            // Bullet points
+            escaped = escaped.replace(/^\s*-\s+(.*$)/gim, '<li style="margin-left: 20px; color:#e2e8f0;">$1</li>');
+            // Line breaks
+            escaped = escaped.replace(/\n/g, '<br>');
+            return escaped;
+        }
+
+        function updateDealTargetListDropdown() {
+            const select = document.getElementById('deal-target-list');
+            if (!select) return;
+            select.innerHTML = allGroceryLists.map(l => `<option value="${l.id}" ${l.id === activeGroceryListId ? 'selected' : ''}>${escapeHtml(l.title)}</option>`).join('');
+        }
+
+        async function addAllRecommendedDealsToList() {
+            if (!latestRecommendedDeals || latestRecommendedDeals.length === 0) return alert("No recommended items to add.");
+            const targetListId = document.getElementById('deal-target-list').value || activeGroceryListId;
+            if (!targetListId) return alert("Please select or create a grocery list first.");
+
+            const btn = document.getElementById('add-all-deals-btn');
+            const orig = btn.innerText;
+            btn.innerText = "Adding...";
+            try {
+                const response = await fetch(`/api/groceries/lists/${targetListId}/batch_items`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({list_id: targetListId, items: latestRecommendedDeals})
+                });
+                await handleApiError(response);
+                showGroceryMsg(`Added ${latestRecommendedDeals.length} items to your grocery list!`, "success");
+                btn.innerText = "✓ Added All!";
+                setTimeout(() => btn.innerText = orig, 2500);
+                if (currentGrocerySubTab === 'lists') loadActiveListItems();
+            } catch(e) {
+                if (e.message !== "Unauthorized") alert(e.message || "Failed to add items to grocery list.");
+                btn.innerText = orig;
+            }
+        }
+
+        async function addSingleRecommendedDealToList(idx, btn) {
+            const item = latestRecommendedDeals[idx];
+            if (!item) return;
+            const targetListId = document.getElementById('deal-target-list').value || activeGroceryListId;
+            if (!targetListId) return alert("Please select or create a grocery list first.");
+
+            const orig = btn.innerText;
+            btn.innerText = "Adding...";
+            try {
+                const response = await fetch(`/api/groceries/lists/${targetListId}/items`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        list_id: targetListId,
+                        item_name: item.item_name,
+                        store_name: item.store_name || "Any",
+                        price_notes: item.price_notes || "",
+                        category: item.category || "General"
+                    })
+                });
+                await handleApiError(response);
+                btn.innerText = "✓ Added";
+                btn.style.background = "#10b981";
+                if (currentGrocerySubTab === 'lists') loadActiveListItems();
+            } catch(e) {
+                if (e.message !== "Unauthorized") alert(e.message || "Failed to add item.");
+                btn.innerText = orig;
+            }
+        }
+
+        // --- Grocery Lists & Items ---
+        async function loadGroceryLists() {
+            const select = document.getElementById('active-grocery-list-select');
+            try {
+                const response = await fetch('/api/groceries/lists');
+                await handleApiError(response);
+                allGroceryLists = await response.json();
+                
+                if (select) {
+                    select.innerHTML = allGroceryLists.map(l => `<option value="${l.id}">${escapeHtml(l.title)}</option>`).join('');
+                    if (!activeGroceryListId && allGroceryLists.length > 0) {
+                        activeGroceryListId = allGroceryLists[0].id;
+                    }
+                    if (activeGroceryListId) {
+                        select.value = activeGroceryListId;
+                    }
+                }
+                updateDealTargetListDropdown();
+            } catch(e) {
+                if (e.message !== "Unauthorized") console.error("Error loading grocery lists", e);
+            }
+        }
+
+        function onActiveListChange() {
+            const select = document.getElementById('active-grocery-list-select');
+            if (select) {
+                activeGroceryListId = select.value;
+                loadActiveListItems();
+                updateDealTargetListDropdown();
+            }
+        }
+
+        async function promptCreateNewList() {
+            const name = prompt("Enter a name for your new grocery list:", "Weekly Groceries");
+            if (!name || !name.trim()) return;
+            try {
+                const response = await fetch('/api/groceries/lists', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({title: name.trim()})
+                });
+                await handleApiError(response);
+                const data = await response.json();
+                activeGroceryListId = data.id;
+                await loadGroceryLists();
+                loadActiveListItems();
+            } catch(e) {
+                if (e.message !== "Unauthorized") alert(e.message || "Failed to create list.");
+            }
+        }
+
+        async function deleteCurrentList() {
+            if (!activeGroceryListId) return;
+            const select = document.getElementById('active-grocery-list-select');
+            const listTitle = select.options[select.selectedIndex]?.text || 'this list';
+            if (!confirm(`Are you sure you want to delete "${listTitle}" and all its items?`)) return;
+
+            try {
+                const response = await fetch(`/api/groceries/lists/${activeGroceryListId}`, {method: 'DELETE'});
+                await handleApiError(response);
+                activeGroceryListId = null;
+                await loadGroceryLists();
+                loadActiveListItems();
+            } catch(e) {
+                if (e.message !== "Unauthorized") alert(e.message || "Failed to delete list.");
+            }
+        }
+
+        function setGroceryGrouping(mode) {
+            currentGroceryGrouping = mode;
+            document.getElementById('group-by-category').classList.toggle('active', mode === 'category');
+            document.getElementById('group-by-store').classList.toggle('active', mode === 'store');
+            loadActiveListItems();
+        }
+
+        async function loadActiveListItems() {
+            const container = document.getElementById('grocery-items-container');
+            const totalCountEl = document.getElementById('grocery-total-count');
+            const checkedCountEl = document.getElementById('grocery-checked-count');
+            
+            if (!activeGroceryListId) {
+                container.innerHTML = '<div style="color:#aaa; text-align:center; padding:30px;">No list selected. Create or select a list above.</div>';
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/groceries/lists/${activeGroceryListId}/items`);
+                await handleApiError(response);
+                const items = await response.json();
+
+                const total = items.length;
+                const checked = items.filter(i => i.is_checked === 1).length;
+                if (totalCountEl) totalCountEl.innerText = total;
+                if (checkedCountEl) checkedCountEl.innerText = checked;
+
+                if (items.length === 0) {
+                    container.innerHTML = `
+                        <div style="color: #aaa; text-align: center; padding: 35px; border: 1px dashed var(--border-color); border-radius: var(--radius-md);">
+                            <h3 style="color: #fff; margin-top: 0;">Your Grocery List is Empty</h3>
+                            <p>Add items using the quick form above, ask the Deal Finder for sale recommendations, or click <strong>🤖 Generate with AI</strong> to build a meal plan!</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                // Group items
+                const groups = {};
+                items.forEach(item => {
+                    const groupKey = currentGroceryGrouping === 'store' 
+                        ? (item.store_name || 'Any Store') 
+                        : (item.category || 'General');
+                    if (!groups[groupKey]) groups[groupKey] = [];
+                    groups[groupKey].push(item);
+                });
+
+                let html = '';
+                for (const [groupName, groupItems] of Object.entries(groups)) {
+                    html += `
+                        <div style="margin-bottom: 22px;">
+                            <h4 style="margin: 0 0 10px 0; color: #93c5fd; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px;">
+                                <span>${currentGroceryGrouping === 'store' ? '🏪' : '📂'}</span>
+                                <span>${escapeHtml(groupName)}</span>
+                                <span style="font-size: 12px; color: #888; font-weight: normal;">(${groupItems.length})</span>
+                            </h4>
+                            <div>
+                                ${groupItems.map(item => {
+                                    const isChecked = item.is_checked === 1;
+                                    const pillClass = getStorePillClass(item.store_name);
+                                    return `
+                                        <div class="grocery-item-row ${isChecked ? 'checked' : ''}" id="grocery-item-${item.id}">
+                                            <div style="display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0;">
+                                                <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleGroceryItemChecked('${item.id}', this.checked)" style="transform: scale(1.3); cursor: pointer; flex-shrink: 0;">
+                                                <div style="flex: 1; min-width: 0;">
+                                                    <span class="grocery-item-title" style="font-size: 14.5px; font-weight: 500; color: #fff;">${escapeHtml(item.item_name)}</span>
+                                                    <div style="display: flex; gap: 6px; align-items: center; margin-top: 4px; flex-wrap: wrap;">
+                                                        ${currentGroceryGrouping !== 'store' ? `<span class="store-pill ${pillClass}">${escapeHtml(item.store_name || 'Any')}</span>` : ''}
+                                                        ${currentGroceryGrouping !== 'category' && item.category ? `<span class="category-pill">${escapeHtml(item.category)}</span>` : ''}
+                                                        ${item.price_notes ? `<span class="price-pill">${escapeHtml(item.price_notes)}</span>` : ''}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <button class="remove-btn" onclick="deleteGroceryItem('${item.id}')" style="margin: 0; padding: 4px 8px; font-size: 12px; opacity: 0.75;">🗑️</button>
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+                container.innerHTML = html;
+
+            } catch(e) {
+                if (e.message !== "Unauthorized") container.innerHTML = '<div class="error">Failed to load grocery items.</div>';
+            }
+        }
+
+        async function addSingleGroceryItem() {
+            const nameInput = document.getElementById('new-item-name');
+            const storeInput = document.getElementById('new-item-store');
+            const priceInput = document.getElementById('new-item-price');
+            const catInput = document.getElementById('new-item-category');
+
+            const name = nameInput.value.trim();
+            if (!name) return alert("Please enter an item name.");
+            if (!activeGroceryListId) return alert("Please select or create a grocery list first.");
+
+            try {
+                const response = await fetch(`/api/groceries/lists/${activeGroceryListId}/items`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        list_id: activeGroceryListId,
+                        item_name: name,
+                        store_name: storeInput.value || "Any",
+                        price_notes: priceInput.value.trim() || "",
+                        category: catInput.value || "General"
+                    })
+                });
+                await handleApiError(response);
+                nameInput.value = '';
+                priceInput.value = '';
+                nameInput.focus();
+                loadActiveListItems();
+            } catch(e) {
+                if (e.message !== "Unauthorized") alert(e.message || "Failed to add item.");
+            }
+        }
+
+        async function toggleGroceryItemChecked(itemId, isChecked) {
+            const row = document.getElementById(`grocery-item-${itemId}`);
+            if (row) row.classList.toggle('checked', isChecked);
+            try {
+                const response = await fetch(`/api/groceries/items/${itemId}`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({is_checked: isChecked ? 1 : 0})
+                });
+                await handleApiError(response);
+                loadActiveListItems();
+            } catch(e) {
+                if (e.message !== "Unauthorized") console.error("Error toggling item", e);
+            }
+        }
+
+        async function deleteGroceryItem(itemId) {
+            try {
+                const response = await fetch(`/api/groceries/items/${itemId}`, {method: 'DELETE'});
+                await handleApiError(response);
+                loadActiveListItems();
+            } catch(e) {
+                if (e.message !== "Unauthorized") alert("Failed to delete item.");
+            }
+        }
+
+        async function clearCheckedGroceryItems() {
+            if (!activeGroceryListId) return;
+            if (!confirm("Clear all checked items from this list?")) return;
+            try {
+                const response = await fetch(`/api/groceries/lists/${activeGroceryListId}/clear_checked`, {method: 'POST'});
+                await handleApiError(response);
+                loadActiveListItems();
+            } catch(e) {
+                if (e.message !== "Unauthorized") alert("Failed to clear checked items.");
+            }
+        }
+
+        async function copyGroceryListToClipboard() {
+            if (!activeGroceryListId) return;
+            try {
+                const response = await fetch(`/api/groceries/lists/${activeGroceryListId}/items`);
+                await handleApiError(response);
+                const items = await response.json();
+                if (items.length === 0) return alert("List is empty.");
+
+                const select = document.getElementById('active-grocery-list-select');
+                const listTitle = select.options[select.selectedIndex]?.text || 'Grocery List';
+
+                let text = `🛒 ${listTitle}\n====================\n`;
+                items.forEach(item => {
+                    const check = item.is_checked === 1 ? '[x]' : '[ ]';
+                    const store = item.store_name && item.store_name !== 'Any' ? ` (@ ${item.store_name})` : '';
+                    const price = item.price_notes ? ` - ${item.price_notes}` : '';
+                    text += `${check} ${item.item_name}${store}${price}\n`;
+                });
+
+                navigator.clipboard.writeText(text).then(() => {
+                    alert("✓ Grocery list copied to clipboard!");
+                }).catch(err => {
+                    alert("Could not copy list: " + err);
+                });
+            } catch(e) {
+                if (e.message !== "Unauthorized") alert("Error copying list.");
+            }
+        }
+
+        // --- AI List Generation Modal ---
+        function openAIGenerateListModal() {
+            const modal = document.getElementById('ai-list-modal');
+            const titleInput = document.getElementById('ai-modal-list-title');
+            const promptInput = document.getElementById('ai-modal-prompt');
+            const msgBox = document.getElementById('ai-modal-msg');
+            
+            titleInput.value = "Weekly Meal Plan & Deals";
+            promptInput.value = "";
+            msgBox.innerHTML = "";
+            modal.style.display = 'flex';
+        }
+
+        function closeAIGenerateListModal() {
+            document.getElementById('ai-list-modal').style.display = 'none';
+        }
+
+        async function submitAIGenerateList() {
+            const title = document.getElementById('ai-modal-list-title').value.trim();
+            const promptText = document.getElementById('ai-modal-prompt').value.trim();
+            const msgBox = document.getElementById('ai-modal-msg');
+            const submitBtn = document.getElementById('ai-modal-submit-btn');
+
+            if (!promptText) {
+                msgBox.innerHTML = '<div class="error">Please describe what you want to make or plan.</div>';
+                return;
+            }
+
+            submitBtn.innerText = "Generating List with AI...";
+            submitBtn.disabled = true;
+            msgBox.innerHTML = '<span style="color: #a78bfa;">AI is creating your ingredient list and checking store sales...</span>';
+
+            try {
+                const response = await fetch('/api/groceries/ai_generate_list', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({list_title: title || "AI Meal Plan", prompt: promptText})
+                });
+                await handleApiError(response);
+                const data = await response.json();
+                activeGroceryListId = data.list_id;
+                closeAIGenerateListModal();
+                showGroceryMsg(`Generated ${data.items.length} items with AI!`, "success");
+                await loadGroceryLists();
+                loadActiveListItems();
+            } catch(e) {
+                if (e.message !== "Unauthorized") msgBox.innerHTML = `<div class="error">${e.message || 'Error generating list. Verify AI API key in Settings.'}</div>`;
+            } finally {
+                submitBtn.innerText = "✨ Generate List";
+                submitBtn.disabled = false;
+            }
+        }
+
+        function showGroceryMsg(msg, type = "success") {
+            const box = document.getElementById('groceries-msg');
+            if (!box) return;
+            box.innerHTML = `<div class="${type}">${escapeHtml(msg)}</div>`;
+            setTimeout(() => box.innerHTML = '', 3500);
         }
 
         // Kick off auth check on load

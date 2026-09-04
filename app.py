@@ -131,6 +131,35 @@ def init_db():
     except sqlite3.OperationalError:
         pass # Column already exists
         
+    c.execute('''CREATE TABLE IF NOT EXISTS grocery_stores (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT,
+                    name TEXT,
+                    ad_url TEXT,
+                    notes TEXT,
+                    last_scanned TEXT,
+                    cached_deals TEXT
+                 )''')
+                 
+    c.execute('''CREATE TABLE IF NOT EXISTS grocery_lists (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT,
+                    title TEXT,
+                    created_at TEXT,
+                    updated_at TEXT
+                 )''')
+                 
+    c.execute('''CREATE TABLE IF NOT EXISTS grocery_list_items (
+                    id TEXT PRIMARY KEY,
+                    list_id TEXT,
+                    user_id TEXT,
+                    item_name TEXT,
+                    store_name TEXT,
+                    price_notes TEXT,
+                    category TEXT,
+                    is_checked INTEGER DEFAULT 0
+                 )''')
+        
     conn.commit()
     conn.close()
 
@@ -1227,4 +1256,566 @@ async def terms_of_service():
 </body></html>""",
         media_type="text/html"
     )
+
+# =====================================================================
+# --- Grocery Deals & Smart Lists Module ---
+# =====================================================================
+
+class GroceryStoreSave(BaseModel):
+    id: Optional[str] = None
+    name: str
+    ad_url: str
+    notes: Optional[str] = ""
+
+class GroceryListSave(BaseModel):
+    id: Optional[str] = None
+    title: str
+
+class GroceryItemSave(BaseModel):
+    id: Optional[str] = None
+    list_id: str
+    item_name: str
+    store_name: Optional[str] = "Any"
+    price_notes: Optional[str] = ""
+    category: Optional[str] = "General"
+    is_checked: Optional[int] = 0
+
+class GroceryBatchItemsSave(BaseModel):
+    list_id: str
+    items: List[dict]
+
+class DealQueryRequest(BaseModel):
+    query: str
+    store_ids: Optional[List[str]] = None
+
+class AIGroceryListRequest(BaseModel):
+    list_id: Optional[str] = None
+    list_title: Optional[str] = "Weekly Meal Plan & Deals"
+    prompt: str
+
+# Web content fetcher for store ads
+def fetch_url_clean_content(url: str) -> str:
+    if not url or not url.startswith(("http://", "https://")):
+        return ""
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9'
+            }
+        )
+        with urllib.request.urlopen(req, timeout=12) as response:
+            html_bytes = response.read()
+            html_str = html_bytes.decode('utf-8', errors='replace')
+            return clean_page_html(html_str)
+    except Exception as e:
+        logger.warning(f"Error fetching weekly ad content from {url}: {e}")
+        return ""
+
+def extract_store_deals_with_ai(store_name: str, page_content: str, settings: dict) -> list:
+    if not page_content or len(page_content.strip()) < 20:
+        return []
+    
+    prompt = f"""
+    You are an expert grocery bargain hunter. Extract all weekly sales, discounts, price cuts, and grocery deals from the provided store circular / weekly ad text for '{store_name}'.
+    
+    Return your response strictly as a JSON array of objects with the following keys:
+    - "item": Name of the product or item (e.g. "USDA Choice Ribeye Steak", "Honeycrisp Apples", "Large Grade A Eggs 18ct", "Organic Whole Milk 1gal", "Tide Pods 42ct")
+    - "price": Price or sale text (e.g. "$6.99/lb", "$0.99/lb", "2 for $5.00", "Buy 1 Get 1 Free", "$3.49")
+    - "category": Category (one of: "Meat & Seafood", "Produce", "Dairy & Eggs", "Pantry & Dry Goods", "Bakery & Deli", "Frozen", "Beverages", "Household & Personal", "Snacks")
+    - "notes": Any specific sale details, requirements (e.g. "Digital coupon required", "Must buy 2", "Valid through Tuesday", "Limit 4")
+    
+    Do not invent items that are not in the text.
+    
+    Weekly Ad Text:
+    {page_content[:25000]}
+    """
+    
+    provider = settings.get("ai_provider", "gemini")
+    model_name = settings.get("ai_model", "gemini-1.5-flash") or "gemini-1.5-flash"
+    result_text = ""
+    try:
+        if provider == "gemini":
+            api_key = settings.get("gemini_api_key", "")
+            if not api_key: return []
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel(model_name)
+            response = model.generate_content(prompt)
+            result_text = response.text
+        elif provider == "openai":
+            api_key = settings.get("openai_api_key", "")
+            if not api_key: return []
+            client = openai.OpenAI(api_key=api_key)
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": "You extract grocery deals and return pure valid JSON."},
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            result_text = response.choices[0].message.content
+    except Exception as e:
+        logger.error(f"Error extracting store deals for {store_name}: {e}")
+        return []
+        
+    try:
+        cleaned = re.sub(r'^```json\s*', '', result_text.strip(), flags=re.MULTILINE)
+        cleaned = re.sub(r'^```\s*', '', cleaned, flags=re.MULTILINE)
+        cleaned = re.sub(r'```$', '', cleaned, flags=re.MULTILINE).strip()
+        data = json.loads(cleaned)
+        if isinstance(data, list):
+            return data
+        elif isinstance(data, dict):
+            for k in ["deals", "items", "sales", "products"]:
+                if k in data and isinstance(data[k], list):
+                    return data[k]
+        return []
+    except Exception as parse_err:
+        logger.warning(f"Could not parse deals JSON for {store_name}: {parse_err}")
+        return []
+
+def query_ai_deals_and_prices(user_query: str, store_deals_data: list, settings: dict) -> dict:
+    deals_summary = []
+    for store in store_deals_data:
+        store_name = store.get("name", "Store")
+        deals = store.get("deals", [])
+        if deals:
+            deals_summary.append(f"=== STORE: {store_name} ({len(deals)} items on sale) ===\n" + 
+                                 "\n".join([f"- {d.get('item')}: {d.get('price')} [{d.get('category', 'General')}] {d.get('notes', '')}" for d in deals[:45]]))
+        else:
+            deals_summary.append(f"=== STORE: {store_name} (Weekly Ad configured: {store.get('ad_url', '')}) ===")
+    
+    all_deals_text = "\n\n".join(deals_summary) if deals_summary else "No cached circulars. Use market pricing knowledge for HEB, Kroger, Tom Thumb, Costco, Sprouts, Whole Foods, and Walmart."
+
+    prompt = f"""
+    You are an expert grocery bargain hunter and smart shopping assistant.
+    The user is asking: "{user_query}"
+    
+    Available Local Store Weekly Deals & Circulars:
+    {all_deals_text[:25000]}
+    
+    Instructions:
+    1. Answer the user's inquiry thoroughly. Compare prices across stores (e.g. Kroger, Tom Thumb, HEB, Costco, Sprouts, Whole Foods, Walmart, etc.).
+    2. Suggest which store has the best deal or value for each item requested.
+    3. Include practical shopping advice (e.g. bulk buying at Costco vs produce at Sprouts/HEB vs weekly digital coupons at Kroger/Tom Thumb).
+    4. Provide a structured JSON array of recommended items to add to the user's grocery list.
+    
+    Format your response strictly as a JSON object with two fields:
+    - "analysis_markdown": A comprehensive, well-formatted Markdown response with headers, comparison tables/bullets, and tips.
+    - "items": Array of item objects:
+       - "item_name": Product name (string)
+       - "store_name": Best store name (e.g. "HEB", "Costco", "Kroger", etc.)
+       - "price_notes": Price or deal info (e.g. "$6.99/lb (Save $3/lb)", "$0.99/lb", "BOGO")
+       - "category": Category ("Meat & Seafood", "Produce", "Dairy & Eggs", "Pantry", "Snacks", "Household")
+    """
+    
+    provider = settings.get("ai_provider", "gemini")
+    model_name = settings.get("ai_model", "gemini-1.5-flash") or "gemini-1.5-flash"
+    result_text = ""
+    try:
+        if provider == "gemini":
+            api_key = settings.get("gemini_api_key", "")
+            if not api_key: return {"error": "Gemini API key missing in Settings"}
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel(model_name)
+            response = model.generate_content(prompt)
+            result_text = response.text
+        elif provider == "openai":
+            api_key = settings.get("openai_api_key", "")
+            if not api_key: return {"error": "OpenAI API key missing in Settings"}
+            client = openai.OpenAI(api_key=api_key)
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": "You compare grocery prices and return JSON."},
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            result_text = response.choices[0].message.content
+    except Exception as e:
+        logger.error(f"Error running grocery deal query: {e}")
+        return {"error": str(e)}
+        
+    try:
+        cleaned = re.sub(r'^```json\s*', '', result_text.strip(), flags=re.MULTILINE)
+        cleaned = re.sub(r'^```\s*', '', cleaned, flags=re.MULTILINE)
+        cleaned = re.sub(r'```$', '', cleaned, flags=re.MULTILINE).strip()
+        data = json.loads(cleaned)
+        return data
+    except Exception as parse_err:
+        logger.warning(f"Could not parse grocery query JSON: {parse_err}")
+        return {
+            "analysis_markdown": result_text,
+            "items": []
+        }
+
+def ai_generate_grocery_list_items(prompt_text: str, store_deals_data: list, settings: dict) -> list:
+    deals_summary = []
+    for store in store_deals_data:
+        store_name = store.get("name", "Store")
+        deals = store.get("deals", [])
+        if deals:
+            deals_summary.append(f"{store_name} Sales: " + ", ".join([f"{d.get('item')} ({d.get('price')})" for d in deals[:25]]))
+    
+    context = "\n".join(deals_summary)
+    prompt = f"""
+    Create a detailed, organized grocery list based on the user request: "{prompt_text}".
+    
+    Current Store Sales Context:
+    {context[:15000]}
+    
+    Return strictly a JSON array of objects:
+    - "item_name": Product name (string)
+    - "store_name": Store name (e.g. "HEB", "Costco", "Kroger", "Sprouts", "Walmart", "Any")
+    - "price_notes": Sale price or estimated budget note (e.g. "$3.99/lb", "Buy in bulk", "On sale")
+    - "category": Category ("Produce", "Meat & Seafood", "Dairy & Eggs", "Pantry & Dry Goods", "Bakery", "Frozen", "Beverages", "Household", "Snacks")
+    """
+    
+    provider = settings.get("ai_provider", "gemini")
+    model_name = settings.get("ai_model", "gemini-1.5-flash") or "gemini-1.5-flash"
+    result_text = ""
+    try:
+        if provider == "gemini":
+            api_key = settings.get("gemini_api_key", "")
+            if not api_key: return []
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel(model_name)
+            response = model.generate_content(prompt)
+            result_text = response.text
+        elif provider == "openai":
+            api_key = settings.get("openai_api_key", "")
+            if not api_key: return []
+            client = openai.OpenAI(api_key=api_key)
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": "You build grocery lists and return valid JSON arrays."},
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            result_text = response.choices[0].message.content
+    except Exception as e:
+        logger.error(f"Error generating grocery list with AI: {e}")
+        return []
+        
+    try:
+        cleaned = re.sub(r'^```json\s*', '', result_text.strip(), flags=re.MULTILINE)
+        cleaned = re.sub(r'^```\s*', '', cleaned, flags=re.MULTILINE)
+        cleaned = re.sub(r'```$', '', cleaned, flags=re.MULTILINE).strip()
+        data = json.loads(cleaned)
+        if isinstance(data, list):
+            return data
+        elif isinstance(data, dict):
+            for k in ["items", "grocery_list", "list"]:
+                if k in data and isinstance(data[k], list):
+                    return data[k]
+        return []
+    except Exception as parse_err:
+        logger.warning(f"Could not parse AI grocery list items JSON: {parse_err}")
+        return []
+
+# --- Store Management Endpoints ---
+@app.get("/api/groceries/stores")
+async def get_grocery_stores(user_id: str = Depends(verify_auth)):
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    c.execute("SELECT id, name, ad_url, notes, last_scanned, cached_deals FROM grocery_stores WHERE user_id=? ORDER BY name ASC", (user_id,))
+    rows = c.fetchall()
+    conn.close()
+    
+    stores = []
+    for r in rows:
+        d = dict(r)
+        deals = []
+        if d.get("cached_deals"):
+            try: deals = json.loads(d["cached_deals"])
+            except Exception: deals = []
+        d["deals_count"] = len(deals)
+        d["deals_preview"] = deals[:5]
+        stores.append(d)
+    return stores
+
+@app.post("/api/groceries/stores")
+async def save_grocery_store(store: GroceryStoreSave, user_id: str = Depends(verify_auth)):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    store_id = store.id or str(uuid.uuid4())
+    c.execute("SELECT id FROM grocery_stores WHERE id=? AND user_id=?", (store_id, user_id))
+    if c.fetchone():
+        c.execute("UPDATE grocery_stores SET name=?, ad_url=?, notes=? WHERE id=? AND user_id=?", 
+                  (store.name, store.ad_url, store.notes or "", store_id, user_id))
+    else:
+        c.execute("INSERT INTO grocery_stores (id, user_id, name, ad_url, notes, last_scanned, cached_deals) VALUES (?, ?, ?, ?, ?, NULL, NULL)",
+                  (store_id, user_id, store.name, store.ad_url, store.notes or ""))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "id": store_id}
+
+@app.delete("/api/groceries/stores/{store_id}")
+async def delete_grocery_store(store_id: str, user_id: str = Depends(verify_auth)):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("DELETE FROM grocery_stores WHERE id=? AND user_id=?", (store_id, user_id))
+    conn.commit()
+    conn.close()
+    return {"status": "success"}
+
+@app.post("/api/groceries/stores/{store_id}/scan")
+async def scan_grocery_store(store_id: str, user_id: str = Depends(verify_auth)):
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    c.execute("SELECT id, name, ad_url FROM grocery_stores WHERE id=? AND user_id=?", (store_id, user_id))
+    store = c.fetchone()
+    if not store:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Store not found")
+        
+    c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
+    row = c.fetchone()
+    settings = json.loads(row['settings']) if row and row['settings'] else {}
+    
+    url = store["ad_url"]
+    name = store["name"]
+    content = fetch_url_clean_content(url)
+    
+    deals = extract_store_deals_with_ai(name, content, settings)
+    now_iso = datetime.now().isoformat()
+    
+    c.execute("UPDATE grocery_stores SET last_scanned=?, cached_deals=? WHERE id=? AND user_id=?",
+              (now_iso, json.dumps(deals), store_id, user_id))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "deals_found": len(deals), "deals": deals}
+
+@app.post("/api/groceries/stores/scan_all")
+async def scan_all_grocery_stores(user_id: str = Depends(verify_auth)):
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    c.execute("SELECT id, name, ad_url FROM grocery_stores WHERE user_id=?", (user_id,))
+    stores = c.fetchall()
+    
+    c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
+    row = c.fetchone()
+    settings = json.loads(row['settings']) if row and row['settings'] else {}
+    
+    results = []
+    now_iso = datetime.now().isoformat()
+    for s in stores:
+        content = fetch_url_clean_content(s["ad_url"])
+        deals = extract_store_deals_with_ai(s["name"], content, settings)
+        c.execute("UPDATE grocery_stores SET last_scanned=?, cached_deals=? WHERE id=? AND user_id=?",
+                  (now_iso, json.dumps(deals), s["id"], user_id))
+        results.append({"store": s["name"], "deals_found": len(deals)})
+        if settings.get("ai_provider", "gemini") == "gemini":
+            await asyncio.sleep(2.0)
+            
+    conn.commit()
+    conn.close()
+    return {"status": "success", "results": results}
+
+# --- Deal Query & Price Finder Endpoint ---
+@app.post("/api/groceries/query_deals")
+async def query_deals(req: DealQueryRequest, user_id: str = Depends(verify_auth)):
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    c.execute("SELECT id, name, ad_url, cached_deals FROM grocery_stores WHERE user_id=?", (user_id,))
+    rows = c.fetchall()
+    
+    c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
+    s_row = c.fetchone()
+    settings = json.loads(s_row['settings']) if s_row and s_row['settings'] else {}
+    conn.close()
+    
+    store_deals_data = []
+    for r in rows:
+        if req.store_ids and r["id"] not in req.store_ids:
+            continue
+        deals = []
+        if r["cached_deals"]:
+            try: deals = json.loads(r["cached_deals"])
+            except Exception: deals = []
+        store_deals_data.append({
+            "name": r["name"],
+            "ad_url": r["ad_url"],
+            "deals": deals
+        })
+        
+    res = query_ai_deals_and_prices(req.query, store_deals_data, settings)
+    return res
+
+# --- Grocery Lists & Items Endpoints ---
+@app.get("/api/groceries/lists")
+async def get_grocery_lists(user_id: str = Depends(verify_auth)):
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    c.execute("SELECT id, title, created_at, updated_at FROM grocery_lists WHERE user_id=? ORDER BY updated_at DESC", (user_id,))
+    lists = [dict(r) for r in c.fetchall()]
+    
+    if not lists:
+        # Create default initial list
+        def_id = str(uuid.uuid4())
+        now = datetime.now().isoformat()
+        c.execute("INSERT INTO grocery_lists (id, user_id, title, created_at, updated_at) VALUES (?, ?, 'Weekly Groceries', ?, ?)",
+                  (def_id, user_id, now, now))
+        conn.commit()
+        lists = [{"id": def_id, "title": "Weekly Groceries", "created_at": now, "updated_at": now}]
+        
+    conn.close()
+    return lists
+
+@app.post("/api/groceries/lists")
+async def save_grocery_list(glist: GroceryListSave, user_id: str = Depends(verify_auth)):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    list_id = glist.id or str(uuid.uuid4())
+    now = datetime.now().isoformat()
+    c.execute("SELECT id FROM grocery_lists WHERE id=? AND user_id=?", (list_id, user_id))
+    if c.fetchone():
+        c.execute("UPDATE grocery_lists SET title=?, updated_at=? WHERE id=? AND user_id=?", (glist.title, now, list_id, user_id))
+    else:
+        c.execute("INSERT INTO grocery_lists (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)", (list_id, user_id, glist.title, now, now))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "id": list_id}
+
+@app.delete("/api/groceries/lists/{list_id}")
+async def delete_grocery_list(list_id: str, user_id: str = Depends(verify_auth)):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("DELETE FROM grocery_lists WHERE id=? AND user_id=?", (list_id, user_id))
+    c.execute("DELETE FROM grocery_list_items WHERE list_id=? AND user_id=?", (list_id, user_id))
+    conn.commit()
+    conn.close()
+    return {"status": "success"}
+
+@app.get("/api/groceries/lists/{list_id}/items")
+async def get_grocery_list_items(list_id: str, user_id: str = Depends(verify_auth)):
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    c.execute("SELECT id, list_id, item_name, store_name, price_notes, category, is_checked FROM grocery_list_items WHERE list_id=? AND user_id=? ORDER BY is_checked ASC, category ASC, item_name ASC", (list_id, user_id))
+    rows = [dict(r) for r in c.fetchall()]
+    conn.close()
+    return rows
+
+@app.post("/api/groceries/lists/{list_id}/items")
+async def add_grocery_item(list_id: str, item: GroceryItemSave, user_id: str = Depends(verify_auth)):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    item_id = item.id or str(uuid.uuid4())
+    c.execute("INSERT INTO grocery_list_items (id, list_id, user_id, item_name, store_name, price_notes, category, is_checked) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+              (item_id, list_id, user_id, item.item_name, item.store_name or "Any", item.price_notes or "", item.category or "General", item.is_checked or 0))
+    now = datetime.now().isoformat()
+    c.execute("UPDATE grocery_lists SET updated_at=? WHERE id=? AND user_id=?", (now, list_id, user_id))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "id": item_id}
+
+@app.post("/api/groceries/lists/{list_id}/batch_items")
+async def add_batch_grocery_items(list_id: str, req: GroceryBatchItemsSave, user_id: str = Depends(verify_auth)):
+    if not req.items:
+        return {"status": "success", "count": 0}
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    added_count = 0
+    now = datetime.now().isoformat()
+    for item in req.items:
+        item_id = str(uuid.uuid4())
+        name = item.get("item_name") or item.get("item") or "Item"
+        store = item.get("store_name") or item.get("store") or "Any"
+        price = item.get("price_notes") or item.get("price") or ""
+        cat = item.get("category") or "General"
+        c.execute("INSERT INTO grocery_list_items (id, list_id, user_id, item_name, store_name, price_notes, category, is_checked) VALUES (?, ?, ?, ?, ?, ?, ?, 0)",
+                  (item_id, list_id, user_id, name, store, price, cat))
+        added_count += 1
+    c.execute("UPDATE grocery_lists SET updated_at=? WHERE id=? AND user_id=?", (now, list_id, user_id))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "count": added_count}
+
+@app.put("/api/groceries/items/{item_id}")
+async def update_grocery_item(item_id: str, payload: dict, user_id: str = Depends(verify_auth)):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    fields = []
+    values = []
+    for k in ["item_name", "store_name", "price_notes", "category", "is_checked"]:
+        if k in payload:
+            fields.append(f"{k}=?")
+            values.append(payload[k])
+    if fields:
+        values.extend([item_id, user_id])
+        c.execute(f"UPDATE grocery_list_items SET {', '.join(fields)} WHERE id=? AND user_id=?", values)
+        conn.commit()
+    conn.close()
+    return {"status": "success"}
+
+@app.delete("/api/groceries/items/{item_id}")
+async def delete_grocery_item(item_id: str, user_id: str = Depends(verify_auth)):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("DELETE FROM grocery_list_items WHERE id=? AND user_id=?", (item_id, user_id))
+    conn.commit()
+    conn.close()
+    return {"status": "success"}
+
+@app.post("/api/groceries/lists/{list_id}/clear_checked")
+async def clear_checked_grocery_items(list_id: str, user_id: str = Depends(verify_auth)):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("DELETE FROM grocery_list_items WHERE list_id=? AND user_id=? AND is_checked=1", (list_id, user_id))
+    now = datetime.now().isoformat()
+    c.execute("UPDATE grocery_lists SET updated_at=? WHERE id=? AND user_id=?", (now, list_id, user_id))
+    conn.commit()
+    conn.close()
+    return {"status": "success"}
+
+@app.post("/api/groceries/ai_generate_list")
+async def ai_generate_list(req: AIGroceryListRequest, user_id: str = Depends(verify_auth)):
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
+    s_row = c.fetchone()
+    settings = json.loads(s_row['settings']) if s_row and s_row['settings'] else {}
+    
+    c.execute("SELECT name, ad_url, cached_deals FROM grocery_stores WHERE user_id=?", (user_id,))
+    stores = []
+    for r in c.fetchall():
+        deals = []
+        if r["cached_deals"]:
+            try: deals = json.loads(r["cached_deals"])
+            except Exception: deals = []
+        stores.append({"name": r["name"], "deals": deals})
+        
+    items = ai_generate_grocery_list_items(req.prompt, stores, settings)
+    
+    list_id = req.list_id
+    now = datetime.now().isoformat()
+    if not list_id:
+        list_id = str(uuid.uuid4())
+        c.execute("INSERT INTO grocery_lists (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+                  (list_id, user_id, req.list_title or "AI Generated List", now, now))
+                  
+    for item in items:
+        item_id = str(uuid.uuid4())
+        name = item.get("item_name") or item.get("item") or "Item"
+        store = item.get("store_name") or item.get("store") or "Any"
+        price = item.get("price_notes") or item.get("price") or ""
+        cat = item.get("category") or "General"
+        c.execute("INSERT INTO grocery_list_items (id, list_id, user_id, item_name, store_name, price_notes, category, is_checked) VALUES (?, ?, ?, ?, ?, ?, ?, 0)",
+                  (item_id, list_id, user_id, name, store, price, cat))
+                  
+    c.execute("UPDATE grocery_lists SET updated_at=? WHERE id=? AND user_id=?", (now, list_id, user_id))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "list_id": list_id, "items": items}
+
 

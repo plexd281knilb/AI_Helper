@@ -101,6 +101,38 @@ All tables are initialized and automatically migrated on startup in `init_db()` 
 | `status` | TEXT | `'added'` or `'no_event'` |
 | **PRIMARY KEY** | `(id, user_id, account)` | Prevents duplicate processing per account per user |
 
+### `grocery_stores`
+| Column | Type | Description |
+|---|---|---|
+| `id` | TEXT PRIMARY KEY | Store UUID |
+| `user_id` | TEXT | Foreign key referencing `users.id` |
+| `name` | TEXT | Store name (e.g. HEB, Kroger, Tom Thumb, Costco, Sprouts, Whole Foods, Walmart) |
+| `ad_url` | TEXT | Weekly ad or circular URL |
+| `notes` | TEXT | Custom store notes or location details |
+| `last_scanned` | TEXT | ISO timestamp of last successful circular scan |
+| `cached_deals` | TEXT (JSON) | Cached JSON array of extracted weekly deals |
+
+### `grocery_lists`
+| Column | Type | Description |
+|---|---|---|
+| `id` | TEXT PRIMARY KEY | Grocery list UUID |
+| `user_id` | TEXT | Foreign key referencing `users.id` |
+| `title` | TEXT | List title (e.g. "Weekly Essentials", "Costco Run") |
+| `created_at` | TEXT | ISO timestamp of creation |
+| `updated_at` | TEXT | ISO timestamp of last update |
+
+### `grocery_list_items`
+| Column | Type | Description |
+|---|---|---|
+| `id` | TEXT PRIMARY KEY | Item UUID |
+| `list_id` | TEXT | Foreign key referencing `grocery_lists.id` |
+| `user_id` | TEXT | Foreign key referencing `users.id` |
+| `item_name` | TEXT | Item name and quantity |
+| `store_name` | TEXT | Designated store (e.g. "HEB", "Costco", "Any") |
+| `price_notes` | TEXT | Price or deal notes (e.g. "$4.99/lb sale", "Digital coupon") |
+| `category` | TEXT | Item category (Produce, Meat & Seafood, Dairy, etc.) |
+| `is_checked` | INTEGER | `0` = pending, `1` = checked/bought |
+
 ---
 
 ## 5. Core Processing & Architecture
@@ -147,6 +179,13 @@ All tables are initialized and automatically migrated on startup in `init_db()` 
   - **Batch Limit**: Max 10, 20 (default), 50, or 100 emails per account per run.
 - Real-time status badge and next-run countdown display in the Settings tab.
 
+### 7. Local Deals & Smart Grocery Lists (`/api/groceries/*`)
+- **Store Ads & Circulars**: Users can configure local store ad URLs (HEB, Kroger, Tom Thumb, Costco, Sprouts, Whole Foods, Walmart, etc.).
+- **AI Ad Scraping**: Scrapes web circulars using clean HTML text extraction and parses structured deals by category.
+- **Price Query & Deal Comparison**: Natural language prompt query allows users to ask for best prices, ingredient comparisons, and budget recommendations across stores.
+- **Interactive Grocery Lists**: Create custom lists, group items by category or store, check off bought items, clear checked items, copy markdown/plain text lists to clipboard, and 1-click add deals directly to any list.
+- **AI Meal-Prep List Generator**: Generates full recipe-based grocery lists with assigned stores and estimated pricing based on user dietary or meal planning prompts.
+
 ---
 
 ## 6. API Route Reference
@@ -167,6 +206,7 @@ All tables are initialized and automatically migrated on startup in `init_db()` 
 | `DELETE` | `/api/accounts/{id}` | Delete an IMAP account | Yes |
 | `GET` | `/api/events` | Fetch active calendar events (pending & added) | Yes |
 | `POST` | `/api/events/{id}/sync` | Manually sync event to Google Calendar | Yes |
+| `POST` | `/api/events/bulk_sync` | Bulk sync multiple events to Google Calendar | Yes |
 | `DELETE` | `/api/events/{id}` | Dismiss an event | Yes |
 | `POST` | `/api/events/bulk_dismiss`| Bulk dismiss events | Yes |
 | `GET` | `/api/fetch_emails` | Trigger manual email fetching & AI parsing | Yes |
@@ -176,9 +216,26 @@ All tables are initialized and automatically migrated on startup in `init_db()` 
 | `DELETE` | `/api/settings/reset_history` | Wipe all email processing memory | Yes |
 | `GET` | `/api/auth/google/url` | Generate Google OAuth authorization URL | Yes |
 | `GET` | `/api/auth/google/callback` | Google OAuth callback handler | No |
+| `DELETE` | `/api/auth/google/token` | Disconnect Google Calendar OAuth token | Yes |
 | `POST` | `/api/upload_client_secret` | Upload Google OAuth `client_secret.json` | Yes |
 | `POST` | `/api/models` | List available models from Gemini or OpenAI | Yes |
 | `GET` | `/api/logs` | View recent application logs (tail 1MB) | Yes |
+| `GET` | `/api/groceries/stores` | List all configured grocery stores and ads | Yes |
+| `POST` | `/api/groceries/stores` | Add or update a grocery store | Yes |
+| `DELETE` | `/api/groceries/stores/{id}` | Delete a grocery store | Yes |
+| `POST` | `/api/groceries/stores/{id}/scan` | Scan store circular URL with AI | Yes |
+| `POST` | `/api/groceries/stores/scan_all` | Scan all store circular URLs with AI | Yes |
+| `POST` | `/api/groceries/query_deals` | AI price comparison and deals query | Yes |
+| `GET` | `/api/groceries/lists` | List all grocery lists for user | Yes |
+| `POST` | `/api/groceries/lists` | Create or update a grocery list | Yes |
+| `DELETE` | `/api/groceries/lists/{id}` | Delete a grocery list and its items | Yes |
+| `GET` | `/api/groceries/lists/{id}/items` | List items in a grocery list | Yes |
+| `POST` | `/api/groceries/lists/{id}/items` | Add single item to grocery list | Yes |
+| `POST` | `/api/groceries/lists/{id}/batch_items` | Batch add multiple items to grocery list | Yes |
+| `PUT` | `/api/groceries/items/{id}` | Update grocery item (check off, edit) | Yes |
+| `DELETE` | `/api/groceries/items/{id}` | Delete item from grocery list | Yes |
+| `POST` | `/api/groceries/lists/{id}/clear_checked` | Remove all checked items from a list | Yes |
+| `POST` | `/api/groceries/ai_generate_list` | Generate meal-prep grocery list with AI | Yes |
 
 ---
 
