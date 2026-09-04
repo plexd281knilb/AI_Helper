@@ -1630,6 +1630,9 @@ def parse_numeric_price(price_str: str) -> dict:
     if 'bogo' in raw_lower or 'buy 1 get 1' in raw_lower or 'buy one get one' in raw_lower:
         return {'unit_price': None, 'unit': 'bogo', 'raw': raw}
         
+    if re.search(r'^(?:save\s+|yellow\s+coupon|digital\s+coupon|coupon|special\s+offer)', raw_lower):
+        return {'unit_price': None, 'unit': 'coupon', 'raw': raw}
+        
     m_lb = re.search(r'\$?([0-9]+(?:\.[0-9]{1,2})?)\s*(?:/|\s+per\s+|\s+)?(?:lb|lbs|pound)\b', raw_lower)
     if m_lb:
         try:
@@ -1781,6 +1784,55 @@ def find_cross_store_comparison(current_item_name: str, current_store: str, curr
             'other_prices': [{'store': m['store'], 'price': m['price_str'], 'item': m['item']} for m in matches[:3]]
         }
 
+def clean_deal_name(name: str) -> str:
+    if not name:
+        return ''
+    n = name.strip()
+    n = re.sub(r'^(?:fresh!?|sale!?|hot\s+deal!?|new!?|special!?|great\s+price!?|save!?|super\s+sale!?)\s*', '', n, flags=re.I).strip()
+    return n
+
+def format_deal_price_and_notes(raw_price, sale_story: Optional[str], description: Optional[str], brand: Optional[str], clean_name: str):
+    price_str = ''
+    notes_parts = []
+    
+    if raw_price:
+        try:
+            fval = float(raw_price)
+            price_str = f"${fval:.2f}"
+        except Exception:
+            price_str = str(raw_price).strip()
+            
+    if sale_story:
+        ss = sale_story.strip()
+        if re.match(r'^\$?\d+(?:\.\d{1,2})?(?:\s*/\s*(?:lb|ea|oz))?$', ss, re.I) or re.match(r'^\d+\s+(?:for|/)\s+\$?\d+(?:\.\d{1,2})?$', ss, re.I) or re.match(r'^(?:bogo|buy\s+1\s+get\s+1(?:\s+free)?)$', ss, re.I):
+            if not price_str:
+                price_str = ss
+        else:
+            if not price_str:
+                m_save = re.search(r'(save\s+(?:up\s+to\s+)?\$?\d+(?:\.\d{1,2})?(?:\s*(?:/|per)\s*lb)?)', ss, re.I)
+                if m_save:
+                    price_str = m_save.group(1).title()
+                elif 'yellow coupon' in ss.lower():
+                    price_str = 'Yellow Coupon'
+                elif 'digital coupon' in ss.lower():
+                    price_str = 'Digital Coupon'
+                elif 'coupon' in ss.lower():
+                    price_str = 'Coupon Deal'
+                else:
+                    price_str = 'Special Offer'
+            notes_parts.append(ss)
+            
+    if not price_str:
+        price_str = 'Sale'
+        
+    if description and description.strip() and description.strip() not in notes_parts:
+        notes_parts.append(description.strip())
+    if brand and brand.strip() and brand.strip().lower() not in clean_name.lower():
+        notes_parts.append(f"Brand: {brand.strip()}")
+        
+    notes_str = ' | '.join(notes_parts)
+    return price_str, notes_str
+
 def _fetch_single_flipp_flyer(f: dict, postal_code: str, headers: dict, ctx: ssl.SSLContext, norm_store: str):
     fid = f.get('id')
     if not fid:
@@ -1792,52 +1844,47 @@ def _fetch_single_flipp_flyer(f: dict, postal_code: str, headers: dict, ctx: ssl
             fdata = json.loads(fresp.read().decode('utf-8'))
             items = fdata.get('items', [])
             
-            deals = []
-            seen_names = set()
+            deals_map = {}
             
             for it in items:
-                name = it.get('name')
-                if not name or len(name.strip()) < 2:
+                raw_name = it.get('name')
+                if not raw_name or len(raw_name.strip()) < 2:
                     continue
-                clean_name = name.strip()
-                if clean_name.lower() in seen_names:
+                clean_name = clean_deal_name(raw_name)
+                if not clean_name:
                     continue
-                seen_names.add(clean_name.lower())
                 
                 raw_price = it.get('price') or it.get('current_price') or ''
                 sale_story = it.get('sale_story') or ''
-                price_str = ''
-                if raw_price:
-                    try:
-                        fval = float(raw_price)
-                        price_str = f"${fval:.2f}"
-                    except Exception:
-                        price_str = str(raw_price)
-                elif sale_story:
-                    price_str = sale_story
-                else:
-                    price_str = "Sale"
-                    
-                notes_parts = []
-                if sale_story and sale_story != price_str:
-                    notes_parts.append(sale_story)
-                if it.get('description'):
-                    notes_parts.append(it.get('description'))
-                if it.get('brand') and it.get('brand') not in clean_name:
-                    notes_parts.append(f"Brand: {it.get('brand')}")
-                    
+                desc = it.get('description') or ''
+                brand = it.get('brand') or ''
+                
+                price_str, notes_str = format_deal_price_and_notes(raw_price, sale_story, desc, brand, clean_name)
+                
                 img_url = it.get('cutout_image_url') or it.get('clean_image_url') or it.get('clipping_image_url') or it.get('image_url') or it.get('original_image_url') or ''
                 if img_url.startswith('http://'):
                     img_url = 'https://' + img_url[7:]
                 
-                deals.append({
-                    'item': clean_name,
-                    'price': price_str,
-                    'category': guess_deal_category(clean_name),
-                    'notes': notes_str,
-                    'image_url': img_url
-                })
-            return norm_store, fid, f, deals
+                name_key = clean_name.lower()
+                if name_key in deals_map:
+                    cur = deals_map[name_key]
+                    has_curr_num = parse_numeric_price(cur['price']).get('unit_price') is not None
+                    has_new_num = parse_numeric_price(price_str).get('unit_price') is not None
+                    if not has_curr_num and has_new_num:
+                        cur['price'] = price_str
+                    if not cur.get('image_url') and img_url:
+                        cur['image_url'] = img_url
+                    if notes_str and notes_str not in cur.get('notes', ''):
+                        cur['notes'] = f"{cur.get('notes', '')} | {notes_str}".strip(" |")
+                else:
+                    deals_map[name_key] = {
+                        'item': clean_name,
+                        'price': price_str,
+                        'category': guess_deal_category(clean_name),
+                        'notes': notes_str,
+                        'image_url': img_url
+                    }
+            return norm_store, fid, f, list(deals_map.values())
     except Exception as e:
         logger.warning(f"Error fetching Flipp flyer {fid} for {norm_store}: {e}")
         return norm_store, fid, f, []
@@ -1923,11 +1970,22 @@ def fetch_flipp_store_deals(postal_code: str = '76262', store_name_filter: Optio
                             'deals': deals
                         }
                     else:
-                        existing_items = {d['item'].lower() for d in stores_data[norm_store]['deals']}
+                        existing_map = {d['item'].lower(): d for d in stores_data[norm_store]['deals']}
                         for d in deals:
-                            if d['item'].lower() not in existing_items:
+                            d_key = d['item'].lower()
+                            if d_key not in existing_map:
                                 stores_data[norm_store]['deals'].append(d)
-                                existing_items.add(d['item'].lower())
+                                existing_map[d_key] = d
+                            else:
+                                cur = existing_map[d_key]
+                                has_curr_num = parse_numeric_price(cur['price']).get('unit_price') is not None
+                                has_new_num = parse_numeric_price(d['price']).get('unit_price') is not None
+                                if not has_curr_num and has_new_num:
+                                    cur['price'] = d['price']
+                                if not cur.get('image_url') and d.get('image_url'):
+                                    cur['image_url'] = d['image_url']
+                                if d.get('notes') and d['notes'] not in cur.get('notes', ''):
+                                    cur['notes'] = f"{cur.get('notes', '')} | {d['notes']}".strip(" |")
             except Exception as ex:
                 logger.warning(f"Error processing flyer response: {ex}")
 
@@ -1944,36 +2002,47 @@ def fetch_flipp_store_deals(postal_code: str = '76262', store_name_filter: Optio
                         existing_map = {d['item'].lower(): d for d in store_deals}
                         
                         for sit in s_items:
-                            s_name = (sit.get('name') or '').strip()
-                            if not s_name:
+                            raw_name = sit.get('name') or ''
+                            if not raw_name or len(raw_name.strip()) < 2:
+                                continue
+                            clean_name = clean_deal_name(raw_name)
+                            if not clean_name:
                                 continue
                             
-                            s_price = sit.get('current_price')
-                            s_sale = sit.get('sale_story')
-                            s_price_str = f"${float(s_price):.2f}" if s_price is not None else (s_sale or "")
+                            s_raw_price = sit.get('current_price') or sit.get('price') or ''
+                            s_sale = sit.get('sale_story') or ''
+                            s_desc = sit.get('description') or ''
+                            s_brand = sit.get('brand') or ''
+                            
+                            s_price_str, s_notes_str = format_deal_price_and_notes(s_raw_price, s_sale, s_desc, s_brand, clean_name)
+                            
                             s_img = sit.get('cutout_image_url') or sit.get('clean_image_url') or sit.get('clipping_image_url') or sit.get('image_url') or sit.get('original_image_url') or ''
                             if s_img.startswith('http://'):
                                 s_img = 'https://' + s_img[7:]
                             
-                            if s_name.lower() in existing_map:
-                                cur_deal = existing_map[s_name.lower()]
-                                if (cur_deal['price'] == 'Sale' or not cur_deal['price']) and s_price_str:
+                            name_key = clean_name.lower()
+                            if name_key in existing_map:
+                                cur_deal = existing_map[name_key]
+                                has_curr_num = parse_numeric_price(cur_deal['price']).get('unit_price') is not None
+                                has_new_num = parse_numeric_price(s_price_str).get('unit_price') is not None
+                                
+                                if not has_curr_num and has_new_num:
                                     cur_deal['price'] = s_price_str
-                                if s_sale and s_sale not in cur_deal.get('notes', ''):
-                                    cur_deal['notes'] = f"{s_sale} | {cur_deal.get('notes', '')}".strip(" |")
+                                if s_notes_str and s_notes_str not in cur_deal.get('notes', ''):
+                                    cur_deal['notes'] = f"{cur_deal.get('notes', '')} | {s_notes_str}".strip(" |")
                                 if not cur_deal.get('image_url') and s_img:
                                     cur_deal['image_url'] = s_img
                             else:
-                                if s_price_str or s_sale:
+                                if s_price_str or s_notes_str:
                                     new_deal = {
-                                        'item': s_name,
+                                        'item': clean_name,
                                         'price': s_price_str or "Sale",
-                                        'category': guess_deal_category(s_name),
-                                        'notes': s_sale or "",
+                                        'category': guess_deal_category(clean_name),
+                                        'notes': s_notes_str or "",
                                         'image_url': s_img
                                     }
                                     store_deals.append(new_deal)
-                                    existing_map[s_name.lower()] = new_deal
+                                    existing_map[name_key] = new_deal
                 except Exception as e:
                     logger.debug(f"Search enrichment error for {sname}: {e}")
             
