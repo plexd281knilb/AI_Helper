@@ -18,10 +18,13 @@ It is built with **FastAPI** (Python 3.11) on the backend and a responsive, vani
 .
 ├── app.py                 # Core backend: FastAPI app, DB initialization, API routes, IMAP fetching, AI parsing, and Google OAuth
 ├── static/
-│   └── index.html         # Complete frontend SPA (Dashboard, History, Settings, Users, Logs)
+│   └── index.html         # Complete frontend SPA (Portalarr-inspired sidebar navigation, Dashboard, History, Deals, Settings, Users, Logs)
+├── .agents/
+│   └── skills/            # Imported expert skills from Portalarr (agregarr, discord, kometa, maintainerr, plex, portalarr-ui, radarr, seerr, sonarr)
+├── roadmap.md             # Multi-phase long-term feature roadmap
 ├── requirements.txt       # Python dependencies
 ├── Dockerfile             # Python 3.11 slim container image
-├── docker-compose.yml     # Container definition and volume mapping (`./data:/app/data`)
+├── docker-compose.yml     # Container definition, volume mapping (`./data:/app/data`), and healthcheck
 ├── README.md              # High-level project README
 ├── AGENTS.md              # Architectural and development guide for AI agents
 └── data/                  # Persistent data directory (auto-created at runtime)
@@ -56,8 +59,9 @@ All tables are initialized and automatically migrated on startup in `init_db()` 
 |---|---|---|
 | `id` | TEXT PRIMARY KEY | Unique user UUID |
 | `username` | TEXT UNIQUE | Login username |
-| `password_hash` | TEXT | SHA-256 password hash |
+| `password_hash` | TEXT | Salted PBKDF2-HMAC-SHA256 password hash |
 | `settings` | TEXT (JSON) | JSON object containing AI provider, keys, models, custom instructions, public URL, and OAuth state |
+| `role` | TEXT | User role: `'admin'` or `'user'` (default `'user'`) |
 
 ### `sessions`
 | Column | Type | Description |
@@ -149,20 +153,40 @@ All tables are initialized and automatically migrated on startup in `init_db()` 
 | `category` | TEXT | Department / category |
 | `recorded_at` | TEXT | ISO timestamp of price recording |
 
+### Database Indexes
+For fast sub-millisecond query performance on multi-user and large datasets, the following indexes are maintained in `init_db()`:
+- `idx_events_user_status_date` on `events(user_id, status, date)`
+- `idx_email_acc_user` on `email_accounts(user_id)`
+- `idx_pe_user_date` on `processed_emails_v2(user_id, date DESC)`
+- `idx_gs_user` on `grocery_stores(user_id)`
+- `idx_gl_user` on `grocery_lists(user_id)`
+- `idx_gli_list_user` on `grocery_list_items(list_id, user_id)`
+
 ---
 
 ## 5. Core Processing & Architecture
 
-### 1. Authentication
-- Cookie-based authentication using `session_token`.
-- Verified in FastAPI route dependencies via `verify_auth(request)`.
+### 1. Authentication, Roles & Navigation Architecture
+- **Password Security**: Salted PBKDF2-HMAC-SHA256 password hashing with 100,000 iterations and 16-byte cryptographically secure random salts.
+- **Backward Compatibility**: Transparently verifies and upgrades legacy unsalted SHA-256 password hashes to salted PBKDF2 upon next successful login using constant-time comparison (`secrets.compare_digest`).
+- **Session Tokens**: Cookie-based authentication using 64-character hex `session_token` with automatic purging of expired sessions.
+- **Role-Based Access Control (RBAC)**: Supports `'admin'` and `'user'` roles. The initial account created during setup is automatically assigned the `'admin'` role. Admin endpoints (`/api/users`, user create/delete, role assignment, `/api/logs`) are strictly gated by the `verify_admin` FastAPI dependency (returning HTTP 403 Forbidden for non-admins).
+- **Portalarr Navigation Tree Shell**: The UI features a Portalarr-style left navigation sidebar tree:
+  - **Brand Header**: App name, version tag (`v2.5`), and subtitle.
+  - **User Status Card**: Displays username, avatar initial, and glowing role badge (`🛡️ Administrator` or `👤 Member`).
+  - **Main Workspace Tree**: Standard user paths (`Dashboard`, `Email History`, `Deals & Groceries`).
+  - **Administration Tree**: Restricted paths (`Users & Access`, `System Settings`, `Live Logs`), dynamically hidden from non-admin accounts and client-side guarded in `openTab`.
+  - **Quick Action & Session Controls**: Instant `Fetch New Emails` trigger with active spinner state and danger-highlighted `Log Out` button.
+  - **Mobile Responsive Drawer**: On viewports <= 850px, collapses into a sticky top navigation bar with a hamburger toggle and touch-friendly slide-over drawer.
 
 ### 2. Email Ingestion (`process_user_emails`)
-- Loops through all configured `email_accounts` for a user.
+- Loops through all configured `email_accounts` for a user with per-account fault isolation. If one account fails (e.g. invalid credentials or IMAP timeout), remaining accounts continue processing and warnings are surfaced non-destructively.
+- Safe connection cleanup guaranteed by top-level `try...finally` database closure.
 - Connects via IMAP (`MailBox.login`).
 - Reads user-configured `lookback_days` (default 7 days) and `email_fetch_limit` (default 20 per account).
 - Fetches messages (`AND(date_gte=...)`, reverse order).
 - Checks `processed_emails_v2` to skip already-analyzed emails.
+- Webview Announcement Scraper: Automatically resolves and fetches full linked school/portal announcement text using resilient SSL contexts.
 - Persists `last_scan_time` in user settings upon scan completion.
 
 ### 3. AI Extraction & Reasoning (`extract_event`)
@@ -175,6 +199,8 @@ All tables are initialized and automatically migrated on startup in `init_db()` 
 
 ### 4. Calendar Sync
 - When events are detected, they are inserted into the `events` table with status `'pending'`.
+- Robust ISO 8601 parsing (`parse_flexible_iso_datetime`) supports standard ISO strings, date-only formats (`YYYY-MM-DD` defaulting to 9:00 AM), space-delimited timestamps, and common colloquial formats.
+- Dashboard queries filter by beginning of today (`today_start`) so events occurring earlier in the day remain visible.
 - If Google Calendar is connected (`token_<user_id>.json` exists), events are immediately auto-synced to Google Calendar and updated to status `'added'`.
 - If not connected, users can manually sync or click manual add links on the Dashboard.
 
@@ -196,11 +222,12 @@ All tables are initialized and automatically migrated on startup in `init_db()` 
 - Real-time status badge and next-run countdown display in the Settings tab.
 
 ### 7. Local Deals & Smart Grocery Lists (`/api/groceries/*`)
-- **Automated Zip-Code Discovery**: Ingests complete weekly circulars and deals automatically across all local supermarkets (HEB, Kroger, Tom Thumb, Albertsons, Sprouts, Whole Foods, Walmart, Target, ALDI, Costco, etc.) via backend Flipp aggregation without requiring manual URLs.
+- **Automated Zip-Code Discovery**: Ingests complete weekly circulars and deals automatically across all local supermarkets (HEB, Kroger, Tom Thumb, Albertsons, Sprouts, Whole Foods, Walmart, Target, ALDI, Costco, Sam's Club, Publix, Safeway, Central Market, Food Lion, Meijer, Hy-Vee, Wegmans, Lidl, Jewel-Osco, Vons, Ralphs, Smith's, Fry's, King Soopers, Harris Teeter, Giant Food, etc.) via backend Flipp aggregation without requiring manual URLs.
 - **Product Images & Transparent Cutouts**: Extracts high-res product packshots and transparent cutout images from Flipp circulars and displays them in grocery lists and deal cards, with emoji avatar fallbacks.
 - **Cross-Store Price Comparison Engine**: Cross-references items and prices across all configured local stores:
   - 🟢 **Green Badge**: Best price or cheaper than competitor (e.g. `✓ Best Price! Save $2.00/lb vs Tom Thumb ($7.99/lb)`).
   - 🔴 **Red Badge**: Cheaper price available at another store (e.g. `⚠️ Cheaper at H-E-B ($4.99/lb) — Save $1.00/lb`).
+- **Stemming & Cent Price Accuracy**: English noun plural stemming (`stem_word`) normalizes plural/singular variations (e.g. `apples` vs `apple`, `berries` vs `berry`) for cross-store deal comparison. Accurately parses cent pricing (`99¢/lb` or `79c ea` into `$0.99/lb` and `$0.79 ea`).
 - **Historical Price Trend Tracking & Lowest Price Flagging**: Automatically tracks and indexes historical unit prices for items over time across stores. Flags when a deal is an all-time low (e.g. `🔥 Best Price in 2 months! Save $1.00/lb vs prev low ($10.99/lb at Tom Thumb)`), matching low, or below average.
 - **Beef Grade Isolation & Quality Protection**: Detects and isolates USDA Beef Quality Grades (`prime`, `choice`, `select`, `wagyu`, `angus`, `none`). Prevents misleading price comparisons where lower quality grades (e.g., Select at $6.99/lb) would override or be compared against higher quality grades (e.g., Prime at $9.99/lb).
 - **Personalized "🔥 My Deals" Feed**: Scores and ranks live circular deals based on user preferences.
@@ -209,7 +236,7 @@ All tables are initialized and automatically migrated on startup in `init_db()` 
 - **AI Ad Scraping & Browsing**: Scrapes web circulars using clean HTML text extraction, parses structured deals by category, and provides a full interactive deal browser with search and department filtering.
 - **Price Query & Deal Comparison**: Natural language prompt query allows users to ask for best prices, ingredient comparisons, and budget recommendations across stores.
 - **Interactive Grocery Lists**: Create custom lists, group items by category or store, check off bought items, clear checked items, copy markdown/plain text lists to clipboard, and 1-click add deals directly to any list with pictures.
-- **AI Meal-Prep List Generator**: Generates full recipe-based grocery lists with assigned stores and estimated pricing based on user dietary or meal planning prompts.
+- **AI Meal-Prep List Generator**: Generates full recipe-based grocery lists with assigned stores, circular deal images, and estimated pricing based on user dietary or meal planning prompts.
 
 ---
 
@@ -217,6 +244,7 @@ All tables are initialized and automatically migrated on startup in `init_db()` 
 
 | Method | Endpoint | Description | Auth Required |
 |---|---|---|---|
+| `GET` | `/health` / `/api/health` | Container and system healthcheck | No |
 | `GET` | `/api/auth/status` | Check authentication & first-time setup status | No |
 | `POST` | `/api/auth/login` | Log in user | No |
 | `POST` | `/api/auth/register` | Register new user | No |
@@ -286,6 +314,9 @@ All tables are initialized and automatically migrated on startup in `init_db()` 
 4. **Data Privacy & Secrets**:
    - Never hardcode or commit API keys, passwords, or credentials into the repository.
    - Keep user-specific OAuth credentials and session tokens isolated in the `data/` volume.
-5. **Testing Changes**:
+5. **Testing & Verification**:
    - Compile Python code (`python -m py_compile app.py`) after making edits.
    - Verify that new or modified endpoints return valid JSON structures compatible with `static/index.html`.
+6. **Push to GitHub**:
+   - Always push verified changes to GitHub (`git push origin main`) as the final step of the build and verification cycle.
+   - Pushing to `main` automatically triggers the GitHub Actions workflow (`.github/workflows/docker.yml`), which builds and publishes the updated container image to GitHub Container Registry (`ghcr.io`).

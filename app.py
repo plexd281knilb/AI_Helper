@@ -198,11 +198,59 @@ def init_db():
                  )''')
     c.execute("CREATE INDEX IF NOT EXISTS idx_gph_user_key ON grocery_price_history(user_id, normalized_key, recorded_at);")
     c.execute("CREATE INDEX IF NOT EXISTS idx_gph_user_store ON grocery_price_history(user_id, store_name, recorded_at);")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_events_user_status_date ON events(user_id, status, date);")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_email_acc_user ON email_accounts(user_id);")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_pe_user_date ON processed_emails_v2(user_id, date DESC);")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_gs_user ON grocery_stores(user_id);")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_gl_user ON grocery_lists(user_id);")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_gli_list_user ON grocery_list_items(list_id, user_id);")
     
+    try:
+        c.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user';")
+    except sqlite3.OperationalError:
+        pass # Column already exists
+
+    # Ensure at least one admin exists if users exist
+    try:
+        c.execute("SELECT id FROM users WHERE role='admin' LIMIT 1")
+        if not c.fetchone():
+            c.execute("SELECT id FROM users ORDER BY rowid ASC LIMIT 1")
+            first_u = c.fetchone()
+            if first_u:
+                c.execute("UPDATE users SET role='admin' WHERE id=?", (first_u[0],))
+                logger.info(f"Assigned administrator role to initial user {first_u[0]}.")
+    except Exception as e:
+        logger.debug(f"Role initialization note: {e}")
+        
     conn.commit()
     conn.close()
 
 init_db()
+
+# --- Password Hashing & Security ---
+def hash_password(plain_password: str) -> str:
+    """Hash password using PBKDF2-HMAC-SHA256 with 100,000 iterations and random salt."""
+    salt = secrets.token_hex(16)
+    iters = 100000
+    h = hashlib.pbkdf2_hmac('sha256', plain_password.encode('utf-8'), salt.encode('utf-8'), iters).hex()
+    return f"pbkdf2:sha256:{iters}${salt}${h}"
+
+def verify_password(plain_password: str, password_hash: str) -> bool:
+    """Verify password supporting both PBKDF2-HMAC-SHA256 and legacy unsalted SHA-256."""
+    if not password_hash or not plain_password:
+        return False
+    if password_hash.startswith("pbkdf2:sha256:"):
+        try:
+            _, iters_str, rest = password_hash.split(":", 2)
+            iters = int(iters_str)
+            salt, stored_hash = rest.split("$", 1)
+            computed = hashlib.pbkdf2_hmac('sha256', plain_password.encode('utf-8'), salt.encode('utf-8'), iters).hex()
+            return secrets.compare_digest(computed, stored_hash)
+        except Exception:
+            return False
+    # Legacy unsalted SHA-256 fallback
+    legacy = hashlib.sha256(plain_password.encode('utf-8')).hexdigest()
+    return secrets.compare_digest(legacy, password_hash)
 
 # --- Authentication & Persistent Session Logic ---
 SESSION_CACHE = {} # In-memory cache for high performance: token -> (user_id, expires_timestamp)
@@ -254,32 +302,69 @@ def verify_auth(request: Request):
         raise HTTPException(status_code=401, detail="Unauthorized")
     return user_id
 
+def verify_admin(current_user: str = Depends(verify_auth)):
+    conn = get_db_conn()
+    c = conn.cursor()
+    c.execute("SELECT role FROM users WHERE id=?", (current_user,))
+    row = c.fetchone()
+    conn.close()
+    if not row or (row["role"] or "").lower() != "admin":
+        raise HTTPException(status_code=403, detail="Administrator privileges required.")
+    return current_user
+
+@app.get("/health")
+@app.get("/api/health")
+def health_check():
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "app": "AI Helper"
+    }
+
 @app.get("/api/auth/status")
 def auth_status(request: Request):
     token = request.cookies.get("session_token")
     user_id = get_user_id_from_token(token)
     logged_in = user_id is not None
+    username = None
+    role = "user"
     
     conn = get_db_conn()
     c = conn.cursor()
     c.execute("SELECT COUNT(*) FROM users")
     count = c.fetchone()[0]
+    if logged_in:
+        c.execute("SELECT username, COALESCE(role, 'user') as role FROM users WHERE id=?", (user_id,))
+        u = c.fetchone()
+        if u:
+            username = u["username"]
+            role = (u["role"] or "user").lower()
     conn.close()
-    return {"setup_required": count == 0, "logged_in": logged_in}
+    return {
+        "setup_required": count == 0,
+        "logged_in": logged_in,
+        "user_id": user_id,
+        "username": username,
+        "role": role,
+        "is_admin": role == "admin"
+    }
 
 @app.post("/api/auth/register")
 def auth_register(req: AuthRequest):
     if len(req.password) < 4:
         return {"error": "Password must be at least 4 characters."}
-    pwd_hash = hashlib.sha256(req.password.encode()).hexdigest()
+    pwd_hash = hash_password(req.password)
     user_id = str(uuid.uuid4())
     default_settings = json.dumps({"ai_provider": "gemini", "ai_model": "gemini-1.5-flash", "public_url": ""})
     conn = get_db_conn()
     c = conn.cursor()
     try:
-        c.execute("INSERT INTO users (id, username, password_hash, settings) VALUES (?, ?, ?, ?)", (user_id, req.username, pwd_hash, default_settings))
+        c.execute("SELECT COUNT(*) FROM users")
+        count = c.fetchone()[0]
+        assigned_role = "admin" if count == 0 else "user"
+        c.execute("INSERT INTO users (id, username, password_hash, settings, role) VALUES (?, ?, ?, ?, ?)", (user_id, req.username, pwd_hash, default_settings, assigned_role))
         conn.commit()
-        logger.info(f"New user registered: {req.username}")
+        logger.info(f"New user registered: {req.username} (role: {assigned_role})")
     except sqlite3.IntegrityError:
         return {"error": "Username already exists."}
     finally:
@@ -288,23 +373,34 @@ def auth_register(req: AuthRequest):
 
 @app.post("/api/auth/login")
 def auth_login(req: AuthRequest, response: Response):
-    req_hash = hashlib.sha256(req.password.encode()).hexdigest()
     conn = get_db_conn()
     c = conn.cursor()
-    c.execute("SELECT id FROM users WHERE username=? AND password_hash=?", (req.username, req_hash))
+    c.execute("SELECT id, password_hash FROM users WHERE username=?", (req.username,))
     user = c.fetchone()
-    if not user:
+    if not user or not verify_password(req.password, user["password_hash"]):
         conn.close()
         logger.warning(f"Failed login attempt for username: {req.username}")
         return {"error": "Invalid username or password"}
         
-    user_id = user[0]
+    user_id = user["id"]
+    # Automatically upgrade legacy unsalted SHA-256 password hashes to PBKDF2
+    if not user["password_hash"].startswith("pbkdf2:"):
+        try:
+            upgraded_hash = hash_password(req.password)
+            c.execute("UPDATE users SET password_hash=? WHERE id=?", (upgraded_hash, user_id))
+            conn.commit()
+            logger.info(f"Upgraded password hash for user {req.username} to PBKDF2.")
+        except Exception as up_err:
+            logger.debug(f"Could not auto-upgrade password hash: {up_err}")
+
     token = secrets.token_hex(32)
     # 90-day session expiration
     expires_ts = (datetime.now() + timedelta(days=90)).timestamp()
     
     try:
         c.execute("INSERT OR REPLACE INTO sessions (token, user_id, expires) VALUES (?, ?, ?)", (token, user_id, expires_ts))
+        # Purge any expired sessions
+        c.execute("DELETE FROM sessions WHERE expires < ?", (datetime.now().timestamp(),))
         conn.commit()
     except Exception as e:
         logger.error(f"Failed to persist session token to database: {e}")
@@ -348,31 +444,34 @@ def auth_logout(request: Request, response: Response):
 class UserCreate(BaseModel):
     username: str
     password: str
+    role: Optional[str] = "user"
 
 class UserUpdate(BaseModel):
     username: Optional[str] = None
     password: Optional[str] = None
+    role: Optional[str] = None
 
-@app.get("/api/users", dependencies=[Depends(verify_auth)])
+@app.get("/api/users", dependencies=[Depends(verify_admin)])
 def get_users():
     conn = get_db_conn()
     c = conn.cursor()
-    c.execute("SELECT id, username FROM users")
-    users = [{"id": r[0], "username": r[1]} for r in c.fetchall()]
+    c.execute("SELECT id, username, COALESCE(role, 'user') as role FROM users")
+    users = [{"id": r[0], "username": r[1], "role": r[2]} for r in c.fetchall()]
     conn.close()
     return users
 
-@app.post("/api/users", dependencies=[Depends(verify_auth)])
+@app.post("/api/users", dependencies=[Depends(verify_admin)])
 def create_user(req: UserCreate):
     if len(req.password) < 4:
         return {"error": "Password must be at least 4 characters."}
-    pwd_hash = hashlib.sha256(req.password.encode()).hexdigest()
+    pwd_hash = hash_password(req.password)
     user_id = str(uuid.uuid4())
     default_settings = json.dumps({"ai_provider": "gemini", "ai_model": "gemini-1.5-flash", "public_url": ""})
+    role = "admin" if (req.role or "").lower() == "admin" else "user"
     conn = get_db_conn()
     c = conn.cursor()
     try:
-        c.execute("INSERT INTO users (id, username, password_hash, settings) VALUES (?, ?, ?, ?)", (user_id, req.username, pwd_hash, default_settings))
+        c.execute("INSERT INTO users (id, username, password_hash, settings, role) VALUES (?, ?, ?, ?, ?)", (user_id, req.username, pwd_hash, default_settings, role))
         conn.commit()
     except sqlite3.IntegrityError:
         return {"error": "Username already exists."}
@@ -380,10 +479,18 @@ def create_user(req: UserCreate):
         conn.close()
     return {"status": "success"}
 
-@app.put("/api/users/{target_user_id}", dependencies=[Depends(verify_auth)])
-def update_user(target_user_id: str, req: UserUpdate):
+@app.put("/api/users/{target_user_id}")
+def update_user(target_user_id: str, req: UserUpdate, current_user: str = Depends(verify_auth)):
     conn = get_db_conn()
     c = conn.cursor()
+    c.execute("SELECT role FROM users WHERE id=?", (current_user,))
+    caller = c.fetchone()
+    is_admin = caller and (caller["role"] or "").lower() == "admin"
+    
+    if not is_admin and current_user != target_user_id:
+        conn.close()
+        raise HTTPException(status_code=403, detail="Permission denied. You can only update your own account.")
+
     if req.username:
         try:
             c.execute("UPDATE users SET username=? WHERE id=?", (req.username, target_user_id))
@@ -394,13 +501,17 @@ def update_user(target_user_id: str, req: UserUpdate):
         if len(req.password) < 4:
             conn.close()
             return {"error": "Password too short."}
-        pwd_hash = hashlib.sha256(req.password.encode()).hexdigest()
+        pwd_hash = hash_password(req.password)
         c.execute("UPDATE users SET password_hash=? WHERE id=?", (pwd_hash, target_user_id))
+    if req.role and is_admin:
+        new_role = "admin" if req.role.lower() == "admin" else "user"
+        c.execute("UPDATE users SET role=? WHERE id=?", (new_role, target_user_id))
+
     conn.commit()
     conn.close()
     return {"status": "success"}
 
-@app.delete("/api/users/{target_user_id}")
+@app.delete("/api/users/{target_user_id}", dependencies=[Depends(verify_admin)])
 def delete_user(target_user_id: str, current_user: str = Depends(verify_auth)):
     if target_user_id == current_user:
         return {"error": "You cannot delete yourself."}
@@ -411,6 +522,9 @@ def delete_user(target_user_id: str, current_user: str = Depends(verify_auth)):
     c.execute("DELETE FROM events WHERE user_id=?", (target_user_id,))
     c.execute("DELETE FROM processed_emails_v2 WHERE user_id=?", (target_user_id,))
     c.execute("DELETE FROM sessions WHERE user_id=?", (target_user_id,))
+    c.execute("DELETE FROM grocery_stores WHERE user_id=?", (target_user_id,))
+    c.execute("DELETE FROM grocery_lists WHERE user_id=?", (target_user_id,))
+    c.execute("DELETE FROM grocery_list_items WHERE user_id=?", (target_user_id,))
     conn.commit()
     conn.close()
     return {"status": "success"}
@@ -685,7 +799,10 @@ def resolve_email_webview_links(text_content: str) -> str:
                     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
                 }
             )
-            with urllib.request.urlopen(req, timeout=10) as response:
+            ssl_ctx = ssl.create_default_context()
+            ssl_ctx.check_hostname = False
+            ssl_ctx.verify_mode = ssl.CERT_NONE
+            with urllib.request.urlopen(req, timeout=10, context=ssl_ctx) as response:
                 html_bytes = response.read(250000)
                 charset = response.headers.get_content_charset() or 'utf-8'
                 html_text = html_bytes.decode(charset, errors='replace')
@@ -856,14 +973,36 @@ def extract_event(text: str, date: datetime, subject: str, settings: dict) -> di
         raise ValueError(f"AI API Error: {str(e)}") 
 
 # --- Google Calendar Event Pusher & Duplicate Prevention ---
+def parse_flexible_iso_datetime(date_str: str) -> datetime:
+    """Robustly parse ISO dates, date-only strings, and common datetime formats."""
+    if not date_str or not isinstance(date_str, str):
+        raise ValueError("Empty or invalid date string")
+    clean = date_str.strip().replace("Z", "+00:00")
+    if re.match(r'^\d{4}-\d{2}-\d{2}$', clean):
+        clean += "T09:00:00"
+    elif " " in clean and "T" not in clean:
+        clean = clean.replace(" ", "T")
+    try:
+        dt = datetime.fromisoformat(clean)
+    except Exception:
+        for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%m/%d/%Y %H:%M", "%m/%d/%Y"):
+            try:
+                dt = datetime.strptime(clean, fmt)
+                break
+            except Exception:
+                pass
+        else:
+            raise ValueError(f"Cannot parse datetime from '{date_str}'")
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=datetime.now().astimezone().tzinfo)
+    return dt
+
 def push_event_to_gcal(service, title: str, description: str, date_str: str, location: str = ""):
     """
     Pushes an event to Google Calendar, with duplicate prevention by checking
     events around the same time window (+/- 2 hours) on the user's primary calendar.
     """
-    start_time = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
-    if start_time.tzinfo is None:
-        start_time = start_time.replace(tzinfo=datetime.now().astimezone().tzinfo)
+    start_time = parse_flexible_iso_datetime(date_str)
     end_time = start_time + timedelta(hours=1)
     
     # Check Google Calendar for existing events in a +/- 2 hour window
@@ -901,141 +1040,148 @@ def push_event_to_gcal(service, title: str, description: str, date_str: str, loc
 
 def process_user_emails(user_id: str):
     conn = get_db_conn()
-    c = conn.cursor()
-    c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
-    row = c.fetchone()
-    settings = json.loads(row['settings']) if row and row['settings'] else {}
-    
-    c.execute("SELECT * FROM email_accounts WHERE user_id=?", (user_id,))
-    accounts = c.fetchall()
-    
-    if not accounts:
-        conn.close()
-        return {"error": "No email accounts configured.", "new_events": 0}
+    try:
+        c = conn.cursor()
+        c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
+        row = c.fetchone()
+        settings = json.loads(row['settings']) if row and row['settings'] else {}
         
-    total_events_found = 0
-    lookback_days = int(settings.get("lookback_days", 7) or 7)
-    email_fetch_limit = int(settings.get("email_fetch_limit", 20) or 20)
-    
-    for account in accounts:
-        email_user = account['email_user']
-        email_pass = account['email_pass']
-        email_host = account['email_host']
+        c.execute("SELECT * FROM email_accounts WHERE user_id=?", (user_id,))
+        accounts = c.fetchall()
         
-        logger.info(f"Fetching emails for user {user_id} ({email_user}) from {email_host} (lookback: {lookback_days}d, limit: {email_fetch_limit})...")
-        try:
-            with MailBox(email_host).login(email_user, email_pass) as mailbox:
-                since_date = (datetime.now() - timedelta(days=lookback_days)).date()
-                messages = list(mailbox.fetch(AND(date_gte=since_date), limit=email_fetch_limit, reverse=True))
-                logger.info(f"Retrieved {len(messages)} messages for {email_user}.")
-                
-                for msg in messages:
-                    c.execute("SELECT id FROM processed_emails_v2 WHERE id=? AND user_id=? AND account=?", (msg.uid, user_id, email_user))
-                    if c.fetchone(): continue
-                        
-                    sender = getattr(msg, 'from_', '') or ''
-                    text_content = extract_email_text(msg)
-                    subject_str = msg.subject or 'No Subject'
-                    date_iso = msg.date.isoformat() if msg.date else ""
+        if not accounts:
+            return {"error": "No email accounts configured.", "new_events": 0}
+            
+        total_events_found = 0
+        account_errors = []
+        lookback_days = int(settings.get("lookback_days", 7) or 7)
+        email_fetch_limit = int(settings.get("email_fetch_limit", 20) or 20)
+        
+        for account in accounts:
+            email_user = account['email_user']
+            email_pass = account['email_pass']
+            email_host = account['email_host']
+            
+            logger.info(f"Fetching emails for user {user_id} ({email_user}) from {email_host} (lookback: {lookback_days}d, limit: {email_fetch_limit})...")
+            try:
+                with MailBox(email_host).login(email_user, email_pass) as mailbox:
+                    since_date = (datetime.now() - timedelta(days=lookback_days)).date()
+                    messages = list(mailbox.fetch(AND(date_gte=since_date), limit=email_fetch_limit, reverse=True))
+                    logger.info(f"Retrieved {len(messages)} messages for {email_user}.")
                     
-                    if text_content and len(text_content.strip()) > 10:
-                        try:
-                            ai_result = extract_event(text_content, msg.date, subject_str, settings)
-                            event_data_list = ai_result.get("events", [])
-                            base_reason = ai_result.get("reason", "")
+                    for msg in messages:
+                        c.execute("SELECT id FROM processed_emails_v2 WHERE id=? AND user_id=? AND account=?", (msg.uid, user_id, email_user))
+                        if c.fetchone(): continue
                             
-                            # Gemini Free Tier limit is 15 RPM (1 request every 4 seconds)
-                            if settings.get("ai_provider", "gemini") == "gemini":
-                                time.sleep(4.1)
+                        sender = getattr(msg, 'from_', '') or ''
+                        text_content = extract_email_text(msg)
+                        subject_str = msg.subject or 'No Subject'
+                        date_iso = msg.date.isoformat() if msg.date else ""
+                        
+                        if text_content and len(text_content.strip()) > 10:
+                            try:
+                                ai_result = extract_event(text_content, msg.date, subject_str, settings)
+                                event_data_list = ai_result.get("events", [])
+                                base_reason = ai_result.get("reason", "")
                                 
-                            if event_data_list:
-                                email_status = "added"
-                                sync_details = []
-                                for event_data in event_data_list:
-                                    event_id = str(uuid.uuid4())
-                                    c.execute("INSERT INTO events (id, user_id, account, email_id, title, date, description, location, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')", 
-                                              (event_id, user_id, email_user, msg.uid,
-                                               event_data.get("title", "Untitled"),
-                                               event_data.get("date", ""),
-                                               event_data.get("description", ""),
-                                               event_data.get("location", "")
-                                              ))
-                                    conn.commit()
+                                # Gemini Free Tier limit is 15 RPM (1 request every 4 seconds)
+                                if settings.get("ai_provider", "gemini") == "gemini":
+                                    time.sleep(4.1)
                                     
-                                    # Auto-sync to Google Calendar immediately if connected!
-                                    token_file = os.path.join(DATA_DIR, f"token_{user_id}.json")
-                                    if os.path.exists(token_file):
-                                        try:
-                                            creds = Credentials.from_authorized_user_file(token_file, SCOPES)
-                                            service = build('calendar', 'v3', credentials=creds)
+                                if event_data_list:
+                                    email_status = "added"
+                                    sync_details = []
+                                    for event_data in event_data_list:
+                                        event_id = str(uuid.uuid4())
+                                        c.execute("INSERT INTO events (id, user_id, account, email_id, title, date, description, location, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')", 
+                                                  (event_id, user_id, email_user, msg.uid,
+                                                   event_data.get("title", "Untitled"),
+                                                   event_data.get("date", ""),
+                                                   event_data.get("description", ""),
+                                                   event_data.get("location", "")
+                                                  ))
+                                        conn.commit()
+                                        
+                                        # Auto-sync to Google Calendar immediately if connected!
+                                        token_file = os.path.join(DATA_DIR, f"token_{user_id}.json")
+                                        if os.path.exists(token_file):
                                             try:
-                                                res = push_event_to_gcal(
-                                                    service,
-                                                    event_data.get("title", "Untitled"),
-                                                    event_data.get("description", ""),
-                                                    event_data.get("date", ""),
-                                                    event_data.get("location", "")
-                                                )
-                                                c.execute("UPDATE events SET status='added' WHERE id=?", (event_id,))
-                                                if res.get("status") == "already_exists":
-                                                    logger.info(f"Background: event '{event_data['title']}' already on Google Calendar for {user_id}")
-                                                    sync_details.append(f"Already on Google Calendar '{event_data['title']}'")
-                                                else:
-                                                    logger.info(f"Background auto-synced event '{event_data['title']}' for {user_id}")
-                                                    sync_details.append(f"Auto-synced '{event_data['title']}' to Google Calendar")
-                                            except Exception as date_err:
-                                                err_str = str(date_err)
+                                                creds = Credentials.from_authorized_user_file(token_file, SCOPES)
+                                                service = build('calendar', 'v3', credentials=creds)
+                                                try:
+                                                    res = push_event_to_gcal(
+                                                        service,
+                                                        event_data.get("title", "Untitled"),
+                                                        event_data.get("description", ""),
+                                                        event_data.get("date", ""),
+                                                        event_data.get("location", "")
+                                                    )
+                                                    c.execute("UPDATE events SET status='added' WHERE id=?", (event_id,))
+                                                    if res.get("status") == "already_exists":
+                                                        logger.info(f"Background: event '{event_data['title']}' already on Google Calendar for {user_id}")
+                                                        sync_details.append(f"Already on Google Calendar '{event_data['title']}'")
+                                                    else:
+                                                        logger.info(f"Background auto-synced event '{event_data['title']}' for {user_id}")
+                                                        sync_details.append(f"Auto-synced '{event_data['title']}' to Google Calendar")
+                                                except Exception as date_err:
+                                                    err_str = str(date_err)
+                                                    if "invalid_grant" in err_str:
+                                                        logger.warning(f"Google Calendar OAuth token for {user_id} is expired or revoked.")
+                                                        sync_details.append("Saved to Dashboard (Google Calendar token expired — reconnect in Settings)")
+                                                    else:
+                                                        logger.error(f"Failed to auto-sync event {event_data['title']}: {date_err}")
+                                                        sync_details.append(f"Saved to Dashboard (sync error: {err_str})")
+                                            except Exception as e:
+                                                err_str = str(e)
                                                 if "invalid_grant" in err_str:
                                                     logger.warning(f"Google Calendar OAuth token for {user_id} is expired or revoked.")
                                                     sync_details.append("Saved to Dashboard (Google Calendar token expired — reconnect in Settings)")
                                                 else:
-                                                    logger.error(f"Failed to auto-sync event {event_data['title']}: {date_err}")
-                                                    sync_details.append(f"Saved to Dashboard (sync error: {err_str})")
-                                        except Exception as e:
-                                            err_str = str(e)
-                                            if "invalid_grant" in err_str:
-                                                logger.warning(f"Google Calendar OAuth token for {user_id} is expired or revoked.")
-                                                sync_details.append("Saved to Dashboard (Google Calendar token expired — reconnect in Settings)")
-                                            else:
-                                                logger.error(f"Background auto-sync failed for {user_id}: {e}")
-                                                sync_details.append(f"Saved to Dashboard (Google Calendar error: {err_str})")
-                                    else:
-                                        sync_details.append(f"Saved to Dashboard for review / manual sync")
-                                    
-                                    total_events_found += 1
-                                    
-                                final_reason = base_reason
-                                if sync_details:
-                                    final_reason += " (" + "; ".join(sync_details) + ")"
-                            else:
-                                email_status = "no_event"
-                                final_reason = base_reason or "No calendar events or deadlines detected in email."
-                        except ValueError as ve:
-                            logger.error(f"AI API Error on {email_user}: {str(ve)}")
-                            # Skip this email for now without marking it processed if the API failed
-                            continue
-                    else:
-                        email_status = "no_event"
-                        final_reason = "Email content was empty or too short to contain calendar events."
-                    
-                    c.execute("INSERT INTO processed_emails_v2 (id, user_id, account, subject, date, body, sender, reason, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", 
-                        (msg.uid, user_id, email_user, subject_str, date_iso, text_content, sender, final_reason, email_status))
-                    conn.commit()
+                                                    logger.error(f"Background auto-sync failed for {user_id}: {e}")
+                                                    sync_details.append(f"Saved to Dashboard (Google Calendar error: {err_str})")
+                                        else:
+                                            sync_details.append(f"Saved to Dashboard for review / manual sync")
+                                        
+                                        total_events_found += 1
+                                        
+                                    final_reason = base_reason
+                                    if sync_details:
+                                        final_reason += " (" + "; ".join(sync_details) + ")"
+                                else:
+                                    email_status = "no_event"
+                                    final_reason = base_reason or "No calendar events or deadlines detected in email."
+                            except ValueError as ve:
+                                logger.error(f"AI API Error on {email_user}: {str(ve)}")
+                                # Skip this email for now without marking it processed if the API failed
+                                continue
+                        else:
+                            email_status = "no_event"
+                            final_reason = "Email content was empty or too short to contain calendar events."
+                        
+                        c.execute("INSERT INTO processed_emails_v2 (id, user_id, account, subject, date, body, sender, reason, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", 
+                            (msg.uid, user_id, email_user, subject_str, date_iso, text_content, sender, final_reason, email_status))
+                        conn.commit()
+            except Exception as e:
+                logger.error(f"Error fetching emails for {email_user}: {e}")
+                account_errors.append(f"{email_user}: {str(e)}")
+                continue
+                
+        # Record last scan time in user settings
+        try:
+            settings["last_scan_time"] = datetime.now().isoformat()
+            c.execute("UPDATE users SET settings=? WHERE id=?", (json.dumps(settings), user_id))
+            conn.commit()
         except Exception as e:
-            logger.error(f"Error fetching emails for {email_user}: {e}")
-            conn.close()
-            return {"error": f"Email connection failed for {email_user}. Check password/host.", "new_events": total_events_found}
-            
-    # Record last scan time in user settings
-    try:
-        settings["last_scan_time"] = datetime.now().isoformat()
-        c.execute("UPDATE users SET settings=? WHERE id=?", (json.dumps(settings), user_id))
-        conn.commit()
-    except Exception as e:
-        logger.error(f"Error updating last_scan_time for user {user_id}: {e}")
+            logger.error(f"Error updating last_scan_time for user {user_id}: {e}")
 
-    conn.close()
-    return {"status": "success", "new_events": total_events_found}
+        result = {"status": "success", "new_events": total_events_found}
+        if account_errors:
+            result["warnings"] = account_errors
+            if total_events_found == 0 and len(account_errors) == len(accounts):
+                result["error"] = f"Failed to connect to email account(s): {'; '.join(account_errors)}"
+        return result
+    finally:
+        conn.close()
 
 # In-memory timestamp tracking for user job runs
 USER_LAST_SCAN = {}
@@ -1097,8 +1243,9 @@ async def startup_event():
 def get_events(user_id: str = Depends(verify_auth)):
     conn = get_db_conn()
     c = conn.cursor()
-    now_iso = datetime.now().isoformat()
-    c.execute("SELECT * FROM events WHERE status IN ('pending', 'added') AND user_id=? AND date >= ? ORDER BY date ASC", (user_id, now_iso))
+    # Use start of current day so events occurring earlier today or all-day events remain visible
+    today_start = datetime.now().date().isoformat()
+    c.execute("SELECT * FROM events WHERE status IN ('pending', 'added') AND user_id=? AND date >= ? ORDER BY date ASC", (user_id, today_start))
     rows = c.fetchall()
     conn.close()
     return [dict(r) for r in rows]
@@ -1461,7 +1608,7 @@ def bulk_sync_history(req: BulkHistorySync, user_id: str = Depends(verify_auth))
     conn.close()
     return {"status": "success", "synced": total_synced, "errors": all_errors}
 
-@app.get("/api/logs", dependencies=[Depends(verify_auth)])
+@app.get("/api/logs", dependencies=[Depends(verify_admin)])
 def get_logs():
     if not os.path.exists(LOG_FILE):
         return {"logs": "No logs recorded yet."}
@@ -1615,6 +1762,20 @@ def guess_deal_category(item_name: str) -> str:
         return 'Household & Personal'
     return 'Pantry & Dry Goods'
 
+def stem_word(w: str) -> str:
+    """Stem English plural nouns into singular canonical forms."""
+    if len(w) <= 3:
+        return w
+    if w.endswith('ies') and len(w) > 4:
+        return w[:-3] + 'y' # berries -> berry, cherries -> cherry
+    if w.endswith(('sses', 'shes', 'ches', 'xes', 'zes')):
+        return w[:-2] # dishes -> dish, peaches -> peach, boxes -> box
+    if w.endswith('oes'):
+        return w[:-2] # potatoes -> potato, tomatoes -> tomato
+    if w.endswith('s') and not w.endswith('ss'):
+        return w[:-1] # apples -> apple, steaks -> steak, eggs -> egg
+    return w
+
 def normalize_grocery_store_name(merchant_raw: str) -> str:
     m = (merchant_raw or '').strip()
     ml = m.lower()
@@ -1622,7 +1783,24 @@ def normalize_grocery_store_name(merchant_raw: str) -> str:
     if 'sprouts' in ml: return 'Sprouts Farmers Market'
     if 'tom thumb' in ml: return 'Tom Thumb'
     if 'albertsons' in ml: return 'Albertsons'
+    if 'central market' in ml: return 'Central Market'
     if 'h-e-b' in ml or 'heb' in ml: return 'H-E-B'
+    if 'publix' in ml: return 'Publix'
+    if 'safeway' in ml: return 'Safeway'
+    if 'sam' in ml and 'club' in ml: return "Sam's Club"
+    if 'food lion' in ml: return 'Food Lion'
+    if 'meijer' in ml: return 'Meijer'
+    if 'hy-vee' in ml or 'hyvee' in ml: return 'Hy-Vee'
+    if 'wegmans' in ml: return 'Wegmans'
+    if 'lidl' in ml: return 'Lidl'
+    if 'jewel' in ml: return 'Jewel-Osco'
+    if 'vons' in ml: return 'Vons'
+    if 'ralphs' in ml: return 'Ralphs'
+    if 'smith' in ml: return "Smith's"
+    if 'fry' in ml: return "Fry's Food Stores"
+    if 'king soopers' in ml: return 'King Soopers'
+    if 'harris teeter' in ml: return 'Harris Teeter'
+    if 'giant' in ml: return 'Giant Food'
     if 'aldi' in ml: return 'ALDI'
     if 'walmart' in ml: return 'Walmart'
     if 'target' in ml: return 'Target'
@@ -1680,6 +1858,23 @@ def parse_numeric_price(price_str: str) -> dict:
     if 'bogo' in raw_lower or 'buy 1 get 1' in raw_lower or 'buy one get one' in raw_lower:
         return {'unit_price': None, 'unit': 'bogo', 'raw': raw}
         
+    # Cents per lb (e.g. 99¢/lb, 79c per lb, 88 cents/lb)
+    m_cents_lb = re.search(r'([0-9]{1,3})\s*(?:¢|c\b|cents?\b)\s*(?:/|\s+per\s+|\s+)?(?:lb|lbs|pound)\b', raw_lower)
+    if m_cents_lb:
+        try:
+            return {'unit_price': round(float(m_cents_lb.group(1)) / 100.0, 2), 'unit': 'lb', 'raw': raw}
+        except Exception:
+            pass
+
+    # Cents each or general cents (e.g. 99¢, 50¢ ea, 49c)
+    m_cents = re.search(r'([0-9]{1,3})\s*(?:¢|c\b|cents?\b)', raw_lower)
+    if m_cents:
+        try:
+            unit = 'lb' if ('/lb' in raw_lower or 'per lb' in raw_lower) else 'ea'
+            return {'unit_price': round(float(m_cents.group(1)) / 100.0, 2), 'unit': unit, 'raw': raw}
+        except Exception:
+            pass
+
     m_lb = re.search(r'\$?([0-9]+(?:\.[0-9]{1,2})?)\s*(?:/|\s+per\s+|\s+)?(?:lb|lbs|pound)\b', raw_lower)
     if m_lb:
         try:
@@ -1763,14 +1958,9 @@ def normalize_item_history_key(item_name: str, category: str = "") -> tuple:
     tokens = [w for w in cleaned.split() if len(w) > 2 and w not in stop_words]
     
     # Stem simple plurals
-    canonical_tokens = []
-    for t in tokens:
-        if t.endswith('ies'): t = t[:-3] + 'y'
-        elif t.endswith('es') and not t.endswith('ees'): t = t[:-2]
-        elif t.endswith('s') and not t.endswith('ss'): t = t[:-1]
-        canonical_tokens.append(t)
+    canonical_tokens = [stem_word(t) for t in tokens]
         
-    if 'claw' in name:
+    if 'claw' in name and 'claw' not in canonical_tokens:
         canonical_tokens.append('claw')
     if 'crab' in name and 'crab' not in canonical_tokens:
         canonical_tokens.append('crab')
@@ -1801,7 +1991,7 @@ def normalize_item_tokens(item_name: str) -> set:
         'farm', 'raised', 'boneless', 'skinless', 'bone', 'in', 'center', 'cut', 'thin', 'sliced',
         'thick', 'whole', 'half', 'quarter', 'the', 'and', 'or', 'with', 'in', 'for', 'of', 'item', 'lb', 'lbs'
     }
-    return {w for w in cleaned.split() if len(w) > 2 and w not in stop_words}
+    return {stem_word(w) for w in cleaned.split() if len(w) > 2 and w not in stop_words}
 
 def find_cross_store_comparison(current_item_name: str, current_store: str, current_price_str: str, current_category: str, all_stores_deals: list) -> dict:
     clean_curr_price, _ = sanitize_deal_price_and_notes(current_price_str, "")
@@ -2068,6 +2258,8 @@ def clean_deal_name(name: str) -> str:
         return ''
     n = name.strip()
     n = re.sub(r'^(?:fresh!?|sale!?|hot\s+deal!?|new!?|special!?|great\s+price!?|save!?|super\s+sale!?)\s*', '', n, flags=re.I).strip()
+    n = re.sub(r'[\*\#]+$', '', n).strip()
+    n = re.sub(r'\s+', ' ', n)
     return n
 
 def format_deal_price_and_notes(raw_price, sale_story: Optional[str], description: Optional[str], brand: Optional[str], clean_name: str):
@@ -2120,7 +2312,7 @@ def _fetch_single_flipp_flyer(f: dict, postal_code: str, headers: dict, ctx: ssl
     fid = f.get('id')
     if not fid:
         return norm_store, fid, f, []
-    furl = f"https://backflipp.wishabi.com/flipp/flyers/{fid}"
+    furl = f"https://backflipp.wishabi.com/flipp/flyers/{fid}?postal_code={postal_code}&locale=en-us"
     try:
         freq = urllib.request.Request(furl, headers=headers)
         with urllib.request.urlopen(freq, timeout=8, context=ctx) as fresp:
@@ -2145,7 +2337,9 @@ def _fetch_single_flipp_flyer(f: dict, postal_code: str, headers: dict, ctx: ssl
                 price_str, notes_str = format_deal_price_and_notes(raw_price, sale_story, desc, brand, clean_name)
                 
                 img_url = it.get('cutout_image_url') or it.get('clean_image_url') or it.get('clipping_image_url') or it.get('image_url') or it.get('original_image_url') or ''
-                if img_url.startswith('http://'):
+                if img_url.startswith('//'):
+                    img_url = 'https:' + img_url
+                elif img_url.startswith('http://'):
                     img_url = 'https://' + img_url[7:]
                 
                 name_key = clean_name.lower()
@@ -2209,7 +2403,10 @@ def fetch_flipp_store_deals(postal_code: str = '76262', store_name_filter: Optio
     known_grocery_keywords = [
         'kroger', 'h-e-b', 'heb', 'tom thumb', 'albertsons', 'sprouts',
         'aldi', 'walmart', 'target', 'fiesta', 'costco', 'winco',
-        'whole foods', 'trader joe', 'brookshire', 'market street', 'united supermarkets', 'bravo'
+        'whole foods', 'trader joe', 'brookshire', 'market street', 'united supermarkets',
+        'publix', 'safeway', 'sam', 'food lion', 'meijer', 'hy-vee', 'hyvee', 'wegmans',
+        'lidl', 'jewel', 'vons', 'ralphs', 'smith', 'fry', 'king soopers', 'harris teeter',
+        'giant', 'central market', 'bravo'
     ]
     
     stores_data = {}
@@ -2300,7 +2497,9 @@ def fetch_flipp_store_deals(postal_code: str = '76262', store_name_filter: Optio
                             s_price_str, s_notes_str = format_deal_price_and_notes(s_raw_price, s_sale, s_desc, s_brand, clean_name)
                             
                             s_img = sit.get('cutout_image_url') or sit.get('clean_image_url') or sit.get('clipping_image_url') or sit.get('image_url') or sit.get('original_image_url') or ''
-                            if s_img.startswith('http://'):
+                            if s_img.startswith('//'):
+                                s_img = 'https:' + s_img
+                            elif s_img.startswith('http://'):
                                 s_img = 'https://' + s_img[7:]
                             
                             name_key = clean_name.lower()
@@ -3223,42 +3422,66 @@ def clear_checked_grocery_items(list_id: str, user_id: str = Depends(verify_auth
 @app.post("/api/groceries/ai_generate_list")
 def ai_generate_list(req: AIGroceryListRequest, user_id: str = Depends(verify_auth)):
     conn = get_db_conn()
-    c = conn.cursor()
-    c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
-    s_row = c.fetchone()
-    settings = json.loads(s_row['settings']) if s_row and s_row['settings'] else {}
-    
-    c.execute("SELECT name, ad_url, cached_deals FROM grocery_stores WHERE user_id=?", (user_id,))
-    stores = []
-    for r in c.fetchall():
-        deals = []
-        if r["cached_deals"]:
-            try: deals = json.loads(r["cached_deals"])
-            except Exception: deals = []
-        stores.append({"name": r["name"], "deals": deals})
+    try:
+        c = conn.cursor()
+        c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
+        s_row = c.fetchone()
+        settings = json.loads(s_row['settings']) if s_row and s_row['settings'] else {}
         
-    items = ai_generate_grocery_list_items(req.prompt, stores, settings)
-    
-    list_id = req.list_id
-    now = datetime.now().isoformat()
-    if not list_id:
-        list_id = str(uuid.uuid4())
-        c.execute("INSERT INTO grocery_lists (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-                  (list_id, user_id, req.list_title or "AI Generated List", now, now))
-                  
-    for item in items:
-        item_id = str(uuid.uuid4())
-        name = item.get("item_name") or item.get("item") or "Item"
-        store = item.get("store_name") or item.get("store") or "Any"
-        price = item.get("price_notes") or item.get("price") or ""
-        cat = item.get("category") or "General"
-        img = item.get("image_url") or ""
-        c.execute("INSERT INTO grocery_list_items (id, list_id, user_id, item_name, store_name, price_notes, category, is_checked, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)",
-                  (item_id, list_id, user_id, name, store, price, cat, img))
-                  
-    c.execute("UPDATE grocery_lists SET updated_at=? WHERE id=? AND user_id=?", (now, list_id, user_id))
-    conn.commit()
-    conn.close()
-    return {"status": "success", "list_id": list_id, "items": items}
+        c.execute("SELECT name, ad_url, cached_deals FROM grocery_stores WHERE user_id=?", (user_id,))
+        stores = []
+        deal_images = {}
+        for r in c.fetchall():
+            deals = []
+            if r["cached_deals"]:
+                try: deals = json.loads(r["cached_deals"])
+                except Exception: deals = []
+            stores.append({"name": r["name"], "deals": deals})
+            for d in deals:
+                d_item = (d.get("item") or "").lower().strip()
+                d_img = d.get("image_url") or ""
+                if d_item and d_img and d_item not in deal_images:
+                    deal_images[d_item] = d_img
+            
+        items = ai_generate_grocery_list_items(req.prompt, stores, settings)
+        
+        list_id = req.list_id
+        now = datetime.now().isoformat()
+        if list_id:
+            c.execute("SELECT id FROM grocery_lists WHERE id=? AND user_id=?", (list_id, user_id))
+            if not c.fetchone():
+                c.execute("INSERT INTO grocery_lists (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+                          (list_id, user_id, req.list_title or "AI Generated List", now, now))
+        else:
+            list_id = str(uuid.uuid4())
+            c.execute("INSERT INTO grocery_lists (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+                      (list_id, user_id, req.list_title or "AI Generated List", now, now))
+                      
+        for item in items:
+            item_id = str(uuid.uuid4())
+            name = item.get("item_name") or item.get("item") or "Item"
+            store = item.get("store_name") or item.get("store") or "Any"
+            price = item.get("price_notes") or item.get("price") or ""
+            cat = item.get("category") or "General"
+            img = item.get("image_url") or ""
+            
+            # If no image was provided, find best match from cached store circular deals
+            if not img and deal_images:
+                toks = normalize_item_tokens(name)
+                for d_name, d_img in deal_images.items():
+                    d_toks = normalize_item_tokens(d_name)
+                    if toks and d_toks and toks.intersection(d_toks) and len(toks.intersection(d_toks)) >= min(len(toks), 2):
+                        img = d_img
+                        item["image_url"] = img
+                        break
+                        
+            c.execute("INSERT INTO grocery_list_items (id, list_id, user_id, item_name, store_name, price_notes, category, is_checked, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)",
+                      (item_id, list_id, user_id, name, store, price, cat, img))
+                      
+        c.execute("UPDATE grocery_lists SET updated_at=? WHERE id=? AND user_id=?", (now, list_id, user_id))
+        conn.commit()
+        return {"status": "success", "list_id": list_id, "items": items}
+    finally:
+        conn.close()
 
 
