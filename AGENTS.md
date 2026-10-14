@@ -115,6 +115,8 @@ All tables are initialized and automatically migrated on startup in `init_db()` 
 | `notes` | TEXT | Custom store notes or location details |
 | `last_scanned` | TEXT | ISO timestamp of last successful circular scan |
 | `cached_deals` | TEXT (JSON) | Cached JSON array of extracted weekly deals |
+| `valid_from` | TEXT | ISO timestamp when the active circular begins (e.g. `2026-09-01T00:00:00-04:00`) |
+| `valid_to` | TEXT | ISO timestamp when the active circular expires (e.g. `2026-09-08T23:59:59-04:00`) |
 
 ### `grocery_lists`
 | Column | Type | Description |
@@ -235,6 +237,7 @@ For fast sub-millisecond query performance on multi-user and large datasets, the
 - **Store Ads & Circulars**: Users can configure local store ad URLs or use automated zip discovery.
 - **AI Ad Scraping & Browsing**: Scrapes web circulars using clean HTML text extraction, parses structured deals by category, and provides a full interactive deal browser with search and department filtering.
 - **Price Query & Deal Comparison**: Natural language prompt query allows users to ask for best prices, ingredient comparisons, and budget recommendations across stores.
+- **Automatic Deal Expiration Tracking & Continuous Freshness Engine**: Tracks `valid_from` and `valid_to` date boundaries for every store circular. When a flyer expires (e.g. running 9/1 to 9/8, expiring at midnight on 9/8), the engine automatically flags the store as expired on 9/9, and proactive background polling (every 30 minutes) + reactive just-in-time checks immediately ingest the new active weekly deals (e.g. 9/9 to 9/15) from Flipp and local sources, replacing expired deals without requiring manual user intervention. Filtered search enrichment also validates individual item expiration dates to prevent expired promotions from leaking into active feeds.
 - **Interactive Grocery Lists**: Create custom lists, group items by category or store, check off bought items, clear checked items, copy markdown/plain text lists to clipboard, and 1-click add deals directly to any list with pictures.
 - **AI Meal-Prep List Generator**: Generates full recipe-based grocery lists with assigned stores, circular deal images, and estimated pricing based on user dietary or meal planning prompts.
 

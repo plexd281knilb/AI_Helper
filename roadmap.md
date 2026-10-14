@@ -12,6 +12,7 @@ This document outlines the evolutionary roadmap for **AI Helper**, cataloging re
 - **🚀 High-Performance SQLite Composite Indexing:** Sub-millisecond queries on large multi-user databases with automated composite indexes across events, accounts, processing memory, and circular deals.
 - **🛒 Stemmed Cross-Store Deal Comparison & Exact Cent Pricing:** Plural noun stemming (`stem_word`) and accurate cents-to-dollars price normalization (`parse_numeric_price`) allowing exact cross-store bargain matching across 25+ nationwide supermarket chains.
 - **🥩 USDA Beef Grade Quality Isolation:** Dedicated beef grade detection (`prime`, `choice`, `select`, `wagyu`, `angus`) preventing misleading price comparisons across quality tiers.
+- **🔄 Continuous Circular Freshness & Automatic Deal Transition Engine:** Continuous validity tracking (`valid_from` to `valid_to`) ensuring that when promotional flyers expire (e.g. 9/1 – 9/8), the engine automatically pulls and ingests the next week's circular deals (e.g. 9/9 onwards) via proactive 30-minute background polling and reactive just-in-time refresh.
 - **🩺 Container Health Monitoring:** Standardized `/health` and `/api/health` endpoints with lightweight Python urllib healthchecks in `docker-compose.yml`.
 
 ---

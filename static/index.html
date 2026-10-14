@@ -3847,6 +3847,15 @@
                     cleanNotes = cleanNotes.replace(/^(\s*\|\s*)+|(\s*\|\s*)+$/g, '').trim();
                 }
 
+                let dealValidityHtml = '';
+                if (deal.valid_to) {
+                    try {
+                        const vTo = new Date(deal.valid_to);
+                        const dateFmt = vTo.toLocaleDateString(undefined, {month: 'short', day: 'numeric'});
+                        dealValidityHtml = `<span style="font-size: 10.5px; color: #94a3b8; font-weight: 500;" title="Sale valid through ${dateFmt}">📅 thru ${dateFmt}</span>`;
+                    } catch(e) {}
+                }
+
                 return `
                     <div class="deal-card" id="deal-card-${idx}">
                         <div class="deal-thumb-box">
@@ -3861,6 +3870,7 @@
                                 <span class="store-pill ${pillClass}">${escapeHtml(deal.store)}</span>
                                 <span class="deal-price-badge">${escapeHtml(cleanedPrice || 'Sale')}</span>
                                 ${gradePillHtml}
+                                ${dealValidityHtml}
                                 <span style="font-size: 10.5px; color: #8b949e; margin-left: auto; text-transform: uppercase; font-weight: 500; letter-spacing: 0.3px;">${escapeHtml(deal.category || '')}</span>
                             </div>
 
@@ -4258,12 +4268,31 @@
                                     const pillClass = getStorePillClass(store.name);
                                     const scannedStr = store.last_scanned ? new Date(store.last_scanned).toLocaleString() : 'Never scanned';
                                     const dealsCount = store.deals_count || 0;
+                                    
+                                    let validityBadge = '';
+                                    if (store.valid_to) {
+                                        const vToDate = new Date(store.valid_to);
+                                        const vFromDate = store.valid_from ? new Date(store.valid_from) : null;
+                                        const isExpired = store.is_expired || (vToDate < new Date());
+                                        const formatDate = (d) => d.toLocaleDateString(undefined, {month: 'short', day: 'numeric'});
+                                        const dateRangeStr = vFromDate ? `${formatDate(vFromDate)} – ${formatDate(vToDate)}` : `Ends ${formatDate(vToDate)}`;
+                                        
+                                        if (isExpired) {
+                                            validityBadge = `<div style="font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 4px; background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); display: inline-flex; align-items: center; gap: 4px; margin-top: 5px;">⚠️ Circular Ended ${formatDate(vToDate)} (Refreshing...)</div>`;
+                                        } else {
+                                            validityBadge = `<div style="font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 4px; background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); display: inline-flex; align-items: center; gap: 4px; margin-top: 5px;">🟢 Active Ad: ${dateRangeStr}</div>`;
+                                        }
+                                    } else if (store.notes && store.notes.includes('Valid')) {
+                                        validityBadge = `<div style="font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 4px; background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); display: inline-flex; align-items: center; gap: 4px; margin-top: 5px;">🟢 ${escapeHtml(store.notes)}</div>`;
+                                    }
+
                                     return `
                                         <div class="store-card">
                                             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
                                                 <div>
                                                     <span class="store-pill ${pillClass}" style="font-size: 13.5px; padding: 4px 10px; font-weight: 700;">${escapeHtml(store.name)}</span>
-                                                    ${store.notes ? `<div style="font-size: 12px; color: #94a3b8; margin-top: 4px;">${escapeHtml(store.notes)}</div>` : ''}
+                                                    ${validityBadge}
+                                                    ${store.notes && !validityBadge ? `<div style="font-size: 12px; color: #94a3b8; margin-top: 4px;">${escapeHtml(store.notes)}</div>` : ''}
                                                 </div>
                                                 <button class="remove-btn" onclick="deleteGroceryStore('${store.id}')" style="margin: 0; padding: 4px 8px; font-size: 12px;" title="Delete Store">🗑️</button>
                                             </div>

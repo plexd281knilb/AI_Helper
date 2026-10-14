@@ -12,7 +12,7 @@ import urllib.request
 import urllib.parse
 from html import unescape
 from logging.handlers import RotatingFileHandler
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from fastapi import FastAPI, Request, Response, UploadFile, File, Depends, HTTPException
@@ -155,7 +155,9 @@ def init_db():
                     ad_url TEXT,
                     notes TEXT,
                     last_scanned TEXT,
-                    cached_deals TEXT
+                    cached_deals TEXT,
+                    valid_from TEXT,
+                    valid_to TEXT
                  )''')
                  
     c.execute('''CREATE TABLE IF NOT EXISTS grocery_lists (
@@ -183,6 +185,16 @@ def init_db():
     except sqlite3.OperationalError:
         pass # Column already exists
         
+    try:
+        c.execute("ALTER TABLE grocery_stores ADD COLUMN valid_from TEXT;")
+    except sqlite3.OperationalError:
+        pass # Column already exists
+        
+    try:
+        c.execute("ALTER TABLE grocery_stores ADD COLUMN valid_to TEXT;")
+    except sqlite3.OperationalError:
+        pass # Column already exists
+        
     c.execute('''CREATE TABLE IF NOT EXISTS grocery_price_history (
                     id TEXT PRIMARY KEY,
                     user_id TEXT,
@@ -202,6 +214,7 @@ def init_db():
     c.execute("CREATE INDEX IF NOT EXISTS idx_email_acc_user ON email_accounts(user_id);")
     c.execute("CREATE INDEX IF NOT EXISTS idx_pe_user_date ON processed_emails_v2(user_id, date DESC);")
     c.execute("CREATE INDEX IF NOT EXISTS idx_gs_user ON grocery_stores(user_id);")
+    c.execute("CREATE INDEX IF NOT EXISTS idx_gs_user_valid_to ON grocery_stores(user_id, valid_to);")
     c.execute("CREATE INDEX IF NOT EXISTS idx_gl_user ON grocery_lists(user_id);")
     c.execute("CREATE INDEX IF NOT EXISTS idx_gli_list_user ON grocery_list_items(list_id, user_id);")
     
@@ -1185,6 +1198,7 @@ def process_user_emails(user_id: str):
 
 # In-memory timestamp tracking for user job runs
 USER_LAST_SCAN = {}
+USER_LAST_DEAL_SCAN = {}
 
 @app.get("/api/fetch_emails")
 def fetch_emails_endpoint(user_id: str = Depends(verify_auth)):
@@ -1209,7 +1223,19 @@ async def scheduled_email_fetch():
                 s = json.loads(u["settings"] or "{}")
                 interval_minutes = int(s.get("fetch_interval_minutes", 60))
                 
-                # If interval is 0 or negative, auto-fetch is disabled
+                # Proactive Background Deal Freshness Check & Ingestion (Every 30 minutes)
+                # Automatically detects expired circulars and pulls the next circular immediately (e.g. 9/9 after 9/8)
+                last_deal_scan = USER_LAST_DEAL_SCAN.get(user_id, 0)
+                if (now_ts - last_deal_scan) >= 1800: # 30 minutes
+                    USER_LAST_DEAL_SCAN[user_id] = now_ts
+                    try:
+                        deal_refresh_res = await asyncio.to_thread(refresh_user_expired_deals, user_id)
+                        if deal_refresh_res.get("refreshed", 0) > 0:
+                            logger.info(f"Background worker: Auto-pulled {deal_refresh_res['refreshed']} new weekly circular(s) for user {user_id}")
+                    except Exception as d_err:
+                        logger.error(f"Error checking deal circular freshness for user {user_id}: {d_err}")
+
+                # If interval is 0 or negative, auto-fetch for email is disabled
                 if interval_minutes <= 0:
                     continue
                     
@@ -1814,6 +1840,61 @@ def normalize_grocery_store_name(merchant_raw: str) -> str:
     if 'united' in ml: return 'United Supermarkets'
     return m
 
+def parse_flyer_datetime(dt_str: Optional[str]) -> Optional[datetime]:
+    """Parse ISO datetime or date string into a UTC-aware datetime object."""
+    if not dt_str or not isinstance(dt_str, str):
+        return None
+    s = dt_str.strip()
+    if not s:
+        return None
+    try:
+        dt = datetime.fromisoformat(s.replace('Z', '+00:00'))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception:
+        pass
+    try:
+        m = re.match(r'^(\d{4})-(\d{2})-(\d{2})', s)
+        if m:
+            return datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)), 23, 59, 59, tzinfo=timezone.utc)
+    except Exception:
+        pass
+    return None
+
+def is_store_deals_expired(store: dict) -> bool:
+    """
+    Check if a store's cached circular deals are expired and should be re-fetched.
+    If a flyer ran 9/1 to 9/8, on 9/9 valid_to < now() returns True, triggering
+    automatic ingestion of the new 9/9 circular deals.
+    """
+    valid_to_str = store.get('valid_to')
+    if not valid_to_str and store.get('notes'):
+        m = re.search(r'to\s+(\d{4}-\d{2}-\d{2})', store['notes'], re.I)
+        if m:
+            valid_to_str = m.group(1)
+            
+    now_utc = datetime.now(timezone.utc)
+    if valid_to_str:
+        v_to = parse_flyer_datetime(valid_to_str)
+        if v_to:
+            return now_utc > v_to
+
+    cached = store.get('cached_deals')
+    if not cached or cached == '[]' or cached == 'null':
+        return True
+        
+    last_scanned = store.get('last_scanned')
+    if not last_scanned:
+        return True
+        
+    ls_dt = parse_flyer_datetime(last_scanned)
+    if ls_dt:
+        if (now_utc - ls_dt).total_seconds() > 86400:
+            return True
+            
+    return False
+
 def sanitize_deal_price_and_notes(price_str: str, notes_str: str = "") -> tuple:
     p = (price_str or '').strip()
     n = (notes_str or '').strip()
@@ -2412,7 +2493,9 @@ def fetch_flipp_store_deals(postal_code: str = '76262', store_name_filter: Optio
     stores_data = {}
     target_filter_norm = normalize_grocery_store_name(store_name_filter).lower() if store_name_filter else None
 
-    matched_flyers = []
+    now_utc = datetime.now(timezone.utc)
+    merchant_flyers_map = {}
+    
     for f in flyers:
         merchant = f.get('merchant') or ''
         merchant_lower = merchant.lower()
@@ -2426,7 +2509,42 @@ def fetch_flipp_store_deals(postal_code: str = '76262', store_name_filter: Optio
         if target_filter_norm and target_filter_norm not in norm_store.lower() and norm_store.lower() not in target_filter_norm:
             continue
             
-        matched_flyers.append((f, norm_store))
+        v_from = parse_flyer_datetime(f.get('valid_from'))
+        v_to = parse_flyer_datetime(f.get('valid_to'))
+        is_active = (v_to is None or v_to >= now_utc)
+        
+        if norm_store not in merchant_flyers_map:
+            merchant_flyers_map[norm_store] = []
+        merchant_flyers_map[norm_store].append({
+            'flyer': f,
+            'is_active': is_active,
+            'valid_from_dt': v_from,
+            'valid_to_dt': v_to
+        })
+
+    if not merchant_flyers_map:
+        return {}
+
+    # For each store, select the best active / upcoming flyer(s)
+    # If active flyers exist, discard expired flyers so they never pollute fresh deals
+    matched_flyers = []
+    for nstore, f_entries in merchant_flyers_map.items():
+        active_entries = [e for e in f_entries if e['is_active']]
+        if active_entries:
+            # Sort active flyers by valid_from descending (most recent/upcoming promotional week first)
+            active_entries.sort(key=lambda e: (
+                e['valid_from_dt'] or datetime.min.replace(tzinfo=timezone.utc),
+                e['flyer'].get('title') or ''
+            ), reverse=True)
+            for e in active_entries:
+                matched_flyers.append((e['flyer'], nstore))
+        else:
+            # Fallback if no active flyer exists yet: keep the newest expired flyer temporarily
+            f_entries.sort(key=lambda e: (
+                e['valid_to_dt'] or datetime.min.replace(tzinfo=timezone.utc)
+            ), reverse=True)
+            if f_entries:
+                matched_flyers.append((f_entries[0]['flyer'], nstore))
 
     if not matched_flyers:
         return {}
@@ -2439,17 +2557,25 @@ def fetch_flipp_store_deals(postal_code: str = '76262', store_name_filter: Optio
                 norm_store, fid, f, deals = fut.result()
                 if deals:
                     ad_web_url = f"https://flipp.com/flyer/{fid}?postal_code={postal_code}"
+                    f_v_from = f.get('valid_from')
+                    f_v_to = f.get('valid_to')
                     if norm_store not in stores_data:
                         stores_data[norm_store] = {
                             'name': norm_store,
                             'ad_url': ad_web_url,
                             'flyer_id': fid,
                             'flyer_title': f.get('title') or f"{norm_store} Weekly Ad",
-                            'valid_from': f.get('valid_from'),
-                            'valid_to': f.get('valid_to'),
+                            'valid_from': f_v_from,
+                            'valid_to': f_v_to,
                             'deals': deals
                         }
                     else:
+                        cur_v_to_dt = parse_flyer_datetime(stores_data[norm_store].get('valid_to'))
+                        new_v_to_dt = parse_flyer_datetime(f_v_to)
+                        # Keep earlier expiration date if merging weekly ad with longer seasonal promo
+                        if new_v_to_dt and cur_v_to_dt and new_v_to_dt < cur_v_to_dt:
+                            stores_data[norm_store]['valid_to'] = f_v_to
+                            stores_data[norm_store]['ad_url'] = ad_web_url
                         existing_map = {d['item'].lower(): d for d in stores_data[norm_store]['deals']}
                         for d in deals:
                             d_key = d['item'].lower()
@@ -2482,6 +2608,10 @@ def fetch_flipp_store_deals(postal_code: str = '76262', store_name_filter: Optio
                         existing_map = {d['item'].lower(): d for d in store_deals}
                         
                         for sit in s_items:
+                            # Skip expired items from search cache
+                            sit_v_to = parse_flyer_datetime(sit.get('valid_to'))
+                            if sit_v_to and sit_v_to < now_utc:
+                                continue
                             raw_name = sit.get('name') or ''
                             if not raw_name or len(raw_name.strip()) < 2:
                                 continue
@@ -2762,12 +2892,108 @@ def ai_generate_grocery_list_items(prompt_text: str, store_deals_data: list, set
         logger.warning(f"Could not parse AI grocery list items JSON: {parse_err}")
         return []
 
+def refresh_user_expired_deals(user_id: str, force: bool = False) -> dict:
+    """
+    Checks if any grocery stores for user_id have expired deals (or if force=True).
+    If a deal ran 9/1 to 9/8, on 9/9 valid_to < now() triggers an automatic refresh,
+    pulling the next new deals for that store and updating the database cache.
+    """
+    conn = get_db_conn()
+    c = conn.cursor()
+    c.execute("SELECT id, name, ad_url, notes, last_scanned, cached_deals, valid_from, valid_to FROM grocery_stores WHERE user_id=?", (user_id,))
+    stores = [dict(r) for r in c.fetchall()]
+    
+    if not stores:
+        conn.close()
+        return {"refreshed": 0, "message": "No stores configured"}
+        
+    now_utc = datetime.now(timezone.utc)
+    expired_stores = []
+    
+    for s in stores:
+        if force:
+            expired_stores.append(s)
+            continue
+            
+        # Cooldown check: if checked in the last 15 minutes and has non-empty deals, don't spam
+        ls = s.get("last_scanned")
+        cached = s.get("cached_deals")
+        has_deals = bool(cached and cached != '[]' and cached != 'null')
+        if ls and has_deals:
+            ls_dt = parse_flyer_datetime(ls)
+            if ls_dt and (now_utc - ls_dt).total_seconds() < 900: # 15 minutes cooldown
+                continue
+                
+        if is_store_deals_expired(s):
+            expired_stores.append(s)
+            
+    if not expired_stores:
+        conn.close()
+        return {"refreshed": 0, "message": "All store deals are currently fresh"}
+        
+    c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
+    s_row = c.fetchone()
+    settings = json.loads(s_row['settings']) if s_row and s_row['settings'] else {}
+    postal_code = (settings.get("postal_code") or "76262").strip()
+    
+    logger.info(f"Auto-refreshing {len(expired_stores)} expired grocery stores for user {user_id} (zip {postal_code})...")
+    
+    # Fetch newest circulars from Flipp
+    flipp_stores = fetch_flipp_store_deals(postal_code)
+    now_iso = datetime.now().isoformat()
+    refreshed_count = 0
+    
+    for s in expired_stores:
+        sname = s["name"]
+        norm_key = normalize_grocery_store_name(sname)
+        new_deals = []
+        new_valid_from = None
+        new_valid_to = None
+        new_ad_url = s["ad_url"]
+        new_notes = s["notes"] or ""
+        
+        if norm_key in flipp_stores:
+            f_info = flipp_stores[norm_key]
+            new_deals = f_info.get("deals", [])
+            new_valid_from = f_info.get("valid_from")
+            new_valid_to = f_info.get("valid_to")
+            if new_valid_to:
+                new_notes = f"Valid: {new_valid_from[:10]} to {new_valid_to[:10]}" if new_valid_from else f"Valid to {new_valid_to[:10]}"
+            if f_info.get("ad_url"):
+                new_ad_url = f_info["ad_url"]
+        elif s["ad_url"] and s["ad_url"].startswith(("http://", "https://")) and "flipp.com" not in s["ad_url"]:
+            content = fetch_url_clean_content(s["ad_url"])
+            if content:
+                new_deals = extract_store_deals_with_ai(sname, content, settings)
+                
+        if new_deals:
+            c.execute(
+                "UPDATE grocery_stores SET ad_url=?, notes=?, last_scanned=?, cached_deals=?, valid_from=?, valid_to=? WHERE id=? AND user_id=?",
+                (new_ad_url, new_notes, now_iso, json.dumps(new_deals), new_valid_from, new_valid_to, s["id"], user_id)
+            )
+            record_store_deals_price_history(conn, user_id, sname, new_deals, now_iso)
+            refreshed_count += 1
+        else:
+            # Even if 0 deals were found on this pass, touch last_scanned so we don't spam in tight loops
+            c.execute("UPDATE grocery_stores SET last_scanned=? WHERE id=? AND user_id=?", (now_iso, s["id"], user_id))
+            
+    conn.commit()
+    conn.close()
+    
+    logger.info(f"Auto-refresh complete: updated {refreshed_count} stores with newest circular deals.")
+    return {"refreshed": refreshed_count, "expired_count": len(expired_stores)}
+
 # --- Store Management Endpoints ---
 @app.get("/api/groceries/stores")
 def get_grocery_stores(user_id: str = Depends(verify_auth)):
+    try:
+        refresh_user_expired_deals(user_id)
+    except Exception as e:
+        logger.warning(f"Error checking deal freshness in get_grocery_stores: {e}")
+
     conn = get_db_conn()
     c = conn.cursor()
-    c.execute("SELECT id, name, ad_url, notes, last_scanned, cached_deals FROM grocery_stores WHERE user_id=? ORDER BY name ASC", (user_id,))
+    c.execute("SELECT id, name, ad_url, notes, last_scanned, cached_deals, valid_from, valid_to FROM grocery_stores WHERE user_id=? ORDER BY name ASC", (user_id,))
     rows = c.fetchall()
     conn.close()
     
@@ -2780,6 +3006,7 @@ def get_grocery_stores(user_id: str = Depends(verify_auth)):
             except Exception: deals = []
         d["deals_count"] = len(deals)
         d["deals_preview"] = deals[:5]
+        d["is_expired"] = is_store_deals_expired(d)
         stores.append(d)
     return stores
 
@@ -2878,20 +3105,22 @@ def auto_fetch_local_deals(req: AutoFetchDealsRequest, user_id: str = Depends(ve
         total_deals_count += len(deals)
         deals_json = json.dumps(deals)
         ad_url = sinfo.get("ad_url", "")
-        valid_range = f"Valid: {sinfo.get('valid_from', '')[:10]} to {sinfo.get('valid_to', '')[:10]}" if sinfo.get('valid_to') else ""
+        valid_from = sinfo.get("valid_from")
+        valid_to = sinfo.get("valid_to")
+        valid_range = f"Valid: {valid_from[:10]} to {valid_to[:10]}" if valid_to else ""
         
         norm_key = sname.lower()
         if norm_key in existing_stores:
             store_id = existing_stores[norm_key]
             c.execute(
-                "UPDATE grocery_stores SET name=?, ad_url=?, notes=?, last_scanned=?, cached_deals=? WHERE id=? AND user_id=?",
-                (sname, ad_url, valid_range, now_iso, deals_json, store_id, user_id)
+                "UPDATE grocery_stores SET name=?, ad_url=?, notes=?, last_scanned=?, cached_deals=?, valid_from=?, valid_to=? WHERE id=? AND user_id=?",
+                (sname, ad_url, valid_range, now_iso, deals_json, valid_from, valid_to, store_id, user_id)
             )
         else:
             store_id = str(uuid.uuid4())
             c.execute(
-                "INSERT INTO grocery_stores (id, user_id, name, ad_url, notes, last_scanned, cached_deals) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (store_id, user_id, sname, ad_url, valid_range, now_iso, deals_json)
+                "INSERT INTO grocery_stores (id, user_id, name, ad_url, notes, last_scanned, cached_deals, valid_from, valid_to) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (store_id, user_id, sname, ad_url, valid_range, now_iso, deals_json, valid_from, valid_to)
             )
             existing_stores[norm_key] = store_id
             
@@ -2901,7 +3130,9 @@ def auto_fetch_local_deals(req: AutoFetchDealsRequest, user_id: str = Depends(ve
             "name": sname,
             "deals_count": len(deals),
             "ad_url": ad_url,
-            "valid_range": valid_range
+            "valid_range": valid_range,
+            "valid_from": valid_from,
+            "valid_to": valid_to
         })
         
     conn.commit()
@@ -2919,7 +3150,7 @@ def auto_fetch_local_deals(req: AutoFetchDealsRequest, user_id: str = Depends(ve
 def scan_grocery_store(store_id: str, user_id: str = Depends(verify_auth)):
     conn = get_db_conn()
     c = conn.cursor()
-    c.execute("SELECT id, name, ad_url FROM grocery_stores WHERE id=? AND user_id=?", (store_id, user_id))
+    c.execute("SELECT id, name, ad_url, notes FROM grocery_stores WHERE id=? AND user_id=?", (store_id, user_id))
     store = c.fetchone()
     if not store:
         conn.close()
@@ -2932,6 +3163,9 @@ def scan_grocery_store(store_id: str, user_id: str = Depends(verify_auth)):
     
     url = store["ad_url"] or ""
     name = store["name"]
+    valid_range = store["notes"] or ""
+    valid_from = None
+    valid_to = None
     
     deals = []
     now_iso = datetime.now().isoformat()
@@ -2942,6 +3176,10 @@ def scan_grocery_store(store_id: str, user_id: str = Depends(verify_auth)):
     if flipp_stores:
         matched_info = list(flipp_stores.values())[0]
         deals = matched_info.get("deals", [])
+        valid_from = matched_info.get("valid_from")
+        valid_to = matched_info.get("valid_to")
+        if valid_to:
+            valid_range = f"Valid: {valid_from[:10]} to {valid_to[:10]}" if valid_from else f"Valid to {valid_to[:10]}"
         if matched_info.get("ad_url"):
             url = matched_info["ad_url"]
     
@@ -2952,18 +3190,18 @@ def scan_grocery_store(store_id: str, user_id: str = Depends(verify_auth)):
         if not deals and (not content or len(content.strip()) < 50):
             warning_msg = f"Could not read circular text from {url}. Supermarkets (like Kroger, Tom Thumb, and HEB) block scrapers without cookies. Tip: Use 1-Click Auto-Fetch Deals by Zip Code or click '📋 Paste Deals' to paste flyer text directly!"
             
-    c.execute("UPDATE grocery_stores SET ad_url=?, last_scanned=?, cached_deals=? WHERE id=? AND user_id=?",
-              (url, now_iso, json.dumps(deals), store_id, user_id))
+    c.execute("UPDATE grocery_stores SET ad_url=?, notes=?, last_scanned=?, cached_deals=?, valid_from=?, valid_to=? WHERE id=? AND user_id=?",
+              (url, valid_range, now_iso, json.dumps(deals), valid_from, valid_to, store_id, user_id))
     record_store_deals_price_history(conn, user_id, name, deals, now_iso)
     conn.commit()
     conn.close()
-    return {"status": "success", "deals_found": len(deals), "deals": deals, "warning": warning_msg}
+    return {"status": "success", "deals_found": len(deals), "deals": deals, "valid_from": valid_from, "valid_to": valid_to, "warning": warning_msg}
 
 @app.post("/api/groceries/stores/scan_all")
 def scan_all_grocery_stores(user_id: str = Depends(verify_auth)):
     conn = get_db_conn()
     c = conn.cursor()
-    c.execute("SELECT id, name, ad_url FROM grocery_stores WHERE user_id=?", (user_id,))
+    c.execute("SELECT id, name, ad_url, notes FROM grocery_stores WHERE user_id=?", (user_id,))
     stores = c.fetchall()
     
     c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
@@ -2982,10 +3220,17 @@ def scan_all_grocery_stores(user_id: str = Depends(verify_auth)):
         norm_key = normalize_grocery_store_name(sname)
         deals = []
         ad_url = s["ad_url"]
+        valid_from = None
+        valid_to = None
+        valid_range = s["notes"] or ""
         
         if norm_key in flipp_stores:
             matched = flipp_stores[norm_key]
             deals = matched.get("deals", [])
+            valid_from = matched.get("valid_from")
+            valid_to = matched.get("valid_to")
+            if valid_to:
+                valid_range = f"Valid: {valid_from[:10]} to {valid_to[:10]}" if valid_from else f"Valid to {valid_to[:10]}"
             if matched.get("ad_url"):
                 ad_url = matched["ad_url"]
         elif s["ad_url"] and s["ad_url"].startswith(("http://", "https://")) and "flipp.com" not in s["ad_url"]:
@@ -2994,10 +3239,10 @@ def scan_all_grocery_stores(user_id: str = Depends(verify_auth)):
             if settings.get("ai_provider", "gemini") == "gemini":
                 time.sleep(2.0)
                 
-        c.execute("UPDATE grocery_stores SET ad_url=?, last_scanned=?, cached_deals=? WHERE id=? AND user_id=?",
-                  (ad_url, now_iso, json.dumps(deals), s["id"], user_id))
+        c.execute("UPDATE grocery_stores SET ad_url=?, notes=?, last_scanned=?, cached_deals=?, valid_from=?, valid_to=? WHERE id=? AND user_id=?",
+                  (ad_url, valid_range, now_iso, json.dumps(deals), valid_from, valid_to, s["id"], user_id))
         record_store_deals_price_history(conn, user_id, s["name"], deals, now_iso)
-        results.append({"store": s["name"], "deals_found": len(deals)})
+        results.append({"store": s["name"], "deals_found": len(deals), "valid_from": valid_from, "valid_to": valid_to})
             
     conn.commit()
     conn.close()
@@ -3006,6 +3251,11 @@ def scan_all_grocery_stores(user_id: str = Depends(verify_auth)):
 # --- Deal Query & Price Finder Endpoint ---
 @app.post("/api/groceries/query_deals")
 def query_deals(req: DealQueryRequest, user_id: str = Depends(verify_auth)):
+    try:
+        refresh_user_expired_deals(user_id)
+    except Exception as e:
+        logger.warning(f"Error checking deal freshness in query_deals: {e}")
+
     conn = get_db_conn()
     c = conn.cursor()
     c.execute("SELECT id, name, ad_url, cached_deals FROM grocery_stores WHERE user_id=?", (user_id,))
@@ -3112,9 +3362,14 @@ def submit_deal_feedback(req: FeedbackActionRequest, user_id: str = Depends(veri
 
 @app.get("/api/groceries/feed")
 def get_personalized_deals_feed(category: Optional[str] = None, best_only: Optional[bool] = False, search: Optional[str] = None, user_id: str = Depends(verify_auth)):
+    try:
+        refresh_user_expired_deals(user_id)
+    except Exception as e:
+        logger.warning(f"Error checking deal freshness in get_personalized_deals_feed: {e}")
+
     conn = get_db_conn()
     c = conn.cursor()
-    c.execute("SELECT id, name, ad_url, cached_deals FROM grocery_stores WHERE user_id=?", (user_id,))
+    c.execute("SELECT id, name, ad_url, cached_deals, valid_from, valid_to FROM grocery_stores WHERE user_id=?", (user_id,))
     rows = c.fetchall()
     
     c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
@@ -3140,16 +3395,18 @@ def get_personalized_deals_feed(category: Optional[str] = None, best_only: Optio
             "id": r["id"],
             "name": r["name"],
             "ad_url": r["ad_url"],
+            "valid_from": r["valid_from"],
+            "valid_to": r["valid_to"],
             "deals": deals
         })
         for d in deals:
-            all_raw_deals.append((r["name"], r["ad_url"], d))
+            all_raw_deals.append((r["name"], r["ad_url"], d, r["valid_from"], r["valid_to"]))
             
     scored_deals = []
     search_term = (search or '').strip().lower()
     cat_filter = (category or '').strip().lower()
     
-    for store_name, store_ad_url, deal in all_raw_deals:
+    for store_name, store_ad_url, deal, v_from, v_to in all_raw_deals:
         item_name = deal.get("item", "").strip()
         if not item_name:
             continue
@@ -3218,6 +3475,8 @@ def get_personalized_deals_feed(category: Optional[str] = None, best_only: Optio
             "item": item_name,
             "store": store_name,
             "store_ad_url": store_ad_url,
+            "valid_from": v_from,
+            "valid_to": v_to,
             "price": price_str,
             "category": deal_cat,
             "notes": notes_str,
