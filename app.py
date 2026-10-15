@@ -254,9 +254,8 @@ def verify_password(plain_password: str, password_hash: str) -> bool:
         return False
     if password_hash.startswith("pbkdf2:sha256:"):
         try:
-            _, iters_str, rest = password_hash.split(":", 2)
-            iters = int(iters_str)
-            salt, stored_hash = rest.split("$", 1)
+            prefix, salt, stored_hash = password_hash.split("$", 2)
+            iters = int(prefix.split(":")[-1])
             computed = hashlib.pbkdf2_hmac('sha256', plain_password.encode('utf-8'), salt.encode('utf-8'), iters).hex()
             return secrets.compare_digest(computed, stored_hash)
         except Exception:
