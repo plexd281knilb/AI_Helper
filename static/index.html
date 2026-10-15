@@ -2870,7 +2870,7 @@
             </div>
 
             <!-- Site Suggestions Modal (Accessible from ALL pages) -->
-            <div id="site-suggestion-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 10000; justify-content: center; align-items: center; padding: 20px;">
+            <div id="site-suggestion-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 20000; justify-content: center; align-items: center; padding: 20px;">
                 <div class="account-box" style="width: 95%; max-width: 680px; max-height: 90vh; display: flex; flex-direction: column; background: #161b22; border: 1px solid #f59e0b; border-radius: var(--radius-md); padding: 24px; box-shadow: 0 12px 35px rgba(245, 158, 11, 0.35); overflow-y: auto;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
                         <div>
@@ -2911,7 +2911,10 @@
                                     <option value="Meal Planner">🍲 Meal Planner</option>
                                     <option value="Routine & Skip Days">⚙️ Routine &amp; Skip Days</option>
                                     <option value="Family Profile">👨‍👩‍👧‍👦 Family Profile &amp; Portions</option>
+                                    <option value="Setup Wizard">🪄 Setup Wizard (Mobile Onboarding)</option>
                                     <option value="Settings">⚙️ System Settings</option>
+                                    <option value="Users & Access">👥 Users &amp; Access</option>
+                                    <option value="Logs">📜 System Logs</option>
                                     <option value="General">🌐 Entire Site / General</option>
                                 </select>
                             </div>
@@ -7563,26 +7566,132 @@
         let siteSuggestionsList = [];
         let currentSuggTab = 'new';
 
+        function isModalElementVisible(el) {
+            if (!el) return false;
+            if (el.style.display === 'none') return false;
+            if (el.style.display && el.style.display !== 'none') return true;
+            try {
+                const comp = window.getComputedStyle(el);
+                return comp && comp.display !== 'none' && comp.visibility !== 'hidden';
+            } catch (e) {
+                return false;
+            }
+        }
+
+        function detectCurrentPageArea() {
+            // 1. Check open sub-modals (excluding the suggestion modal itself)
+            const wizardModal = document.getElementById('onboarding-wizard-modal');
+            if (isModalElementVisible(wizardModal)) return 'Setup Wizard';
+
+            const dayRulesModal = document.getElementById('day-rules-modal');
+            if (isModalElementVisible(dayRulesModal)) return 'Routine & Skip Days';
+
+            const familyModal = document.getElementById('family-profile-modal');
+            if (isModalElementVisible(familyModal)) return 'Family Profile';
+
+            const browseModal = document.getElementById('browse-deals-modal');
+            if (isModalElementVisible(browseModal)) return 'Deals & Groceries';
+
+            const prefModal = document.getElementById('deal-preferences-modal');
+            if (isModalElementVisible(prefModal)) return 'Deals & Groceries';
+
+            const aiModal = document.getElementById('ai-list-modal');
+            if (isModalElementVisible(aiModal)) return 'Deals & Groceries';
+
+            const pasteModal = document.getElementById('paste-deals-modal');
+            if (isModalElementVisible(pasteModal)) return 'Deals & Groceries';
+
+            // 2. Check active view container in DOM (.view.active)
+            const activeView = document.querySelector('.view.active');
+            if (activeView && activeView.id) {
+                const id = activeView.id.toLowerCase();
+                if (id === 'dashboard') return 'Dashboard';
+                if (id === 'history') return 'Email History';
+                if (id === 'groceries') return 'Deals & Groceries';
+                if (id === 'meals') return 'Meal Planner';
+                if (id === 'settings') return 'Settings';
+                if (id === 'users') return 'Users & Access';
+                if (id === 'logs') return 'Logs';
+            }
+
+            // 3. Check active navigation tree link or mobile drawer item
+            const activeNav = document.querySelector('.tab-link.active, .mobile-drawer-link.active, .nav-tree-item.active');
+            if (activeNav) {
+                const txt = (activeNav.innerText || '').toLowerCase();
+                const onclickAttr = (activeNav.getAttribute('onclick') || '').toLowerCase();
+                if (txt.includes('meal') || onclickAttr.includes('meals')) return 'Meal Planner';
+                if (txt.includes('deal') || txt.includes('grocer') || onclickAttr.includes('groceries')) return 'Deals & Groceries';
+                if (txt.includes('history') || onclickAttr.includes('history')) return 'Email History';
+                if (txt.includes('dashboard') || onclickAttr.includes('dashboard')) return 'Dashboard';
+                if (txt.includes('setting') || onclickAttr.includes('settings')) return 'Settings';
+                if (txt.includes('user') || onclickAttr.includes('users')) return 'Users & Access';
+                if (txt.includes('log') || onclickAttr.includes('logs')) return 'Logs';
+                if (txt.includes('wizard') || onclickAttr.includes('wizard')) return 'Setup Wizard';
+            }
+
+            // 4. Check persisted active tab in localStorage
+            try {
+                const savedTab = (localStorage.getItem('ai_helper_active_tab') || '').toLowerCase();
+                if (savedTab === 'dashboard') return 'Dashboard';
+                if (savedTab === 'history') return 'Email History';
+                if (savedTab === 'groceries') return 'Deals & Groceries';
+                if (savedTab === 'meals') return 'Meal Planner';
+                if (savedTab === 'settings') return 'Settings';
+                if (savedTab === 'users') return 'Users & Access';
+                if (savedTab === 'logs') return 'Logs';
+            } catch (e) {}
+
+            // 5. Check browser address bar pathname
+            const path = (window.location.pathname || '').toLowerCase();
+            if (path.includes('history')) return 'Email History';
+            if (path.includes('groceries')) return 'Deals & Groceries';
+            if (path.includes('meals')) return 'Meal Planner';
+            if (path.includes('settings')) return 'Settings';
+            if (path.includes('users')) return 'Users & Access';
+            if (path.includes('logs')) return 'Logs';
+            if (path === '/' || path === '') return 'Dashboard';
+
+            return 'General';
+        }
+
         function openSuggestionModal(pageContext) {
             const modal = document.getElementById('site-suggestion-modal');
             if (modal) modal.style.display = 'flex';
             
+            const msgEl = document.getElementById('sugg-modal-msg');
+            if (msgEl) msgEl.innerHTML = '';
+
             const pageSelect = document.getElementById('sugg-page-select');
             if (pageSelect) {
-                if (pageContext) {
-                    pageSelect.value = pageContext;
-                } else {
-                    // Detect active tab
-                    const activeTabBtn = document.querySelector('.sidebar-item.active, .mobile-drawer-link.active');
-                    if (activeTabBtn) {
-                        const txt = activeTabBtn.innerText.trim();
-                        if (txt.includes('Meal Planner')) pageSelect.value = 'Meal Planner';
-                        else if (txt.includes('Deals')) pageSelect.value = 'Deals & Groceries';
-                        else if (txt.includes('Email History')) pageSelect.value = 'Email History';
-                        else if (txt.includes('Dashboard')) pageSelect.value = 'Dashboard';
-                        else if (txt.includes('Settings')) pageSelect.value = 'Settings';
-                        else pageSelect.value = 'General';
+                const targetPage = pageContext || detectCurrentPageArea();
+                let matched = false;
+
+                // Exact value match (case-insensitive)
+                for (let i = 0; i < pageSelect.options.length; i++) {
+                    if (pageSelect.options[i].value.toLowerCase() === targetPage.toLowerCase()) {
+                        pageSelect.selectedIndex = i;
+                        matched = true;
+                        break;
                     }
+                }
+
+                // Partial match fallback
+                if (!matched) {
+                    for (let i = 0; i < pageSelect.options.length; i++) {
+                        const optVal = pageSelect.options[i].value.toLowerCase();
+                        const optTxt = (pageSelect.options[i].innerText || '').toLowerCase();
+                        const targetVal = targetPage.toLowerCase();
+                        if (optVal.includes(targetVal) || targetVal.includes(optVal) ||
+                            optTxt.includes(targetVal) || targetVal.includes(optTxt)) {
+                            pageSelect.selectedIndex = i;
+                            matched = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!matched) {
+                    pageSelect.value = 'General';
                 }
             }
 
@@ -8285,7 +8394,7 @@
         checkAuth();
     </script>
 <!-- Floating Suggest Edit Action Button (Available on ALL pages) -->
-        <div id="floating-suggest-container" style="position: fixed; bottom: 22px; right: 22px; z-index: 9999;">
+        <div id="floating-suggest-container" style="position: fixed; bottom: 22px; right: 22px; z-index: 10005;">
             <button class="floating-suggest-btn" id="floating-suggest-btn" onclick="openSuggestionModal()" title="Suggest an edit or improvement for this page">
                 <span style="font-size: 16px;">💡</span>
                 <span>Suggest Edit</span>
