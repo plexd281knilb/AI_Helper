@@ -27,6 +27,7 @@ from google_auth_oauthlib.flow import Flow
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 import asyncio
+import calendar
 
 load_dotenv()
 
@@ -54,6 +55,355 @@ if not any(isinstance(h, RotatingFileHandler) for h in root_logger.handlers):
 
 logger = logging.getLogger("AIHelper")
 logger.info("Application starting up...")
+
+# --- Default Household & Parsing Rules Configuration ---
+DEFAULT_FAMILY_PROFILE = {
+    "family_name": "Our Family",
+    "total_members": 5,
+    "members": [
+        {
+            "id": "m1",
+            "name": "Dominic",
+            "role": "self",
+            "relation": "Father",
+            "age": 38,
+            "gender": "male",
+            "appetite": "large",
+            "grade": "Class of 2006",
+            "school": "",
+            "sports": "",
+            "notes": "Dad / Self, Class of 2006 graduate"
+        },
+        {
+            "id": "m2",
+            "name": "Wife",
+            "role": "spouse",
+            "relation": "Mother",
+            "age": 37,
+            "gender": "female",
+            "appetite": "normal",
+            "grade": "",
+            "school": "",
+            "sports": "",
+            "notes": "Mom / Spouse"
+        },
+        {
+            "id": "m3",
+            "name": "Gia",
+            "role": "child",
+            "relation": "Teen Daughter",
+            "age": 15,
+            "gender": "female",
+            "appetite": "normal",
+            "grade": "9th Grade",
+            "school": "Liberty Christian School",
+            "sports": "Softball",
+            "notes": "9th grade (High School), plays softball"
+        },
+        {
+            "id": "m4",
+            "name": "Ellie",
+            "role": "child",
+            "relation": "Daughter",
+            "age": 11,
+            "gender": "female",
+            "appetite": "normal",
+            "grade": "6th Grade",
+            "school": "Liberty Christian School",
+            "sports": "XC, Soccer, Track",
+            "notes": "6th grade (Middle School), plays cross country (XC), soccer, track"
+        },
+        {
+            "id": "m5",
+            "name": "Leo",
+            "role": "child",
+            "relation": "Son",
+            "age": 8,
+            "gender": "male",
+            "appetite": "normal",
+            "grade": "2nd Grade",
+            "school": "Liberty Christian School",
+            "sports": "",
+            "notes": "2nd grade boy"
+        }
+    ],
+    "notes": "5 family members (Dominic, Wife, Gia, Ellie, Leo)"
+}
+
+DEFAULT_PARSING_RULES = {
+    "bill_reminders": True,
+    "bill_amounts_in_calendar": False,
+    "school_grade_filter": True,
+    "grades_allowed": ["2nd Grade", "6th Grade", "9th Grade", "Middle School", "High School"],
+    "assume_teacher_is_for_kids": True,
+    "filter_unregistered_camps": True,
+    "abbreviate_cross_country_xc": True,
+    "match_children": True,
+    "label_non_child_for_self": True,
+    "self_name": "Dominic",
+    "expand_liberty_location": True,
+    "last_day_of_month_dates": True,
+    "filter_promotions_and_travel": True,
+    "filter_package_deliveries": True,
+    "filter_corporate_webinars": True,
+    "invite_reminders": True,
+    "custom_instructions": ""
+}
+
+def build_parsing_prompt_instructions(settings: dict) -> str:
+    rules = settings.get("parsing_rules") or DEFAULT_PARSING_RULES
+    family = settings.get("family_profile") or DEFAULT_FAMILY_PROFILE
+    members = family.get("members", [])
+    
+    kids = [m for m in members if m.get("role") == "child" or m.get("name") in ["Leo", "Ellie", "Gia"]]
+    self_member = next((m for m in members if m.get("role") == "self" or m.get("name") == "Dominic"), None)
+    self_name = self_member.get("name", "Dominic") if self_member else "Dominic"
+    
+    sections = []
+
+    # 1. Family Members & Event Recipient Matching
+    if rules.get("match_children", True) and kids:
+        kids_desc = []
+        for k in kids:
+            k_name = k.get("name", "")
+            k_grade = k.get("grade", "")
+            k_gender = k.get("gender", "")
+            k_sports = k.get("sports", "")
+            k_school = k.get("school", "")
+            line = f"  * {k_name}: {k_grade} ({k_gender})"
+            if k_sports:
+                line += f" | Sports/Activities: {k_sports}"
+            if k_school:
+                line += f" | School: {k_school}"
+            kids_desc.append(line)
+        
+        kids_text = "\n".join(kids_desc)
+        sections.append(f"""1. FAMILY MEMBERS & EVENT RECIPIENT MATCHING:
+- Family Members:
+{kids_text}
+  * {self_name} (Self / Parent, Class of 2006 graduate)
+- MATCHING & TITLING RULES:
+  * Try to match each event with the relevant child based on grade, sport, or teacher context.
+  * ALWAYS append the person's name at the very end of the event title with a hyphen (e.g. "Track Meet - Ellie", "Softball Practice - Gia", "Spelling Bee - Leo").
+  * NEVER include the school grade in the event title (e.g., use "Track Meet - Ellie", NOT "Track Meet - 6th Grade").
+  * If an event is NOT for one of the children (e.g. personal, household, or general appointments), label it for {self_name} at the end of the title (e.g. "Dentist Appointment - {self_name}").
+  * Write a robust and detailed event description specifying who the event is for and relevant context from the email.""")
+
+    # 2. School Events & Grade Filter
+    if rules.get("school_grade_filter", True):
+        sections.append("""2. SCHOOL EVENT & GRADE FILTERING:
+- The children are in 2nd, 6th, and 9th grades (6th grade is considered Middle School; 9th grade is High School).
+- ONLY extract school events for 2nd, 6th, and 9th grades (and middle/high school activities relevant to them).
+- STRICTLY IGNORE school events for all other grades (Kindergarten, 1st, 3rd, 4th, 5th, 7th, 8th, 10th, 11th, 12th).
+- If an email is from a teacher, coach, or school staff, assume it is for one of the children and scan it thoroughly for calendar events to add.""")
+
+    # 3. Block Unregistered School Camps & Registration Solicitations
+    if rules.get("filter_unregistered_camps", True):
+        sections.append("""3. REJECT UNREGISTERED CAMPS & REGISTRATION SOLICITATIONS:
+- Do NOT add school camps, clinics, or programs that show an open sign-up or registration call to action.
+- Examples of promotional solicitations to IGNORE / REJECT:
+  * "Beginning Sept. 14 Cost: $300 Register here"
+  * "Please CLICK HERE to register"
+  * "(Registration closes Sept 16th)"
+  * "After-School Enrichment Opportunities"
+  * Flyers inviting parents to register or pay for upcoming optional camps/programs.
+- That language indicates the user has NOT signed up yet. DO NOT add it to the calendar!
+- ONLY add events that the family or child has ACTUALLY signed up for, confirmed registrations, or official school schedule events (e.g. actual team games, practices, meets, school calendar days, parent-teacher conferences).""")
+
+    # 4. Cross Country Abbreviation
+    if rules.get("abbreviate_cross_country_xc", True):
+        sections.append("""4. SPORT ABBREVIATIONS:
+- Always abbreviate Cross Country as "XC" in all event titles and descriptions (e.g. "XC Meet - Ellie", "XC Practice - Ellie").""")
+
+    # 5. Location Mapping (Liberty)
+    if rules.get("expand_liberty_location", True):
+        sections.append("""5. LOCATION MAPPING:
+- If an email or event mentions location "liberty" or "Liberty", set the location to "Liberty Christian School, Argyle, Texas".""")
+
+    # 6. Relative Dates (end of MM/YYYY)
+    if rules.get("last_day_of_month_dates", True):
+        sections.append("""6. RELATIVE DATES:
+- If a date is stated as "end of MM/YYYY" (e.g. "end of 08/2026"), set the date to All Day on the last day of that month (e.g. "2026-08-31T09:00:00").""")
+
+    # 7. Promotions, Deliveries & Marketing Filter
+    filter_items = []
+    if rules.get("filter_promotions_and_travel", True):
+        filter_items.append("  * Ignore marketing promotions, rewards deadlines (e.g. 'deadline to book Atmos Rewards Global Getaways by TOMORROW', 'Daily Drop Pro sale ending on Sept 8'). Ignore promotional offers and travel news.")
+    if rules.get("filter_package_deliveries", True):
+        filter_items.append("  * Do NOT add events for items being delivered, shipped, or package tracking dates.")
+    if rules.get("filter_corporate_webinars", True):
+        filter_items.append("  * Do NOT add promotional corporate events, career days, or webinars (e.g. 'Cloudflare AI week', 'Fidelity Career day').")
+    if filter_items:
+        sections.append("7. PROMOTIONAL, DELIVERY & MARKETING FILTERING:\n" + "\n".join(filter_items))
+
+    # 8. Bill Reminders & Dollar Amount Privacy
+    if rules.get("bill_reminders", True):
+        if not rules.get("bill_amounts_in_calendar", False):
+            sections.append("""8. BILL REMINDERS & PAYMENT DEADLINES:
+- Bill due dates and payment deadlines MAY be extracted as calendar reminder events.
+- IMPORTANT PRIVACY RULE: DO NOT include bill dollar amounts (e.g. $145.20) in the event title or description! Keep the event clean (e.g. "Electric Bill Due - Dominic").""")
+        else:
+            sections.append("""8. BILL REMINDERS & PAYMENT DEADLINES:
+- Bill due dates and payment deadlines may be extracted as calendar reminder events with amounts included.""")
+    else:
+        sections.append("""8. BILL REMINDERS:
+- Do NOT extract bill due dates or payment notices.""")
+
+    # 9. Calendar Invites
+    if rules.get("invite_reminders", True):
+        sections.append("""9. CALENDAR & MEETING INVITES:
+- Scan for incoming meeting invitations, appointments, and RSVP deadlines.""")
+
+    # 10. Additional Custom Prompt
+    custom = (rules.get("custom_instructions") or settings.get("custom_prompt") or "").strip()
+    if custom:
+        sections.append(f"10. ADDITIONAL USER CUSTOM INSTRUCTIONS:\n{custom}")
+
+    return "\n\n".join(sections)
+
+def post_process_extracted_event(e: dict, settings: dict, subject: str, body: str) -> Optional[dict]:
+    rules = settings.get("parsing_rules") or DEFAULT_PARSING_RULES
+    title = e.get("title", "") or ""
+    desc = e.get("description", "") or ""
+    loc = e.get("location", "") or ""
+    date_val = e.get("date", "") or ""
+    full_context = f"{title} {desc} {subject} {body}".lower()
+
+    # 1. Unregistered camps / sign-up solicitations filter
+    if rules.get("filter_unregistered_camps", True):
+        camp_patterns = [
+            r'register\s+here',
+            r'click\s+here\s+to\s+register',
+            r'registration\s+closes',
+            r'open\s+for\s+registration',
+            r'cost:\s*\$\d+.*register',
+            r'after-school\s+enrichment\s+opportunities',
+            r'registration\s+deadline',
+            r'please\s+register'
+        ]
+        is_solicitation = any(re.search(pat, full_context) for pat in camp_patterns)
+        has_confirmed = any(kw in full_context for kw in ["you are registered", "registration confirmed", "ticket confirmed", "receipt", "order confirmation", "official game schedule", "practice schedule"])
+        if is_solicitation and not has_confirmed:
+            if any(kw in full_context for kw in ["camp", "clinic", "enrichment", "workshop", "tryout", "sign up", "signup"]):
+                logger.info(f"Filtered unregistered camp solicitation: '{title}'")
+                return None
+
+    # 2. Marketing / Travel / Flash Sales filter
+    if rules.get("filter_promotions_and_travel", True):
+        marketing_patterns = [
+            r'atmos\s+rewards',
+            r'daily\s+drop\s+pro',
+            r'global\s+getaways',
+            r'flash\s+sale',
+            r'book\s+by\s+tomorrow',
+            r'travel\s+news',
+            r'limited\s+time\s+offer',
+            r'discount\s+code',
+            r'sale\s+ends'
+        ]
+        if any(re.search(pat, full_context) for pat in marketing_patterns):
+            logger.info(f"Filtered marketing promotion: '{title}'")
+            return None
+
+    # 3. Delivery / Shipment tracking filter
+    if rules.get("filter_package_deliveries", True):
+        delivery_patterns = [
+            r'scheduled\s+for\s+delivery',
+            r'out\s+for\s+delivery',
+            r'tracking\s+number',
+            r'package\s+will\s+arrive',
+            r'shipped\s+via',
+            r'estimated\s+delivery'
+        ]
+        if any(re.search(pat, full_context) for pat in delivery_patterns):
+            logger.info(f"Filtered package delivery event: '{title}'")
+            return None
+
+    # 4. Corporate promotional webinars / career days filter
+    if rules.get("filter_corporate_webinars", True):
+        corp_patterns = [
+            r'cloudflare(?:\'s)?\s+ai\s+week',
+            r'fidelity(?:\'s)?\s+career\s+day',
+            r'webinar:\s*',
+            r'virtual\s+summit',
+            r'career\s+fair\s+promo'
+        ]
+        if any(re.search(pat, full_context) for pat in corp_patterns):
+            logger.info(f"Filtered corporate webinar/career day: '{title}'")
+            return None
+
+    # 5. Cross Country -> XC abbreviation
+    if rules.get("abbreviate_cross_country_xc", True):
+        title = re.sub(r'\b[Cc]ross\s+[Cc]ountry\b', 'XC', title)
+        desc = re.sub(r'\b[Cc]ross\s+[Cc]ountry\b', 'XC', desc)
+
+    # 6. Location mapping: "liberty" -> "Liberty Christian School, Argyle, Texas"
+    if rules.get("expand_liberty_location", True):
+        if loc and "liberty" in loc.lower() and "argyle" not in loc.lower():
+            loc = "Liberty Christian School, Argyle, Texas"
+        elif not loc and ("liberty" in title.lower() or "liberty" in desc.lower() or "liberty" in subject.lower()):
+            loc = "Liberty Christian School, Argyle, Texas"
+
+    # 7. Bill dollar amounts stripping
+    if not rules.get("bill_amounts_in_calendar", False):
+        title = re.sub(r'\s*\$\d+(?:,\d{3})*(?:\.\d{2})?\b', '', title).strip()
+        desc = re.sub(r'\bamount due:?\s*\$\d+(?:,\d{3})*(?:\.\d{2})?\b', '', desc, flags=re.IGNORECASE).strip()
+
+    # 8. Relative dates: "end of MM/YYYY" -> Last day of month
+    if rules.get("last_day_of_month_dates", True):
+        m_rel = re.search(r'\bend of\s+(0?[1-9]|1[0-2])/(\d{4})\b', full_context)
+        if m_rel:
+            m_num = int(m_rel.group(1))
+            y_num = int(m_rel.group(2))
+            last_day = calendar.monthrange(y_num, m_num)[1]
+            date_val = f"{y_num:04d}-{m_num:02d}-{last_day:02d}T09:00:00"
+
+    # 9. Child / Person Suffix: "Event Title - Name"
+    if rules.get("match_children", True):
+        self_name = rules.get("self_name", "Dominic")
+        family = settings.get("family_profile") or DEFAULT_FAMILY_PROFILE
+        members = family.get("members", [])
+        child_names = [m.get("name") for m in members if m.get("role") == "child" or m.get("name") in ["Leo", "Ellie", "Gia"]]
+        if not child_names:
+            child_names = ["Leo", "Ellie", "Gia"]
+
+        # First clean any trailing grade label that AI might have generated
+        title = re.sub(r'\s*-\s*\d+(?:st|nd|rd|th)?\s+grade\b.*$', '', title, flags=re.IGNORECASE).strip()
+        title = re.sub(r'\s*\(?\d+(?:st|nd|rd|th)?\s+grade\)?$', '', title, flags=re.IGNORECASE).strip()
+
+        # Check if title already ends with any valid name suffix
+        all_possible_names = child_names + [self_name, "Wife"]
+        has_name_suffix = any(title.strip().endswith(f"- {n}") or title.strip().endswith(f"({n})") for n in all_possible_names)
+
+        if not has_name_suffix:
+            matched_person = None
+            if "leo" in full_context or "2nd grade" in full_context or "second grade" in full_context:
+                matched_person = "Leo"
+            elif "ellie" in full_context or "6th grade" in full_context or "sixth grade" in full_context or "middle school" in full_context or " xc " in f" {full_context} " or "soccer" in full_context or "track" in full_context:
+                matched_person = "Ellie"
+            elif "gia" in full_context or "9th grade" in full_context or "ninth grade" in full_context or "softball" in full_context or "high school" in full_context:
+                matched_person = "Gia"
+            elif rules.get("label_non_child_for_self", True):
+                matched_person = self_name
+
+            if matched_person:
+                title = f"{title} - {matched_person}"
+
+    # 10. Robust description enhancement
+    if "ellie" in title.lower() and "ellie" not in desc.lower():
+        desc = f"Event for Ellie (6th Grade XC, Soccer & Track). {desc}".strip()
+    elif "gia" in title.lower() and "gia" not in desc.lower():
+        desc = f"Event for Gia (9th Grade Softball). {desc}".strip()
+    elif "leo" in title.lower() and "leo" not in desc.lower():
+        desc = f"Event for Leo (2nd Grade). {desc}".strip()
+    elif "dominic" in title.lower() and "dominic" not in desc.lower():
+        desc = f"Personal event for Dominic. {desc}".strip()
+
+    e["title"] = title
+    e["description"] = desc
+    e["location"] = loc
+    e["date"] = date_val
+    return e
 
 # --- Database Setup ---
 def get_db_conn():
@@ -264,6 +614,26 @@ def init_db():
     except Exception as e:
         logger.debug(f"Role initialization note: {e}")
         
+    # Ensure users have family profile and smart parsing rules initialized
+    try:
+        c.execute("SELECT id, settings FROM users")
+        for u in c.fetchall():
+            uid = u[0]
+            s = json.loads(u[1]) if u[1] else {}
+            changed = False
+            fp = s.get("family_profile")
+            if not fp or (fp.get("members") and any(m.get("name") in ["Adult 1", "Child 1"] for m in fp.get("members", []))):
+                s["family_profile"] = DEFAULT_FAMILY_PROFILE
+                changed = True
+            if "parsing_rules" not in s:
+                s["parsing_rules"] = DEFAULT_PARSING_RULES
+                changed = True
+            if changed:
+                c.execute("UPDATE users SET settings=? WHERE id=?", (json.dumps(s), uid))
+                logger.info(f"Initialized family profile and smart parsing rules for user {uid}.")
+    except Exception as e:
+        logger.debug(f"Parsing rules migration note: {e}")
+
     conn.commit()
     conn.close()
 
@@ -589,6 +959,12 @@ class SettingsSave(BaseModel):
     lookback_days: Optional[int] = 7
     email_fetch_limit: Optional[int] = 20
     postal_code: Optional[str] = "76262"
+    parsing_rules: Optional[dict] = None
+    family_profile: Optional[dict] = None
+
+class ParsingRulesSaveRequest(BaseModel):
+    rules: dict
+    family_profile: Optional[dict] = None
 
 @app.get("/api/settings")
 def read_settings(user_id: str = Depends(verify_auth)):
@@ -601,6 +977,11 @@ def read_settings(user_id: str = Depends(verify_auth)):
     accounts = [dict(r) for r in c.fetchall()]
     conn.close()
     token_file = os.path.join(DATA_DIR, f"token_{user_id}.json")
+    
+    parsing_rules = settings.get("parsing_rules", DEFAULT_PARSING_RULES)
+    family_profile = settings.get("family_profile", DEFAULT_FAMILY_PROFILE)
+    compiled_prompt = build_parsing_prompt_instructions(settings)
+
     return {
         "accounts": accounts,
         "ai_provider": settings.get("ai_provider", "gemini"),
@@ -615,7 +996,10 @@ def read_settings(user_id: str = Depends(verify_auth)):
         "postal_code": settings.get("postal_code", "76262"),
         "last_scan_time": settings.get("last_scan_time", None),
         "google_auth_ready": os.path.exists(CLIENT_SECRETS_FILE),
-        "google_connected": os.path.exists(token_file)
+        "google_connected": os.path.exists(token_file),
+        "parsing_rules": parsing_rules,
+        "family_profile": family_profile,
+        "compiled_prompt": compiled_prompt
     }
 
 @app.post("/api/settings/ai")
@@ -631,6 +1015,50 @@ def save_ai_settings(s: SettingsSave, user_id: str = Depends(verify_auth)):
     conn.close()
     logger.info(f"User {user_id} saved settings (job interval: {s.fetch_interval_minutes}m, lookback: {s.lookback_days}d).")
     return {"status": "success"}
+
+@app.get("/api/settings/parsing_rules")
+def get_parsing_rules_api(user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
+    c = conn.cursor()
+    c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
+    row = c.fetchone()
+    conn.close()
+    settings = json.loads(row['settings']) if row and row['settings'] else {}
+    rules = settings.get("parsing_rules", DEFAULT_PARSING_RULES)
+    family_profile = settings.get("family_profile", DEFAULT_FAMILY_PROFILE)
+    compiled_prompt = build_parsing_prompt_instructions(settings)
+    return {
+        "status": "success",
+        "rules": rules,
+        "family_profile": family_profile,
+        "compiled_prompt": compiled_prompt
+    }
+
+@app.post("/api/settings/parsing_rules")
+def save_parsing_rules_api(req: ParsingRulesSaveRequest, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
+    c = conn.cursor()
+    c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
+    row = c.fetchone()
+    settings = json.loads(row['settings']) if row and row['settings'] else {}
+    settings["parsing_rules"] = req.rules
+    if req.family_profile:
+        settings["family_profile"] = req.family_profile
+        if "members" in req.family_profile:
+            if "meal_preferences" not in settings:
+                settings["meal_preferences"] = {}
+            settings["meal_preferences"]["default_servings"] = len(req.family_profile["members"])
+
+    c.execute("UPDATE users SET settings=? WHERE id=?", (json.dumps(settings), user_id))
+    conn.commit()
+    conn.close()
+    compiled_prompt = build_parsing_prompt_instructions(settings)
+    return {
+        "status": "success",
+        "rules": req.rules,
+        "family_profile": settings.get("family_profile", DEFAULT_FAMILY_PROFILE),
+        "compiled_prompt": compiled_prompt
+    }
 
 class AccountTest(BaseModel):
     email_user: str
@@ -1018,23 +1446,24 @@ def extract_email_text(msg) -> str:
 
 # --- AI Parsing ---
 def extract_event(text: str, date: datetime, subject: str, settings: dict) -> dict:
-    custom_instructions = settings.get("custom_prompt", "")
-    custom_prompt_text = f"\n    USER CUSTOM INSTRUCTIONS: {custom_instructions}\n" if custom_instructions.strip() else ""
-    
+    rules_text = build_parsing_prompt_instructions(settings)
     date_str = date.isoformat() if date else "Unknown"
     prompt = f"""
     Analyze the following email to see if it contains one or more clear calendar events, appointments, meetings, flights, dinners, deadlines, assignment due dates, or scheduled tasks.
     Email Subject: {subject}
     Email Date: {date_str}
-    {custom_prompt_text}
+
+    CRITICAL PARSING RULES & FAMILY PREFERENCES:
+    {rules_text}
+
     Return your response strictly as a JSON object with two fields:
-    1. "reason": A concise, clear explanation (1-2 sentences) of why events were extracted OR why no events were added to the calendar (for example: "Extracted dental appointment on Oct 14 at 2 PM", "No specific dates, meetings, or deadlines mentioned in this newsletter", "Ignored grade event per custom instructions", "Order confirmation receipt without calendar deadlines").
-    2. "events": A JSON array of event objects. If there are no valid calendar events or deadlines (or if they violate the USER CUSTOM INSTRUCTIONS), return an empty array [].
+    1. "reason": A concise, clear explanation (1-2 sentences) of why events were extracted OR why no events were added to the calendar (for example: "Extracted XC meet for Ellie on Oct 14 at 2 PM", "No specific dates, meetings, or deadlines mentioned in this newsletter", "Ignored 5th grade event per custom grade filter", "Filtered unregistered camp solicitation with open registration link").
+    2. "events": A JSON array of event objects. If there are no valid calendar events or deadlines (or if they violate the PARSING RULES or USER CUSTOM INSTRUCTIONS), return an empty array [].
        Each object in the array must have the following keys:
-       - "title": Title of the event (string)
+       - "title": Title of the event (string, formatted per the child/person suffix rules e.g. "Track Meet - Ellie")
        - "date": Date and time in ISO 8601 format (e.g. "2026-10-15T14:00:00"). For assignments or deadlines without a specific time, default the time to 09:00:00 local time.
-       - "description": Summary or notes (string)
-       - "location": Physical address, room number, or place name (leave blank "" if none found)
+       - "description": Robust summary or notes identifying who the event is for and relevant context (string)
+       - "location": Physical address, room number, or place name (leave blank "" if none found; if Liberty, use "Liberty Christian School, Argyle, Texas")
        Create a separate event object for EVERY distinct scheduled time mentioned (e.g., Departure time, Event time, Return time).
 
     Email Content:
@@ -1102,13 +1531,17 @@ def extract_event(text: str, date: datetime, subject: str, settings: dict) -> di
         if isinstance(events_list, list):
             for e in events_list:
                 if isinstance(e, dict) and all(k in e for k in ("title", "date", "description")):
-                    valid_events.append(e)
+                    pe = post_process_extracted_event(e, settings, subject, text)
+                    if pe:
+                        valid_events.append(pe)
                     
         if not reason:
             if valid_events:
                 reason = f"Extracted {len(valid_events)} event(s): " + ", ".join(e.get("title", "Event") for e in valid_events)
             else:
                 reason = "No calendar events or deadlines detected in email."
+        elif not valid_events and events_list:
+            reason = "Filtered promotional, unregistered camp, or non-matching grade items per parsing rules."
                 
         return {"events": valid_events, "reason": reason}
     except Exception as e:
@@ -4179,18 +4612,7 @@ def find_best_store_for_ingredient(item_name: str, category: str, all_stores: li
         "savings": f"Sale at {best['store']}"
     }
 
-DEFAULT_FAMILY_PROFILE = {
-    "family_name": "Our Family",
-    "total_members": 5,
-    "members": [
-        {"id": "m1", "name": "Adult 1", "age": 40, "gender": "male", "appetite": "hearty"},
-        {"id": "m2", "name": "Adult 2", "age": 38, "gender": "female", "appetite": "moderate"},
-        {"id": "m3", "name": "Child 1", "age": 14, "gender": "male", "appetite": "hearty"},
-        {"id": "m4", "name": "Child 2", "age": 10, "gender": "female", "appetite": "moderate"},
-        {"id": "m5", "name": "Child 3", "age": 6, "gender": "male", "appetite": "light"}
-    ],
-    "notes": "5 family members (2 adults, 3 kids)"
-}
+# Note: DEFAULT_FAMILY_PROFILE is defined at top level for unified household sync across calendar and meals
 
 def calculate_family_nutrition_needs(family_profile: dict) -> dict:
     """
@@ -4212,18 +4634,19 @@ def calculate_family_nutrition_needs(family_profile: dict) -> dict:
             age = int(m.get("age", 25))
         except Exception:
             age = 25
-        gender = str(m.get("gender", "male")).lower()
+        gender_raw = str(m.get("gender", "male")).lower()
+        is_male = gender_raw in ["male", "m"]
         appetite = str(m.get("appetite", "moderate")).lower()
         
         # Portion ratio based on age & gender (USDA Dietary Reference Guidelines)
         if age >= 19:
             adults += 1
-            base_ratio = 1.15 if gender == "male" else 1.0
-            base_cals = 700 if gender == "male" else 550
+            base_ratio = 1.15 if is_male else 1.0
+            base_cals = 700 if is_male else 550
         elif age >= 13:
             teens += 1
-            base_ratio = 1.25 if gender == "male" else 1.05
-            base_cals = 750 if gender == "male" else 600
+            base_ratio = 1.25 if is_male else 1.05
+            base_cals = 750 if is_male else 600
         elif age >= 9:
             kids += 1
             base_ratio = 0.85

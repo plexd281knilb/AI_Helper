@@ -60,7 +60,7 @@ All tables are initialized and automatically migrated on startup in `init_db()` 
 | `id` | TEXT PRIMARY KEY | Unique user UUID |
 | `username` | TEXT UNIQUE | Login username |
 | `password_hash` | TEXT | Salted PBKDF2-HMAC-SHA256 password hash |
-| `settings` | TEXT (JSON) | JSON object containing AI provider, keys, models, custom instructions, public URL, and OAuth state |
+| `settings` | TEXT (JSON) | JSON object containing AI provider, keys, models, custom instructions, public URL, OAuth state, `family_profile`, `parsing_rules`, and meal preferences |
 | `role` | TEXT | User role: `'admin'` or `'user'` (default `'user'`) |
 
 ### `sessions`
@@ -313,6 +313,29 @@ For fast sub-millisecond query performance on multi-user and large datasets, the
   4. **Household & Preferences**: Configures local zip code (for circular ads), family servings (default 5 people), scan frequency, and lookback window.
   5. **Completion & Immediate First Scan**: Congratulates user and offers instant 1-click trigger to fetch their first batch of emails.
 
+### 11. Family Profile & Smart Event Parsing Rules Engine (`/api/settings/parsing_rules`)
+- **Unified Household Roster**: Synchronized between the AI Event Parser and the Meal Planner. Manages all family members with roles (`self`, `spouse`, `child`), grades (e.g. 2nd, 6th, 9th), school affiliations (e.g. "Liberty Christian School"), sports (e.g. Cross Country, Soccer, Track, Softball), gender, and ages. Pre-seeded with Dominic's exact family configuration:
+  - **Dominic**: Self, High School Class of 2006. Default assignee for personal/family events not tied to a specific child.
+  - **Wife**: Spouse.
+  - **Gia**: 9th Grade (High School), Softball.
+  - **Ellie**: 6th Grade (Middle School), Cross Country (XC), Soccer, Track.
+  - **Leo**: 2nd Grade (Elementary School).
+- **Double-Layer Defense Architecture**:
+  1. **Layer 1: Intelligent Prompt Compilation (`build_parsing_prompt_instructions`)**:
+     - Systematically builds structured, numbered negative constraints and positive extraction rules injected into Gemini and OpenAI prompts.
+     - Instructs the AI to only extract events for enrolled child grades (2nd, 6th MS, 9th HS) from school emails, map teacher communications to household children, expand `"Liberty"` to `"Liberty Christian School, Argyle, Texas"`, abbreviate Cross Country as `"XC"`, append child names (or Dominic) to titles while excluding grade labels, and reject unconfirmed camps or registration solicitations.
+  2. **Layer 2: Deterministic Python Post-Processing (`post_process_extracted_event`)**:
+     - Guarantees 100% adherence through programmatic regex and keyword filters even if an LLM hallucinates or slips up.
+     - **School Camp & Solicitation Blocker**: Rejects events matching registration solicitations (e.g. `"cost: $"`, `"register here"`, `"registration closes"`, `"enrichment opportunities"`).
+     - **Bill & Payment Privacy**: Automatically strips dollar amounts (e.g. `$145.20`) from event titles when `bill_amounts_in_calendar` is disabled, retaining clean reminders (e.g. `Electric Bill Due - Dominic`).
+     - **Noise & Commercial Event Discarder**: Discards delivery tracking, shipping confirmations, promotional webinars, and marketing flash sales (e.g. Atmos Rewards, Daily Drop Pro, Fidelity Career Day).
+     - **Relative Month-End Parser**: Resolves colloquial time expressions such as `"end of MM/YYYY"` (e.g. `"end of 08/2026"`) to All Day events on the exact final calendar day of the month (`2026-08-31`).
+     - **Sport & Location Normalization**: Replaces any variations of "Cross Country" with `"XC"` and expands `"liberty"` to `"Liberty Christian School, Argyle, Texas"`.
+     - **Child & Self Attribution**: Enforces the title suffix pattern: appends `- ChildName` (or `- Dominic`), stripping any accidental grade prefixes.
+- **Granular Configurable Checkbox Settings UI**:
+  - Live toggles for school grade filtering, teacher email assumption, sports tracking, camp solicitation rejection, bill reminders, bill dollar amount hiding, invite reminders, delivery filtering, and promotion/travel noise suppression.
+  - **Live AI Prompt Preview**: Expandable accordion in the Settings tab allowing users to inspect the exact prompt compiled from their active rules in real time.
+
 ---
 
 ## 6. API Route Reference
@@ -330,6 +353,8 @@ For fast sub-millisecond query performance on multi-user and large datasets, the
 | `DELETE` | `/api/users/{id}` | Delete user and all associated data | Yes |
 | `GET` | `/api/settings` | Read user settings and connected accounts | Yes |
 | `POST` | `/api/settings/ai` | Save AI configuration & custom prompt | Yes |
+| `GET` | `/api/settings/parsing_rules` | Get active smart parsing rules, family roster, and compiled prompt preview | Yes |
+| `POST` | `/api/settings/parsing_rules` | Save smart parsing rules and family profile roster | Yes |
 | `POST` | `/api/accounts` | Add or update an IMAP account | Yes |
 | `DELETE` | `/api/accounts/{id}` | Delete an IMAP account | Yes |
 | `GET` | `/api/events` | Fetch active calendar events (pending & added) | Yes |

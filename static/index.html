@@ -3309,6 +3309,177 @@
                     <button class="save-btn" style="width: 100%; margin-top: 20px;" onclick="saveJobSettings()">Save Job &amp; Schedule Settings</button>
                 </div>
 
+                <!-- Smart AI Calendar Parsing & Family Preferences Section -->
+                <h3 class="section-title">
+                    👨‍👩‍👧‍👦 Family Profile &amp; Smart Event Rules
+                    <span class="badge-blue" id="rules-status-badge">AI Active</span>
+                </h3>
+                <div class="account-box" style="margin-bottom: 25px;">
+                    <div id="rules-feedback-msg" style="margin-bottom: 12px;"></div>
+
+                    <p style="color: #94a3b8; font-size: 13.5px; line-height: 1.5; margin-top: 0; margin-bottom: 16px;">
+                        Configure your household roster, children's schools &amp; sports, and customize email scanning checkboxes so events are matched to the right child and unwanted flyers/promotions are ignored.
+                    </p>
+
+                    <!-- Sub-section 1: Family & Children Roster -->
+                    <div style="background: rgba(0, 0, 0, 0.2); border: 1px solid #334155; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                            <div>
+                                <strong style="color: #f8fafc; font-size: 14px; display: flex; align-items: center; gap: 6px;">
+                                    <span>👨‍👩‍👧‍👦</span> Household &amp; Children Roster
+                                </strong>
+                                <span style="color: #94a3b8; font-size: 12px;">Used to auto-match events, assign child names, and calculate meal portions.</span>
+                            </div>
+                            <button type="button" class="add-btn" onclick="addSettingsFamilyMember()" style="margin: 0; padding: 6px 12px; font-size: 12.5px; background: #0284c7;">+ Add Member</button>
+                        </div>
+
+                        <div id="settings-family-roster-container" style="display: flex; flex-direction: column; gap: 10px;">
+                            <!-- Injected by renderSettingsFamilyProfile() -->
+                        </div>
+                    </div>
+
+                    <!-- Sub-section 2: Smart Parsing Checkboxes Grid -->
+                    <h4 style="margin: 0 0 10px 0; color: #fff; font-size: 14px;">Smart Email &amp; Calendar Preferences</h4>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-bottom: 20px;">
+                        
+                        <!-- Group A: School, Children & Sports -->
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <div style="font-size: 12.5px; font-weight: 700; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.5px;">🎒 School, Kids &amp; Sports</div>
+
+                            <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; background: rgba(255,255,255,0.02); padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 6px;">
+                                <input type="checkbox" id="rules-grade-filter" checked style="margin-top: 3px; transform: scale(1.15); cursor: pointer;">
+                                <div>
+                                    <strong style="color: #fff; font-size: 13px; display: block;">Filter by Child Grades Only</strong>
+                                    <span style="color: #94a3b8; font-size: 11.5px; line-height: 1.4; display: block;">Only extract school events for 2nd, 6th, and 9th grades (and middle/high school relevant to them). Ignore all other grades.</span>
+                                </div>
+                            </label>
+
+                            <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; background: rgba(255,255,255,0.02); padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 6px;">
+                                <input type="checkbox" id="rules-teacher-scan" checked style="margin-top: 3px; transform: scale(1.15); cursor: pointer;">
+                                <div>
+                                    <strong style="color: #fff; font-size: 13px; display: block;">Auto-Scan Teacher &amp; Coach Emails</strong>
+                                    <span style="color: #94a3b8; font-size: 11.5px; line-height: 1.4; display: block;">Assume emails from teachers and school staff are for your children and scan for calendar events to add.</span>
+                                </div>
+                            </label>
+
+                            <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; background: rgba(255,255,255,0.02); padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 6px;">
+                                <input type="checkbox" id="rules-filter-camps" checked style="margin-top: 3px; transform: scale(1.15); cursor: pointer;">
+                                <div>
+                                    <strong style="color: #fff; font-size: 13px; display: block;">Block Unregistered Camp Solicitations</strong>
+                                    <span style="color: #94a3b8; font-size: 11.5px; line-height: 1.4; display: block;">Ignore camp flyers with open sign-up links (e.g. "Beginning Sept. 14 Cost: $300 Register here", "Click to register"). Only add confirmed sign-ups.</span>
+                                </div>
+                            </label>
+
+                            <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; background: rgba(255,255,255,0.02); padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 6px;">
+                                <input type="checkbox" id="rules-abbrev-xc" checked style="margin-top: 3px; transform: scale(1.15); cursor: pointer;">
+                                <div>
+                                    <strong style="color: #fff; font-size: 13px; display: block;">Abbreviate Cross Country as "XC"</strong>
+                                    <span style="color: #94a3b8; font-size: 11.5px; line-height: 1.4; display: block;">Always abbreviate Cross Country to "XC" across all titles and descriptions (e.g. "XC Meet - Ellie").</span>
+                                </div>
+                            </label>
+
+                            <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; background: rgba(255,255,255,0.02); padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 6px;">
+                                <input type="checkbox" id="rules-match-children" checked style="margin-top: 3px; transform: scale(1.15); cursor: pointer;">
+                                <div>
+                                    <strong style="color: #fff; font-size: 13px; display: block;">Append Child Name Suffix</strong>
+                                    <span style="color: #94a3b8; font-size: 11.5px; line-height: 1.4; display: block;">Match event to child and append their name at the end (e.g. "- Ellie", "- Gia", "- Leo"). Never include the grade.</span>
+                                </div>
+                            </label>
+
+                            <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; background: rgba(255,255,255,0.02); padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 6px;">
+                                <input type="checkbox" id="rules-label-self" checked style="margin-top: 3px; transform: scale(1.15); cursor: pointer;">
+                                <div>
+                                    <strong style="color: #fff; font-size: 13px; display: block;">Label Non-Child Events for Dominic</strong>
+                                    <span style="color: #94a3b8; font-size: 11.5px; line-height: 1.4; display: block;">If an event is personal or not specific to the kids, label it for Dominic (Class of 2006).</span>
+                                </div>
+                            </label>
+
+                            <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; background: rgba(255,255,255,0.02); padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 6px;">
+                                <input type="checkbox" id="rules-expand-liberty" checked style="margin-top: 3px; transform: scale(1.15); cursor: pointer;">
+                                <div>
+                                    <strong style="color: #fff; font-size: 13px; display: block;">Map Location "Liberty"</strong>
+                                    <span style="color: #94a3b8; font-size: 11.5px; line-height: 1.4; display: block;">If an event specifies location "Liberty", auto-expand to "Liberty Christian School, Argyle, Texas".</span>
+                                </div>
+                            </label>
+
+                            <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; background: rgba(255,255,255,0.02); padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 6px;">
+                                <input type="checkbox" id="rules-relative-dates" checked style="margin-top: 3px; transform: scale(1.15); cursor: pointer;">
+                                <div>
+                                    <strong style="color: #fff; font-size: 13px; display: block;">Parse "End of MM/YYYY" as Last Day of Month</strong>
+                                    <span style="color: #94a3b8; font-size: 11.5px; line-height: 1.4; display: block;">Dates written as "end of 08/2026" automatically default to All Day on 8/31/2026.</span>
+                                </div>
+                            </label>
+                        </div>
+
+                        <!-- Group B: Bills & Noise Filters -->
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <div style="font-size: 12.5px; font-weight: 700; color: #10b981; text-transform: uppercase; letter-spacing: 0.5px;">💳 Bills &amp; Payment Due Dates</div>
+
+                            <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; background: rgba(255,255,255,0.02); padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 6px;">
+                                <input type="checkbox" id="rules-bill-reminders" checked style="margin-top: 3px; transform: scale(1.15); cursor: pointer;">
+                                <div>
+                                    <strong style="color: #fff; font-size: 13px; display: block;">Scan for Bill &amp; Payment Deadlines</strong>
+                                    <span style="color: #94a3b8; font-size: 11.5px; line-height: 1.4; display: block;">Create reminder events for upcoming utility, credit card, and bill due dates.</span>
+                                </div>
+                            </label>
+
+                            <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; background: rgba(255,255,255,0.02); padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 6px;">
+                                <input type="checkbox" id="rules-bill-amounts" style="margin-top: 3px; transform: scale(1.15); cursor: pointer;">
+                                <div>
+                                    <strong style="color: #fff; font-size: 13px; display: block;">Include Dollar Amount in Calendar Event</strong>
+                                    <span style="color: #94a3b8; font-size: 11.5px; line-height: 1.4; display: block;">Unchecked by default for privacy (e.g. "Electric Bill Due - Dominic" instead of showing $145.20).</span>
+                                </div>
+                            </label>
+
+                            <div style="font-size: 12.5px; font-weight: 700; color: #f59e0b; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 8px;">🛡️ Promotions, Deals &amp; Noise Filtering</div>
+
+                            <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; background: rgba(255,255,255,0.02); padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 6px;">
+                                <input type="checkbox" id="rules-filter-promo" checked style="margin-top: 3px; transform: scale(1.15); cursor: pointer;">
+                                <div>
+                                    <strong style="color: #fff; font-size: 13px; display: block;">Ignore Marketing Deals &amp; Reward Deadlines</strong>
+                                    <span style="color: #94a3b8; font-size: 11.5px; line-height: 1.4; display: block;">Block airline/hotel flash sales and reward booking deadlines (e.g. Atmos Rewards, Daily Drop Pro, travel news).</span>
+                                </div>
+                            </label>
+
+                            <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; background: rgba(255,255,255,0.02); padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 6px;">
+                                <input type="checkbox" id="rules-filter-delivery" checked style="margin-top: 3px; transform: scale(1.15); cursor: pointer;">
+                                <div>
+                                    <strong style="color: #fff; font-size: 13px; display: block;">Ignore Package Deliveries &amp; Shipping Dates</strong>
+                                    <span style="color: #94a3b8; font-size: 11.5px; line-height: 1.4; display: block;">Do not create calendar entries for items getting delivered, tracking numbers, or shipment arrival estimates.</span>
+                                </div>
+                            </label>
+
+                            <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; background: rgba(255,255,255,0.02); padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 6px;">
+                                <input type="checkbox" id="rules-filter-webinars" checked style="margin-top: 3px; transform: scale(1.15); cursor: pointer;">
+                                <div>
+                                    <strong style="color: #fff; font-size: 13px; display: block;">Ignore Corporate Promotional Events &amp; Webinars</strong>
+                                    <span style="color: #94a3b8; font-size: 11.5px; line-height: 1.4; display: block;">Block tech promotion weeks, virtual summits, and career days (e.g. Cloudflare AI Week, Fidelity Career Day).</span>
+                                </div>
+                            </label>
+
+                            <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; background: rgba(255,255,255,0.02); padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 6px;">
+                                <input type="checkbox" id="rules-invite-reminders" checked style="margin-top: 3px; transform: scale(1.15); cursor: pointer;">
+                                <div>
+                                    <strong style="color: #fff; font-size: 13px; display: block;">Detect Meeting Invites &amp; RSVP Deadlines</strong>
+                                    <span style="color: #94a3b8; font-size: 11.5px; line-height: 1.4; display: block;">Scan for direct meeting invitations, appointments, and RSVP deadlines.</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Live AI Prompt Preview Details -->
+                    <details style="background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px 14px; margin-bottom: 20px;">
+                        <summary style="cursor: pointer; color: #38bdf8; font-weight: 600; font-size: 13px;">👁️ View Live Compiled AI Prompt Instructions</summary>
+                        <pre id="rules-compiled-preview" style="margin-top: 10px; padding: 12px; background: #0d1117; border: 1px solid #334155; border-radius: 6px; color: #cbd5e1; font-size: 12px; line-height: 1.45; white-space: pre-wrap; max-height: 250px; overflow-y: auto; font-family: monospace;"></pre>
+                    </details>
+
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button class="save-btn" id="save-parsing-rules-btn" onclick="saveParsingRules()" style="margin: 0; background: #0284c7; font-weight: 700;">💾 Save AI Parsing Rules &amp; Family Profile</button>
+                        <button class="remove-btn" onclick="resetFamilyRulesDefaults()" style="margin: 0; background: #374151; color: #e5e7eb;">🔄 Reset to Dominic &amp; Family Defaults</button>
+                    </div>
+                </div>
+
                 <!-- General Settings Section -->
                 <h3 class="section-title">General & AI Configuration</h3>
                 <div class="account-box" style="margin-bottom: 30px;">
@@ -4704,6 +4875,224 @@
             }
         }
 
+        let currentParsingRules = null;
+        let currentSettingsFamilyProfile = null;
+
+        function loadParsingRulesUI(rules) {
+            if (!rules) return;
+            const setCheck = (id, val) => {
+                const el = document.getElementById(id);
+                if (el) el.checked = Boolean(val);
+            };
+            setCheck('rules-grade-filter', rules.school_grade_filter !== false);
+            setCheck('rules-teacher-scan', rules.assume_teacher_is_for_kids !== false);
+            setCheck('rules-filter-camps', rules.filter_unregistered_camps !== false);
+            setCheck('rules-abbrev-xc', rules.abbreviate_cross_country_xc !== false);
+            setCheck('rules-match-children', rules.match_children !== false);
+            setCheck('rules-label-self', rules.label_non_child_for_self !== false);
+            setCheck('rules-expand-liberty', rules.expand_liberty_location !== false);
+            setCheck('rules-relative-dates', rules.last_day_of_month_dates !== false);
+            setCheck('rules-bill-reminders', rules.bill_reminders !== false);
+            setCheck('rules-bill-amounts', Boolean(rules.bill_amounts_in_calendar));
+            setCheck('rules-filter-promo', rules.filter_promotions_and_travel !== false);
+            setCheck('rules-filter-delivery', rules.filter_package_deliveries !== false);
+            setCheck('rules-filter-webinars', rules.filter_corporate_webinars !== false);
+            setCheck('rules-invite-reminders', rules.invite_reminders !== false);
+        }
+
+        function renderSettingsFamilyProfile() {
+            const container = document.getElementById('settings-family-roster-container');
+            if (!container) return;
+            if (!currentSettingsFamilyProfile || !currentSettingsFamilyProfile.members) {
+                currentSettingsFamilyProfile = {
+                    family_name: "Our Family",
+                    total_members: 5,
+                    members: [
+                        { id: "m1", name: "Dominic", role: "self", relation: "Father", age: 38, gender: "male", appetite: "large", grade: "Class of 2006", school: "", sports: "", notes: "Dad / Self, Class of 2006 graduate" },
+                        { id: "m2", name: "Wife", role: "spouse", relation: "Mother", age: 37, gender: "female", appetite: "normal", grade: "", school: "", sports: "", notes: "Mom / Spouse" },
+                        { id: "m3", name: "Gia", role: "child", relation: "Teen Daughter", age: 15, gender: "female", appetite: "normal", grade: "9th Grade", school: "Liberty Christian School", sports: "Softball", notes: "9th grade (High School), plays softball" },
+                        { id: "m4", name: "Ellie", role: "child", relation: "Daughter", age: 11, gender: "female", appetite: "normal", grade: "6th Grade", school: "Liberty Christian School", sports: "XC, Soccer, Track", notes: "6th grade (Middle School), plays cross country (XC), soccer, track" },
+                        { id: "m5", name: "Leo", role: "child", relation: "Son", age: 8, gender: "male", appetite: "normal", grade: "2nd Grade", school: "Liberty Christian School", sports: "", notes: "2nd grade boy" }
+                    ]
+                };
+            }
+
+            container.innerHTML = currentSettingsFamilyProfile.members.map((m, idx) => `
+                <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 10px 14px; display: grid; grid-template-columns: 1.5fr 1fr 1.2fr 1.5fr 1.5fr 70px 70px auto; gap: 8px; align-items: center;" class="settings-member-card">
+                    <div>
+                        <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 2px;">Name</label>
+                        <input type="text" value="${escapeHtml(m.name || '')}" placeholder="Name" onchange="updateSettingsFamilyMember(${idx}, 'name', this.value)" style="width: 100%; box-sizing: border-box; background: #161b22; border: 1px solid #334155; border-radius: 4px; color: #fff; padding: 6px 8px; font-size: 13px;">
+                    </div>
+                    <div>
+                        <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 2px;">Role</label>
+                        <select onchange="updateSettingsFamilyMember(${idx}, 'role', this.value)" style="width: 100%; box-sizing: border-box; background: #161b22; border: 1px solid #334155; border-radius: 4px; color: #fff; padding: 6px 8px; font-size: 12px;">
+                            <option value="self" ${m.role === 'self' ? 'selected' : ''}>👤 Self</option>
+                            <option value="spouse" ${m.role === 'spouse' ? 'selected' : ''}>💍 Spouse</option>
+                            <option value="child" ${m.role === 'child' ? 'selected' : ''}>🎒 Child</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 2px;">Grade</label>
+                        <input type="text" value="${escapeHtml(m.grade || '')}" placeholder="e.g. 2nd Grade, 6th Grade" onchange="updateSettingsFamilyMember(${idx}, 'grade', this.value)" style="width: 100%; box-sizing: border-box; background: #161b22; border: 1px solid #334155; border-radius: 4px; color: #fff; padding: 6px 8px; font-size: 12.5px;">
+                    </div>
+                    <div>
+                        <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 2px;">School</label>
+                        <input type="text" value="${escapeHtml(m.school || '')}" placeholder="e.g. Liberty Christian School" onchange="updateSettingsFamilyMember(${idx}, 'school', this.value)" style="width: 100%; box-sizing: border-box; background: #161b22; border: 1px solid #334155; border-radius: 4px; color: #fff; padding: 6px 8px; font-size: 12.5px;">
+                    </div>
+                    <div>
+                        <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 2px;">Sports / Activities</label>
+                        <input type="text" value="${escapeHtml(m.sports || '')}" placeholder="e.g. XC, Soccer, Softball" onchange="updateSettingsFamilyMember(${idx}, 'sports', this.value)" style="width: 100%; box-sizing: border-box; background: #161b22; border: 1px solid #334155; border-radius: 4px; color: #fff; padding: 6px 8px; font-size: 12.5px;">
+                    </div>
+                    <div>
+                        <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 2px;">Age</label>
+                        <input type="number" min="1" max="120" value="${m.age || 10}" oninput="updateSettingsFamilyMember(${idx}, 'age', parseInt(this.value)||10)" style="width: 100%; box-sizing: border-box; background: #161b22; border: 1px solid #334155; border-radius: 4px; color: #fff; padding: 6px 6px; font-size: 12.5px;">
+                    </div>
+                    <div>
+                        <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 2px;">Gender</label>
+                        <select onchange="updateSettingsFamilyMember(${idx}, 'gender', this.value)" style="width: 100%; box-sizing: border-box; background: #161b22; border: 1px solid #334155; border-radius: 4px; color: #fff; padding: 6px 4px; font-size: 12px;">
+                            <option value="male" ${(m.gender === 'male' || m.gender === 'M') ? 'selected' : ''}>Male</option>
+                            <option value="female" ${(m.gender === 'female' || m.gender === 'F') ? 'selected' : ''}>Female</option>
+                        </select>
+                    </div>
+                    <div style="text-align: right; padding-top: 14px;">
+                        <button type="button" onclick="removeSettingsFamilyMember(${idx})" title="Remove member" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #f87171; border-radius: 4px; padding: 6px 10px; cursor: pointer; font-size: 12px;">✕</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateSettingsFamilyMember(idx, field, value) {
+            if (!currentSettingsFamilyProfile || !currentSettingsFamilyProfile.members || !currentSettingsFamilyProfile.members[idx]) return;
+            currentSettingsFamilyProfile.members[idx][field] = value;
+        }
+
+        function addSettingsFamilyMember() {
+            if (!currentSettingsFamilyProfile) currentSettingsFamilyProfile = { family_name: "Our Family", total_members: 0, members: [] };
+            if (!currentSettingsFamilyProfile.members) currentSettingsFamilyProfile.members = [];
+            const nextId = "m" + (currentSettingsFamilyProfile.members.length + 1);
+            currentSettingsFamilyProfile.members.push({
+                id: nextId,
+                name: "New Member",
+                role: "child",
+                relation: "Child",
+                age: 10,
+                gender: "male",
+                appetite: "normal",
+                grade: "",
+                school: "Liberty Christian School",
+                sports: "",
+                notes: ""
+            });
+            currentSettingsFamilyProfile.total_members = currentSettingsFamilyProfile.members.length;
+            renderSettingsFamilyProfile();
+        }
+
+        function removeSettingsFamilyMember(idx) {
+            if (!currentSettingsFamilyProfile || !currentSettingsFamilyProfile.members) return;
+            currentSettingsFamilyProfile.members.splice(idx, 1);
+            currentSettingsFamilyProfile.total_members = currentSettingsFamilyProfile.members.length;
+            renderSettingsFamilyProfile();
+        }
+
+        async function saveParsingRules() {
+            const feedback = document.getElementById('rules-feedback-msg');
+            const saveBtn = document.getElementById('save-parsing-rules-btn');
+            if (feedback) feedback.innerHTML = '<span style="color: #60a5fa; font-size: 13px;">Saving parsing rules and family profile...</span>';
+            if (saveBtn) { saveBtn.disabled = true; saveBtn.innerText = 'Saving...'; }
+
+            const isChecked = (id) => {
+                const el = document.getElementById(id);
+                return el ? el.checked : true;
+            };
+
+            const rulesPayload = {
+                bill_reminders: isChecked('rules-bill-reminders'),
+                bill_amounts_in_calendar: isChecked('rules-bill-amounts'),
+                school_grade_filter: isChecked('rules-grade-filter'),
+                grades_allowed: ["2nd Grade", "6th Grade", "9th Grade", "Middle School", "High School"],
+                assume_teacher_is_for_kids: isChecked('rules-teacher-scan'),
+                filter_unregistered_camps: isChecked('rules-filter-camps'),
+                abbreviate_cross_country_xc: isChecked('rules-abbrev-xc'),
+                match_children: isChecked('rules-match-children'),
+                label_non_child_for_self: isChecked('rules-label-self'),
+                self_name: "Dominic",
+                expand_liberty_location: isChecked('rules-expand-liberty'),
+                last_day_of_month_dates: isChecked('rules-relative-dates'),
+                filter_promotions_and_travel: isChecked('rules-filter-promo'),
+                filter_package_deliveries: isChecked('rules-filter-delivery'),
+                filter_corporate_webinars: isChecked('rules-filter-webinars'),
+                invite_reminders: isChecked('rules-invite-reminders')
+            };
+
+            try {
+                const res = await fetch('/api/settings/parsing_rules', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        rules: rulesPayload,
+                        family_profile: currentSettingsFamilyProfile
+                    })
+                });
+                await handleApiError(res);
+                const data = await res.json();
+                if (data.status === 'success') {
+                    currentParsingRules = data.rules;
+                    if (data.compiled_prompt) {
+                        const previewEl = document.getElementById('rules-compiled-preview');
+                        if (previewEl) previewEl.innerText = data.compiled_prompt;
+                    }
+                    if (feedback) {
+                        feedback.innerHTML = '<div class="success">✓ AI Calendar Parsing Rules &amp; Family Profile saved successfully! New incoming emails will follow these preferences.</div>';
+                        setTimeout(() => { if (feedback) feedback.innerHTML = ''; }, 4000);
+                    }
+                } else {
+                    if (feedback) feedback.innerHTML = '<div class="error">Failed to save parsing rules.</div>';
+                }
+            } catch(e) {
+                if (e.message !== "Unauthorized" && feedback) {
+                    feedback.innerHTML = `<div class="error">Error saving parsing rules: ${escapeHtml(e.message || 'Network error')}</div>`;
+                }
+            } finally {
+                if (saveBtn) { saveBtn.disabled = false; saveBtn.innerText = '💾 Save AI Parsing Rules & Family Profile'; }
+            }
+        }
+
+        async function resetFamilyRulesDefaults() {
+            if (!confirm("Reset family profile and smart rules to Dominic, Wife, Gia (9th), Ellie (6th), Leo (2nd) defaults?")) return;
+            
+            currentSettingsFamilyProfile = {
+                family_name: "Our Family",
+                total_members: 5,
+                members: [
+                    { id: "m1", name: "Dominic", role: "self", relation: "Father", age: 38, gender: "male", appetite: "large", grade: "Class of 2006", school: "", sports: "", notes: "Dad / Self, Class of 2006 graduate" },
+                    { id: "m2", name: "Wife", role: "spouse", relation: "Mother", age: 37, gender: "female", appetite: "normal", grade: "", school: "", sports: "", notes: "Mom / Spouse" },
+                    { id: "m3", name: "Gia", role: "child", relation: "Teen Daughter", age: 15, gender: "female", appetite: "normal", grade: "9th Grade", school: "Liberty Christian School", sports: "Softball", notes: "9th grade (High School), plays softball" },
+                    { id: "m4", name: "Ellie", role: "child", relation: "Daughter", age: 11, gender: "female", appetite: "normal", grade: "6th Grade", school: "Liberty Christian School", sports: "XC, Soccer, Track", notes: "6th grade (Middle School), plays cross country (XC), soccer, track" },
+                    { id: "m5", name: "Leo", role: "child", relation: "Son", age: 8, gender: "male", appetite: "normal", grade: "2nd Grade", school: "Liberty Christian School", sports: "", notes: "2nd grade boy" }
+                ]
+            };
+            renderSettingsFamilyProfile();
+
+            loadParsingRulesUI({
+                bill_reminders: true,
+                bill_amounts_in_calendar: false,
+                school_grade_filter: true,
+                assume_teacher_is_for_kids: true,
+                filter_unregistered_camps: true,
+                abbreviate_cross_country_xc: true,
+                match_children: true,
+                label_non_child_for_self: true,
+                expand_liberty_location: true,
+                last_day_of_month_dates: true,
+                filter_promotions_and_travel: true,
+                filter_package_deliveries: true,
+                filter_corporate_webinars: true,
+                invite_reminders: true
+            });
+
+            await saveParsingRules();
+        }
+
         function collectFullSettingsPayload() {
             const postalEl = document.getElementById('postal_code') || document.getElementById('postal-code-input');
             return {
@@ -4716,7 +5105,9 @@
                 postal_code: postalEl ? postalEl.value.trim() : '76262',
                 fetch_interval_minutes: getSelectedIntervalMinutes(),
                 lookback_days: parseInt(document.getElementById('lookback_days').value, 10) || 7,
-                email_fetch_limit: parseInt(document.getElementById('email_fetch_limit').value, 10) || 20
+                email_fetch_limit: parseInt(document.getElementById('email_fetch_limit').value, 10) || 20,
+                parsing_rules: currentParsingRules,
+                family_profile: currentSettingsFamilyProfile
             };
         }
 
@@ -4767,6 +5158,20 @@
                 if (postalInput) postalInput.value = postalCodeVal;
                 const postalBarInput = document.getElementById('postal-code-input');
                 if (postalBarInput) postalBarInput.value = postalCodeVal;
+
+                // Smart Parsing Rules & Family Profile
+                if (settings.parsing_rules) {
+                    currentParsingRules = settings.parsing_rules;
+                    loadParsingRulesUI(settings.parsing_rules);
+                }
+                if (settings.family_profile) {
+                    currentSettingsFamilyProfile = settings.family_profile;
+                    renderSettingsFamilyProfile();
+                }
+                if (settings.compiled_prompt) {
+                    const previewEl = document.getElementById('rules-compiled-preview');
+                    if (previewEl) previewEl.innerText = settings.compiled_prompt;
+                }
 
                 // Job Schedule settings
                 const intervalMinutes = settings.fetch_interval_minutes !== undefined ? settings.fetch_interval_minutes : 60;
