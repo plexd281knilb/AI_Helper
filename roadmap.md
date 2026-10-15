@@ -13,6 +13,7 @@ This document outlines the evolutionary roadmap for **AI Helper**, cataloging re
 - **🛒 Stemmed Cross-Store Deal Comparison & Exact Cent Pricing:** Plural noun stemming (`stem_word`) and accurate cents-to-dollars price normalization (`parse_numeric_price`) allowing exact cross-store bargain matching across 25+ nationwide supermarket chains.
 - **🥩 USDA Beef Grade Quality Isolation:** Dedicated beef grade detection (`prime`, `choice`, `select`, `wagyu`, `angus`) preventing misleading price comparisons across quality tiers.
 - **🔄 Continuous Circular Freshness & Automatic Deal Transition Engine:** Continuous validity tracking (`valid_from` to `valid_to`) ensuring that when promotional flyers expire (e.g. 9/1 – 9/8), the engine automatically pulls and ingests the next week's circular deals (e.g. 9/9 onwards) via proactive 30-minute background polling and reactive just-in-time refresh.
+- **🍲 Smart Meal Planner (Weekly & Monthly Plans with Live Supermarket Sales):** Chef-crafted dinner planning for the week (7 days) and month (28 days) centered around what is on sale at local supermarkets. Features interactive 👍/👎 recipe preference learning, instant recipe swapping (🔄), 1-click Google Calendar dinner sync, and batch grocery list export with store-by-store best price routing.
 - **🩺 Container Health Monitoring:** Standardized `/health` and `/api/health` endpoints with lightweight Python urllib healthchecks in `docker-compose.yml`.
 
 ---

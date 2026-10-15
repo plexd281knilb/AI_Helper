@@ -1233,6 +1233,401 @@
         .tag-chip-remove:hover {
             color: #ef4444;
         }
+
+        /* --- Smart Meal Planner Styles --- */
+        .meals-header-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 22px;
+        }
+        .meals-controls-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 18px 20px;
+            margin-bottom: 24px;
+            box-shadow: var(--shadow-sm);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .meals-control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .meals-toggle-pill {
+            padding: 8px 16px;
+            border-radius: 20px;
+            border: 1px solid var(--border-color);
+            background: var(--input-bg);
+            color: #cbd5e1;
+            font-size: 13.5px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            user-select: none;
+        }
+        .meals-toggle-pill:hover {
+            border-color: #64748b;
+            color: #fff;
+        }
+        .meals-toggle-pill.active {
+            background: linear-gradient(135deg, rgba(66, 133, 244, 0.25), rgba(52, 211, 153, 0.25));
+            border-color: #3b82f6;
+            color: #93c5fd;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.25);
+        }
+        .meals-select {
+            padding: 8px 14px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-color);
+            background: var(--input-bg);
+            color: #fff;
+            font-size: 13.5px;
+            font-weight: 500;
+            cursor: pointer;
+            outline: none;
+        }
+        .meals-select:focus {
+            border-color: var(--accent);
+        }
+        .meals-date-input {
+            padding: 7px 12px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-color);
+            background: var(--input-bg);
+            color: #fff;
+            font-size: 13.5px;
+            outline: none;
+        }
+        .btn-generate-meals {
+            padding: 9px 20px;
+            border-radius: var(--radius-sm);
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            font-weight: 700;
+            font-size: 14px;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(16, 185, 129, 0.35);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+        }
+        .btn-generate-meals:hover {
+            filter: brightness(1.1);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 14px rgba(16, 185, 129, 0.45);
+        }
+        .meals-summary-banner {
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.9));
+            border: 1px solid rgba(59, 130, 246, 0.25);
+            border-radius: var(--radius-md);
+            padding: 18px 22px;
+            margin-bottom: 22px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            box-shadow: var(--shadow-sm);
+        }
+        .meals-stats-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .meals-stat-chip {
+            padding: 5px 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: #e2e8f0;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .meals-stat-chip.savings {
+            background: rgba(16, 185, 129, 0.15);
+            border-color: rgba(16, 185, 129, 0.35);
+            color: #34d399;
+        }
+        .meals-global-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .meals-week-nav {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            overflow-x: auto;
+            padding-bottom: 4px;
+        }
+        .meals-week-btn {
+            padding: 6px 14px;
+            border-radius: 6px;
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            color: #94a3b8;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+        .meals-week-btn.active {
+            background: rgba(59, 130, 246, 0.2);
+            border-color: #3b82f6;
+            color: #60a5fa;
+        }
+        .meals-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+            gap: 20px;
+        }
+        @media (max-width: 768px) {
+            .meals-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        .meal-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 18px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+        .meal-card:hover {
+            border-color: rgba(66, 133, 244, 0.4);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+        }
+        .meal-card-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .meal-date-badge {
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #94a3b8;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .meal-cuisine-pill {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: rgba(148, 163, 184, 0.15);
+            color: #cbd5e1;
+            border: 1px solid rgba(148, 163, 184, 0.25);
+        }
+        .meal-title {
+            font-size: 16.5px;
+            font-weight: 700;
+            color: #f8fafc;
+            margin: 0 0 6px 0;
+            line-height: 1.35;
+        }
+        .meal-desc {
+            font-size: 13px;
+            color: #94a3b8;
+            margin: 0 0 12px 0;
+            line-height: 1.45;
+        }
+        .meal-meta-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 12px;
+            color: #64748b;
+            margin-bottom: 12px;
+        }
+        .meal-cost-badge {
+            font-weight: 700;
+            color: #38bdf8;
+            background: rgba(56, 189, 248, 0.1);
+            padding: 2px 7px;
+            border-radius: 4px;
+        }
+        .meal-sales-box {
+            background: rgba(16, 185, 129, 0.08);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            border-radius: var(--radius-sm);
+            padding: 10px 12px;
+            margin-bottom: 14px;
+        }
+        .meal-sales-title {
+            font-size: 11.5px;
+            font-weight: 700;
+            color: #34d399;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .meal-sale-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 12px;
+            padding: 3px 8px;
+            border-radius: 6px;
+            background: rgba(16, 185, 129, 0.15);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: #a7f3d0;
+            margin-right: 6px;
+            margin-bottom: 4px;
+        }
+        .meal-details-toggle {
+            background: none;
+            border: none;
+            color: #60a5fa;
+            font-size: 12.5px;
+            font-weight: 600;
+            padding: 0;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin-bottom: 14px;
+        }
+        .meal-details-toggle:hover {
+            text-decoration: underline;
+        }
+        .meal-details-content {
+            display: none;
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            padding: 12px;
+            margin-bottom: 14px;
+            font-size: 12.5px;
+        }
+        .meal-details-content.open {
+            display: block;
+        }
+        .meal-ing-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 4px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        }
+        .meal-ing-item:last-child {
+            border-bottom: none;
+        }
+        .meal-ing-store {
+            font-weight: 600;
+            color: #a5b4fc;
+            font-size: 11.5px;
+        }
+        .meal-actions-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+            gap: 8px;
+        }
+        .meal-feedback-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-meal-feedback {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            background: var(--input-bg);
+            color: #94a3b8;
+            cursor: pointer;
+            font-size: 14px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .btn-meal-feedback:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+        .btn-meal-feedback.active-up {
+            background: rgba(16, 185, 129, 0.2);
+            border-color: #10b981;
+            color: #34d399;
+        }
+        .btn-meal-feedback.active-down {
+            background: rgba(239, 68, 68, 0.2);
+            border-color: #ef4444;
+            color: #f87171;
+        }
+        .meal-action-buttons {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-meal-action {
+            padding: 6px 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            background: var(--input-bg);
+            color: #cbd5e1;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            transition: all 0.15s;
+        }
+        .btn-meal-action:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: #64748b;
+            color: #fff;
+        }
+        .btn-meal-action.synced {
+            background: rgba(59, 130, 246, 0.15);
+            border-color: #3b82f6;
+            color: #93c5fd;
+            cursor: default;
+        }
+        .meals-empty-state {
+            text-align: center;
+            padding: 50px 20px;
+            background: var(--card-bg);
+            border: 1px dashed var(--border-color);
+            border-radius: var(--radius-md);
+        }
+        .meals-empty-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
     </style>
 </head>
 <body>
@@ -1308,6 +1703,10 @@
                     <button class="tab-link nav-tree-item" onclick="openTab('groceries', event)">
                         <span class="nav-item-icon">🛒</span>
                         <span>Deals &amp; Groceries</span>
+                    </button>
+                    <button class="tab-link nav-tree-item" onclick="openTab('meals', event)">
+                        <span class="nav-item-icon">🍲</span>
+                        <span>Meal Planner</span>
                     </button>
 
                     <!-- Administration Paths (Admin Only) -->
@@ -1851,6 +2250,74 @@
                 </div>
             </div>
 
+            <!-- Smart Meal Planner View -->
+            <div id="meals" class="view">
+                <div class="meals-header-bar">
+                    <div>
+                        <h1 style="margin: 0 0 5px 0;">🍲 Smart Meal Planner</h1>
+                        <p style="color: #ccc; margin: 0;">AI meal planning for the week &amp; month powered by live supermarket sales. Add to calendar, get personalized recipes, and shop lowest-price stores.</p>
+                    </div>
+                    <div id="meals-status-badge" style="display: flex; align-items: center; gap: 8px;">
+                        <span class="badge-blue" id="meals-active-stores-badge">🏪 12 Stores Active</span>
+                    </div>
+                </div>
+
+                <div id="meals-msg"></div>
+
+                <!-- Controls Card -->
+                <div class="meals-controls-card">
+                    <div class="meals-control-group">
+                        <span style="font-size: 13px; color: #94a3b8; font-weight: 600;">Timeframe:</span>
+                        <button class="meals-toggle-pill active" id="pill-timeframe-week" onclick="setMealPlanTimeframe('week')">📅 Week (7 Days)</button>
+                        <button class="meals-toggle-pill" id="pill-timeframe-month" onclick="setMealPlanTimeframe('month')">🗓️ Month (4 Weeks)</button>
+                    </div>
+
+                    <div class="meals-control-group">
+                        <span style="font-size: 13px; color: #94a3b8; font-weight: 600;">Dietary Style:</span>
+                        <select id="meals-dietary-select" class="meals-select">
+                            <option value="All">🌟 Family Favorites (Balanced)</option>
+                            <option value="High Protein">🥩 High Protein &amp; Steakhouse</option>
+                            <option value="Budget Saver">💰 Budget Saver (Max Savings)</option>
+                            <option value="Quick &amp; Easy">⚡ Quick &amp; Easy (&lt; 30 mins)</option>
+                            <option value="Low Carb">🥑 Low Carb / Keto</option>
+                            <option value="Mediterranean &amp; Fresh">🥗 Mediterranean &amp; Fresh</option>
+                        </select>
+                    </div>
+
+                    <div class="meals-control-group">
+                        <span style="font-size: 13px; color: #94a3b8; font-weight: 600;">Servings:</span>
+                        <select id="meals-servings-select" class="meals-select">
+                            <option value="2">2 People</option>
+                            <option value="4" selected>4 People (Family)</option>
+                            <option value="6">6 People</option>
+                            <option value="8">8 People</option>
+                        </select>
+                    </div>
+
+                    <div class="meals-control-group">
+                        <span style="font-size: 13px; color: #94a3b8; font-weight: 600;">Starts:</span>
+                        <input type="date" id="meals-start-date" class="meals-date-input" />
+                    </div>
+
+                    <button class="btn-generate-meals" id="btn-generate-meals" onclick="generateMealPlan()">
+                        <span id="btn-generate-meals-icon">✨</span> Generate Meal Plan
+                    </button>
+                </div>
+
+                <!-- Meal Plan Content Container (Rendered dynamically) -->
+                <div id="meals-content-container">
+                    <div class="meals-empty-state">
+                        <div class="meals-empty-icon">🍲</div>
+                        <h2 style="margin: 0 0 10px 0;">No Active Meal Plan</h2>
+                        <p style="color: #94a3b8; max-width: 550px; margin: 0 auto 20px auto;">
+                            Click <strong>Generate Meal Plan</strong> above to create a chef-crafted dinner schedule centered directly around what is currently on sale at your local stores!
+                        </p>
+                        <button class="btn-generate-meals" onclick="generateMealPlan()">
+                            ✨ Generate My First Weekly Plan
+                        </button>
+                    </div>
+                </div>
+            </div>
 
             <!-- Users View -->
             <div id="users" class="view">
@@ -2209,7 +2676,7 @@
         let modelFetchTimeout = null;
         let googleConnected = false;
         
-        const VALID_TABS = ['dashboard', 'history', 'groceries', 'settings', 'users', 'logs'];
+        const VALID_TABS = ['dashboard', 'history', 'groceries', 'meals', 'settings', 'users', 'logs'];
 
         function getCurrentTabFromUrl() {
             // 1. Check pathname (e.g. /history, /groceries, /settings)
@@ -2303,6 +2770,8 @@
                 loadHistory();
             } else if (tabName === 'groceries') {
                 initGroceriesTab();
+            } else if (tabName === 'meals') {
+                initMealsTab();
             } else if (tabName === 'settings') {
                 loadSettings();
             } else if (tabName === 'users') {
@@ -5219,6 +5688,471 @@
             if (!box) return;
             box.innerHTML = `<div class="${type}">${escapeHtml(msg)}</div>`;
             setTimeout(() => box.innerHTML = '', 3500);
+        }
+
+
+        // --- SMART MEAL PLANNER LOGIC ---
+        let currentMealPlan = null;
+        let currentMealTimeframe = 'week'; // 'week' or 'month'
+        let activeMonthWeekFilter = 0; // 0 = all, 1=week1, 2=week2, 3=week3, 4=week4
+
+        function showMealMsg(msg, type = "success") {
+            const box = document.getElementById('meals-msg');
+            if (!box) return;
+            box.innerHTML = `<div class="${type}">${escapeHtml(msg)}</div>`;
+            setTimeout(() => { if (box) box.innerHTML = ''; }, 4000);
+        }
+
+        function setMealPlanTimeframe(type) {
+            currentMealTimeframe = type;
+            document.querySelectorAll('.meals-toggle-pill').forEach(btn => btn.classList.remove('active'));
+            const activeBtn = document.getElementById(`pill-timeframe-${type}`);
+            if (activeBtn) activeBtn.classList.add('active');
+        }
+
+        async function initMealsTab() {
+            const dateInput = document.getElementById('meals-start-date');
+            if (dateInput && !dateInput.value) {
+                const now = new Date();
+                const day = now.getDay();
+                let diff = (1 - day + 7) % 7;
+                if (diff === 0 && now.getHours() >= 14) diff = 7;
+                const nextMon = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diff);
+                dateInput.value = nextMon.toISOString().split('T')[0];
+            }
+            await loadCurrentMealPlan();
+        }
+
+        async function loadCurrentMealPlan() {
+            try {
+                const response = await fetch('/api/meals/current');
+                await handleApiError(response);
+                const data = await response.json();
+                
+                if (data.stores_count !== undefined) {
+                    const badge = document.getElementById('meals-active-stores-badge');
+                    if (badge) badge.innerText = `🏪 ${data.stores_count} Stores Active`;
+                }
+                
+                currentMealPlan = data.plan;
+                renderMealPlanUI();
+            } catch(e) {
+                console.error("Error loading meal plan:", e);
+                renderMealPlanUI();
+            }
+        }
+
+        async function generateMealPlan() {
+            const btn = document.getElementById('btn-generate-meals');
+            const icon = document.getElementById('btn-generate-meals-icon');
+            const dietary = document.getElementById('meals-dietary-select').value;
+            const servings = parseInt(document.getElementById('meals-servings-select').value) || 4;
+            const startDate = document.getElementById('meals-start-date').value;
+            
+            if (btn) btn.disabled = true;
+            if (icon) icon.innerText = "⏳";
+            showMealMsg("Crafting personalized meal plan based on live circular sales...", "success");
+            
+            try {
+                const response = await fetch('/api/meals/generate', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        plan_type: currentMealTimeframe,
+                        dietary_pref: dietary,
+                        servings: servings,
+                        start_date: startDate
+                    })
+                });
+                await handleApiError(response);
+                const data = await response.json();
+                currentMealPlan = data.plan;
+                renderMealPlanUI();
+                showMealMsg(`✨ ${currentMealPlan.title} generated successfully!`, "success");
+            } catch(e) {
+                if (e.message !== "Unauthorized") {
+                    showMealMsg(`Error generating meal plan: ${e.message}`, "error");
+                }
+            } finally {
+                if (btn) btn.disabled = false;
+                if (icon) icon.innerText = "✨";
+            }
+        }
+
+        function filterMonthMealsByWeek(weekNum) {
+            activeMonthWeekFilter = weekNum;
+            document.querySelectorAll('.meals-week-btn').forEach(btn => btn.classList.remove('active'));
+            const activeBtn = document.getElementById(`btn-week-filter-${weekNum}`);
+            if (activeBtn) activeBtn.classList.add('active');
+            renderMealCardsOnly();
+        }
+
+        function toggleMealDetails(mealId) {
+            const content = document.getElementById(`meal-details-${mealId}`);
+            const btn = document.getElementById(`btn-toggle-details-${mealId}`);
+            if (!content) return;
+            const isOpen = content.classList.contains('open');
+            if (isOpen) {
+                content.classList.remove('open');
+                if (btn) btn.innerHTML = "📖 View Recipe &amp; Stores ▼";
+            } else {
+                content.classList.add('open');
+                if (btn) btn.innerHTML = "📖 Hide Recipe ▲";
+            }
+        }
+
+        async function submitMealCardFeedback(planId, mealId, action, btn) {
+            try {
+                if (btn) {
+                    btn.classList.remove('anim-pop');
+                    void btn.offsetWidth;
+                    btn.classList.add('anim-pop');
+                }
+                showFloatingFeedback(btn, action === 'like' ? '👍 Saved!' : '👎 Saved!', action === 'like' ? 'positive' : 'negative');
+                
+                const response = await fetch(`/api/meals/${planId}/meal/${mealId}/feedback`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ feedback: action })
+                });
+                await handleApiError(response);
+                const data = await response.json();
+                
+                if (currentMealPlan && currentMealPlan.meals_data) {
+                    const m = currentMealPlan.meals_data.find(x => x.id === mealId);
+                    if (m) m.feedback = action;
+                }
+                
+                const upBtn = document.getElementById(`btn-fb-up-${mealId}`);
+                const downBtn = document.getElementById(`btn-fb-down-${mealId}`);
+                if (upBtn) upBtn.className = `btn-meal-feedback ${action === 'like' ? 'active-up' : ''}`;
+                if (downBtn) downBtn.className = `btn-meal-feedback ${action === 'dislike' ? 'active-down' : ''}`;
+                
+                if (action === 'like') {
+                    showMealMsg("Saved! We'll suggest more recipes with these ingredients and cuisine.", "success");
+                } else {
+                    showMealMsg("Saved! Click the 🔄 Swap button to replace this meal with an alternative recipe.", "info");
+                }
+            } catch(e) {
+                console.error("Feedback error:", e);
+            }
+        }
+
+        async function swapMealCard(planId, mealId, btn) {
+            const card = document.getElementById(`meal-card-${mealId}`);
+            const origText = btn ? btn.innerHTML : "🔄 Swap";
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = "⏳ Swapping...";
+            }
+            try {
+                const response = await fetch(`/api/meals/${planId}/meal/${mealId}/swap`, {
+                    method: 'POST'
+                });
+                await handleApiError(response);
+                const data = await response.json();
+                const newMeal = data.meal;
+                
+                if (currentMealPlan && currentMealPlan.meals_data) {
+                    const idx = currentMealPlan.meals_data.findIndex(x => x.id === mealId);
+                    if (idx !== -1) {
+                        currentMealPlan.meals_data[idx] = newMeal;
+                    }
+                }
+                
+                showFloatingFeedback(btn, '🔄 Swapped!', 'positive');
+                showMealMsg(`Swapped with "${newMeal.title}" using active sales!`, "success");
+                renderMealPlanUI();
+            } catch(e) {
+                showMealMsg(`Error swapping meal: ${e.message}`, "error");
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = origText;
+                }
+            }
+        }
+
+        async function syncMealCardToCalendar(planId, mealId, btn) {
+            if (btn && btn.classList.contains('synced')) return;
+            const orig = btn ? btn.innerHTML : "📅 Add";
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = "⏳ Adding...";
+            }
+            try {
+                const response = await fetch(`/api/meals/${planId}/meal/${mealId}/calendar`, {
+                    method: 'POST'
+                });
+                await handleApiError(response);
+                const data = await response.json();
+                
+                if (currentMealPlan && currentMealPlan.meals_data) {
+                    const m = currentMealPlan.meals_data.find(x => x.id === mealId);
+                    if (m) {
+                        m.calendar_synced = true;
+                        m.calendar_event_id = data.event_id;
+                    }
+                }
+                
+                if (btn) {
+                    btn.className = "btn-meal-action synced";
+                    btn.innerHTML = "✓ Synced";
+                    btn.disabled = false;
+                }
+                showFloatingFeedback(btn, '📅 On Calendar!', 'positive');
+                showMealMsg("Added dinner to your calendar! (6:30 PM with ingredients & directions)", "success");
+            } catch(e) {
+                showMealMsg(`Error syncing to calendar: ${e.message}`, "error");
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = orig;
+                }
+            }
+        }
+
+        async function syncAllMealsToCalendar() {
+            if (!currentMealPlan) return;
+            const btn = document.getElementById('btn-sync-all-meals');
+            const orig = btn ? btn.innerHTML : "📅 Add All to Calendar";
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = "⏳ Syncing all meals...";
+            }
+            try {
+                const response = await fetch(`/api/meals/${currentMealPlan.id}/calendar_all`, {
+                    method: 'POST'
+                });
+                await handleApiError(response);
+                const data = await response.json();
+                
+                if (currentMealPlan && currentMealPlan.meals_data) {
+                    currentMealPlan.meals_data.forEach(m => m.calendar_synced = true);
+                }
+                
+                renderMealCardsOnly();
+                if (btn) {
+                    btn.innerHTML = "✓ All Meals on Calendar";
+                    btn.disabled = false;
+                }
+                showMealMsg(`🎉 Successfully added all ${data.synced_count} dinner recipes to your calendar!`, "success");
+            } catch(e) {
+                showMealMsg(`Error syncing all meals: ${e.message}`, "error");
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = orig;
+                }
+            }
+        }
+
+        async function exportMealPlanToGroceryList(planId = null, mealId = null, btn = null) {
+            const targetPlanId = planId || (currentMealPlan ? currentMealPlan.id : null);
+            if (!targetPlanId) return;
+            
+            const orig = btn ? btn.innerHTML : "🛒 Export All to Grocery List";
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = "⏳ Adding to list...";
+            }
+            
+            try {
+                const body = mealId ? { meal_ids: [mealId] } : {};
+                const response = await fetch(`/api/meals/${targetPlanId}/export_grocery_list`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(body)
+                });
+                await handleApiError(response);
+                const data = await response.json();
+                
+                if (btn) {
+                    btn.innerHTML = "✓ Added to List!";
+                    setTimeout(() => { if (btn) { btn.innerHTML = orig; btn.disabled = false; } }, 2500);
+                }
+                
+                const box = document.getElementById('meals-msg');
+                if (box) {
+                    box.innerHTML = `
+                        <div class="success" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                            <span>🛒 Successfully added <strong>${data.items_count}</strong> ingredients with best store pricing to <strong>${escapeHtml(data.list_title)}</strong>!</span>
+                            <button class="save-btn" onclick="openTab('groceries', event)" style="margin: 0; padding: 6px 14px; background: #3b82f6;">View Grocery List ➔</button>
+                        </div>
+                    `;
+                }
+            } catch(e) {
+                showMealMsg(`Error exporting to grocery list: ${e.message}`, "error");
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = orig;
+                }
+            }
+        }
+
+        function renderMealPlanUI() {
+            const container = document.getElementById('meals-content-container');
+            if (!container) return;
+            
+            if (!currentMealPlan || !currentMealPlan.meals_data || currentMealPlan.meals_data.length === 0) {
+                container.innerHTML = `
+                    <div class="meals-empty-state">
+                        <div class="meals-empty-icon">🍲</div>
+                        <h2 style="margin: 0 0 10px 0;">No Active Meal Plan</h2>
+                        <p style="color: #94a3b8; max-width: 550px; margin: 0 auto 20px auto;">
+                            Click <strong>Generate Meal Plan</strong> above to create a chef-crafted dinner schedule centered directly around what is currently on sale at your local stores!
+                        </p>
+                        <button class="btn-generate-meals" onclick="generateMealPlan()">
+                            ✨ Generate My First Weekly Plan
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+            
+            const isMonth = currentMealPlan.plan_type === 'month' || currentMealPlan.meals_data.length > 7;
+            const allSynced = currentMealPlan.meals_data.every(m => m.calendar_synced);
+            
+            let weekNavHtml = '';
+            if (isMonth) {
+                weekNavHtml = `
+                    <div class="meals-week-nav">
+                        <button class="meals-week-btn ${activeMonthWeekFilter === 0 ? 'active' : ''}" id="btn-week-filter-0" onclick="filterMonthMealsByWeek(0)">All 28 Days</button>
+                        <button class="meals-week-btn ${activeMonthWeekFilter === 1 ? 'active' : ''}" id="btn-week-filter-1" onclick="filterMonthMealsByWeek(1)">Week 1 (Days 1–7)</button>
+                        <button class="meals-week-btn ${activeMonthWeekFilter === 2 ? 'active' : ''}" id="btn-week-filter-2" onclick="filterMonthMealsByWeek(2)">Week 2 (Days 8–14)</button>
+                        <button class="meals-week-btn ${activeMonthWeekFilter === 3 ? 'active' : ''}" id="btn-week-filter-3" onclick="filterMonthMealsByWeek(3)">Week 3 (Days 15–21)</button>
+                        <button class="meals-week-btn ${activeMonthWeekFilter === 4 ? 'active' : ''}" id="btn-week-filter-4" onclick="filterMonthMealsByWeek(4)">Week 4 (Days 22–28)</button>
+                    </div>
+                `;
+            }
+            
+            container.innerHTML = `
+                <!-- Summary Banner -->
+                <div class="meals-summary-banner">
+                    <div>
+                        <h2 style="margin: 0 0 8px 0; font-size: 19px; color: #f8fafc;">${escapeHtml(currentMealPlan.title)}</h2>
+                        <div class="meals-stats-row">
+                            <span class="meals-stat-chip">🍽️ ${currentMealPlan.meals_data.length} Meals Planned</span>
+                            <span class="meals-stat-chip">💵 Est. Total: ${escapeHtml(currentMealPlan.total_estimated_cost)}</span>
+                            <span class="meals-stat-chip savings">🔥 Est. Savings: ${escapeHtml(currentMealPlan.total_estimated_savings)} from circular sales!</span>
+                            <span class="meals-stat-chip">👥 ${currentMealPlan.servings || 4} Servings</span>
+                        </div>
+                    </div>
+                    <div class="meals-global-actions">
+                        <button class="btn-meal-action ${allSynced ? 'synced' : ''}" id="btn-sync-all-meals" onclick="syncAllMealsToCalendar()" style="padding: 8px 14px; font-size: 13px;">
+                            ${allSynced ? '✓ All on Calendar' : '📅 Add All to Calendar'}
+                        </button>
+                        <button class="btn-generate-meals" onclick="exportMealPlanToGroceryList()" style="padding: 8px 16px; font-size: 13px; background: linear-gradient(135deg, #3b82f6, #1d4ed8);">
+                            🛒 Export All to Grocery List
+                        </button>
+                    </div>
+                </div>
+
+                ${weekNavHtml}
+
+                <!-- Meals Grid -->
+                <div class="meals-grid" id="meals-cards-grid">
+                    <!-- Cards will be populated by renderMealCardsOnly -->
+                </div>
+            `;
+            
+            renderMealCardsOnly();
+        }
+
+        function renderMealCardsOnly() {
+            const grid = document.getElementById('meals-cards-grid');
+            if (!grid || !currentMealPlan || !currentMealPlan.meals_data) return;
+            
+            let mealsToShow = currentMealPlan.meals_data;
+            if (activeMonthWeekFilter > 0) {
+                mealsToShow = mealsToShow.filter(m => m.week_num === activeMonthWeekFilter);
+            }
+            
+            grid.innerHTML = mealsToShow.map(m => {
+                const planId = currentMealPlan.id;
+                const mealId = m.id;
+                const isLiked = m.feedback === 'like';
+                const isDisliked = m.feedback === 'dislike';
+                const isSynced = m.calendar_synced;
+                
+                let salesHtml = '';
+                if (m.sale_highlights && m.sale_highlights.length > 0) {
+                    salesHtml = `
+                        <div class="meal-sales-box">
+                            <div class="meal-sales-title">🔥 On Sale Right Now</div>
+                            <div>
+                                ${m.sale_highlights.map(sh => `
+                                    <span class="meal-sale-tag">
+                                        🟢 <strong>${escapeHtml(sh.item)}</strong> — ${escapeHtml(sh.store)} (${escapeHtml(sh.price)})
+                                    </span>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                const ingHtml = (m.ingredients || []).map(ing => `
+                    <div class="meal-ing-item">
+                        <span>${ing.on_sale ? '🟢' : '⚪'} ${escapeHtml(ing.name)}</span>
+                        <span class="meal-ing-store">${escapeHtml(ing.store)} • ${escapeHtml(ing.price)}</span>
+                    </div>
+                `).join('');
+                
+                const instrHtml = (m.instructions || []).map((step, idx) => `
+                    <div style="margin-bottom: 6px; line-height: 1.4;">
+                        <strong style="color: #60a5fa;">${idx + 1}.</strong> ${escapeHtml(step)}
+                    </div>
+                `).join('');
+                
+                return `
+                    <div class="meal-card" id="meal-card-${mealId}">
+                        <div>
+                            <div class="meal-card-top">
+                                <div class="meal-date-badge">
+                                    <span>📅</span> ${escapeHtml(m.day)} • ${escapeHtml(m.date)}
+                                </div>
+                                <span class="meal-cuisine-pill">${escapeHtml(m.cuisine)}</span>
+                            </div>
+
+                            <h3 class="meal-title">${escapeHtml(m.title)}</h3>
+                            <p class="meal-desc">${escapeHtml(m.description)}</p>
+
+                            <div class="meal-meta-row">
+                                <span>⏱️ ${escapeHtml(m.prep_time)} prep • ${escapeHtml(m.cook_time)} cook</span>
+                                <span>🔥 ${m.calories} cal</span>
+                                <span class="meal-cost-badge">${escapeHtml(m.estimated_cost)} (${escapeHtml(m.estimated_cost_per_serving)}/serv)</span>
+                            </div>
+
+                            ${salesHtml}
+
+                            <button class="meal-details-toggle" id="btn-toggle-details-${mealId}" onclick="toggleMealDetails('${mealId}')">
+                                📖 View Recipe &amp; Stores ▼
+                            </button>
+
+                            <div class="meal-details-content" id="meal-details-${mealId}">
+                                <div style="font-weight: 700; color: #cbd5e1; margin-bottom: 6px; text-transform: uppercase; font-size: 11px;">🛒 Best Store Ingredients</div>
+                                <div style="margin-bottom: 12px;">${ingHtml}</div>
+
+                                <div style="font-weight: 700; color: #cbd5e1; margin-bottom: 6px; text-transform: uppercase; font-size: 11px;">👩‍🍳 Cooking Directions</div>
+                                <div>${instrHtml}</div>
+                            </div>
+                        </div>
+
+                        <div class="meal-actions-footer">
+                            <div class="meal-feedback-group">
+                                <button class="btn-meal-feedback ${isLiked ? 'active-up' : ''}" id="btn-fb-up-${mealId}" onclick="submitMealCardFeedback('${planId}', '${mealId}', 'like', this)" title="More meals like this">👍</button>
+                                <button class="btn-meal-feedback ${isDisliked ? 'active-down' : ''}" id="btn-fb-down-${mealId}" onclick="submitMealCardFeedback('${planId}', '${mealId}', 'dislike', this)" title="Less meals like this">👎</button>
+                                <button class="btn-meal-action" onclick="swapMealCard('${planId}', '${mealId}', this)" title="Swap with alternative on-sale recipe">🔄 Swap</button>
+                            </div>
+                            <div class="meal-action-buttons">
+                                <button class="btn-meal-action ${isSynced ? 'synced' : ''}" onclick="syncMealCardToCalendar('${planId}', '${mealId}', this)" title="Add to Calendar">
+                                    ${isSynced ? '✓ Synced' : '📅 Add to Cal'}
+                                </button>
+                                <button class="btn-meal-action" onclick="exportMealPlanToGroceryList('${planId}', '${mealId}', this)" title="Add all ingredients to Grocery List with best stores">
+                                    🛒 Add to List
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
         }
 
         // Kick off auth check on load

@@ -217,6 +217,21 @@ def init_db():
     c.execute("CREATE INDEX IF NOT EXISTS idx_gs_user_valid_to ON grocery_stores(user_id, valid_to);")
     c.execute("CREATE INDEX IF NOT EXISTS idx_gl_user ON grocery_lists(user_id);")
     c.execute("CREATE INDEX IF NOT EXISTS idx_gli_list_user ON grocery_list_items(list_id, user_id);")
+    c.execute('''CREATE TABLE IF NOT EXISTS meal_plans (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT,
+                    plan_type TEXT,
+                    start_date TEXT,
+                    end_date TEXT,
+                    title TEXT,
+                    created_at TEXT,
+                    updated_at TEXT,
+                    meals_data TEXT,
+                    dietary_pref TEXT,
+                    servings INTEGER DEFAULT 4,
+                    notes TEXT
+                 )''')
+    c.execute("CREATE INDEX IF NOT EXISTS idx_mp_user_date ON meal_plans(user_id, start_date DESC);")
     
     try:
         c.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user';")
@@ -537,6 +552,7 @@ def delete_user(target_user_id: str, current_user: str = Depends(verify_auth)):
     c.execute("DELETE FROM grocery_stores WHERE user_id=?", (target_user_id,))
     c.execute("DELETE FROM grocery_lists WHERE user_id=?", (target_user_id,))
     c.execute("DELETE FROM grocery_list_items WHERE user_id=?", (target_user_id,))
+    c.execute("DELETE FROM meal_plans WHERE user_id=?", (target_user_id,))
     conn.commit()
     conn.close()
     return {"status": "success"}
@@ -1651,6 +1667,7 @@ def get_logs():
 @app.get("/dashboard")
 @app.get("/history")
 @app.get("/groceries")
+@app.get("/meals")
 @app.get("/settings")
 @app.get("/users")
 @app.get("/logs")
@@ -3742,4 +3759,1177 @@ def ai_generate_list(req: AIGroceryListRequest, user_id: str = Depends(verify_au
     finally:
         conn.close()
 
+
+
+
+# =====================================================================
+# SMART MEAL PLANNER ENGINE & ENDPOINTS
+# Plans meals for the week & month, matches circular sales to recipes,
+# tracks thumbs up/down user preferences, adds to calendar, and exports
+# ingredients to grocery lists with the lowest price stores.
+# =====================================================================
+
+class MealPlanGenerateRequest(BaseModel):
+    plan_type: str = "week" # "week" or "month"
+    dietary_pref: Optional[str] = "All"
+    servings: Optional[int] = 4
+    start_date: Optional[str] = None
+    custom_notes: Optional[str] = ""
+
+class MealFeedbackRequest(BaseModel):
+    feedback: str # "like", "dislike", "none"
+
+class MealExportGroceryRequest(BaseModel):
+    list_id: Optional[str] = None
+    list_title: Optional[str] = None
+    meal_ids: Optional[list[str]] = None
+
+def find_best_store_for_ingredient(item_name: str, category: str, all_stores: list) -> dict:
+    """
+    Given an ingredient name, category, and list of store objects with cached circular deals,
+    finds the supermarket offering the lowest unit price, deal price string, and product image.
+    """
+    clean_ing = (item_name or "").strip()
+    ing_tokens = normalize_item_tokens(clean_ing)
+    curr_grade = detect_beef_grade(clean_ing, category)
+    
+    matches = []
+    for store in all_stores:
+        s_name = store.get("name", "Store")
+        deals = store.get("deals", [])
+        for d in deals:
+            d_name = d.get("item", "")
+            d_cat = d.get("category", "")
+            
+            if curr_grade:
+                d_grade = detect_beef_grade(d_name, d_cat)
+                if d_grade and d_grade != curr_grade:
+                    continue
+                    
+            d_tokens = normalize_item_tokens(d_name)
+            if not ing_tokens or not d_tokens:
+                continue
+                
+            overlap = ing_tokens.intersection(d_tokens)
+            if len(overlap) >= min(2, len(ing_tokens)) and (len(overlap) / max(len(ing_tokens), 1)) >= 0.35:
+                d_clean_price, _ = sanitize_deal_price_and_notes(d.get("price", ""), d.get("notes", ""))
+                d_parsed = parse_numeric_price(d_clean_price)
+                matches.append({
+                    "store": s_name,
+                    "item": d_name,
+                    "price_str": d_clean_price,
+                    "unit_price": d_parsed.get("unit_price"),
+                    "unit": d_parsed.get("unit", "ea"),
+                    "image_url": d.get("image_url", ""),
+                    "overlap": len(overlap)
+                })
+                
+    if not matches:
+        return {
+            "store": "Any",
+            "price": "Regular shelf price",
+            "on_sale": False,
+            "image_url": "",
+            "savings": ""
+        }
+        
+    matches_with_price = [m for m in matches if m["unit_price"] is not None]
+    if matches_with_price:
+        best = min(matches_with_price, key=lambda m: m["unit_price"])
+    else:
+        best = max(matches, key=lambda m: m["overlap"])
+        
+    return {
+        "store": best["store"],
+        "price": best["price_str"],
+        "on_sale": True,
+        "image_url": best.get("image_url", ""),
+        "savings": f"Sale at {best['store']}"
+    }
+
+MEAL_RECIPES_CATALOG = [
+    {
+        "id": "recipe-ny-strip",
+        "title": "Pan-Seared NY Strip Steak with Garlic Butter Asparagus",
+        "description": "Tender New York strip steaks seared in a cast-iron skillet with aromatic garlic-herb butter and roasted asparagus.",
+        "cuisine": "American Steakhouse",
+        "prep_time": "10 mins",
+        "cook_time": "15 mins",
+        "calories": 590,
+        "key_protein_keywords": ["strip", "steak", "beef", "ny strip"],
+        "produce_keywords": ["asparagus", "garlic", "rosemary"],
+        "dietary_tags": ["High Protein", "Low Carb", "All"],
+        "base_cost": 18.50,
+        "ingredients": [
+            {"name": "New York Strip Steaks (2 lbs)", "category": "Meat & Seafood", "suggested_unit": "lb"},
+            {"name": "Fresh Asparagus (1 lb)", "category": "Produce", "suggested_unit": "lb"},
+            {"name": "Fresh Garlic (1 bulb)", "category": "Produce", "suggested_unit": "ea"},
+            {"name": "Unsalted Butter (2 tbsp)", "category": "Dairy & Eggs", "suggested_unit": "ea"},
+            {"name": "Fresh Rosemary Sprigs", "category": "Produce", "suggested_unit": "ea"}
+        ],
+        "instructions": [
+            "Season strip steaks generously with coarse kosher salt and cracked black pepper.",
+            "Heat cast iron skillet over high heat until smoking; add 1 tbsp neutral oil.",
+            "Sear steaks for 3-4 minutes per side until deep mahogany crust forms.",
+            "Lower heat, toss in butter, smashed garlic, and rosemary sprigs; baste continuously for 2 minutes.",
+            "Toss asparagus in olive oil and roast in a 400°F oven for 10-12 minutes until tender-crisp. Rest steaks 5 minutes before serving."
+        ]
+    },
+    {
+        "id": "recipe-sirloin-guac",
+        "title": "Carne Asada Sirloin Tacos with Fresh Guacamole",
+        "description": "Citrus-marinated top sirloin grilled hot and sliced thin, served on warm corn tortillas with homemade avocado guacamole.",
+        "cuisine": "Mexican Street Food",
+        "prep_time": "20 mins",
+        "cook_time": "12 mins",
+        "calories": 520,
+        "key_protein_keywords": ["sirloin", "steak", "beef", "skirt", "fajita"],
+        "produce_keywords": ["avocado", "lime", "cilantro", "onion"],
+        "dietary_tags": ["Family Favorites", "High Protein", "All"],
+        "base_cost": 16.00,
+        "ingredients": [
+            {"name": "Top Sirloin Steak (1.5 lbs)", "category": "Meat & Seafood", "suggested_unit": "lb"},
+            {"name": "Haas Avocados (3 ct)", "category": "Produce", "suggested_unit": "ea"},
+            {"name": "Limes (2 ct)", "category": "Produce", "suggested_unit": "ea"},
+            {"name": "Fresh Cilantro (1 bunch)", "category": "Produce", "suggested_unit": "ea"},
+            {"name": "White Corn Tortillas (1 pack)", "category": "Bakery", "suggested_unit": "ea"},
+            {"name": "Yellow Onion (1 ct)", "category": "Produce", "suggested_unit": "ea"}
+        ],
+        "instructions": [
+            "Marinate sirloin with lime juice, minced garlic, cumin, salt, and olive oil for 20 minutes.",
+            "Mash avocados with diced red onion, cilantro, lime juice, and salt for fresh guacamole.",
+            "Sear steak over high heat for 4 minutes per side for medium-rare; rest 10 minutes then slice thinly against the grain.",
+            "Warm corn tortillas on dry skillet until pliable.",
+            "Assemble tacos with sliced steak, diced onions, cilantro, and generous spoonfuls of guacamole."
+        ]
+    },
+    {
+        "id": "recipe-chicken-piccata",
+        "title": "Crispy Lemon Herb Chicken Piccata with Garlic Pasta",
+        "description": "Pan-golden chicken breasts simmered in a bright lemon-butter caper sauce, served over garlic butter fettuccine.",
+        "cuisine": "Italian Bistro",
+        "prep_time": "15 mins",
+        "cook_time": "20 mins",
+        "calories": 540,
+        "key_protein_keywords": ["chicken breast", "chicken", "poultry"],
+        "produce_keywords": ["lemon", "garlic", "parsley"],
+        "dietary_tags": ["Family Favorites", "Quick & Easy", "All"],
+        "base_cost": 12.50,
+        "ingredients": [
+            {"name": "Boneless Skinless Chicken Breasts (2 lbs)", "category": "Meat & Seafood", "suggested_unit": "lb"},
+            {"name": "Fresh Lemons (2 ct)", "category": "Produce", "suggested_unit": "ea"},
+            {"name": "Fettuccine or Angel Hair Pasta (1 lb)", "category": "Pantry & Dry Goods", "suggested_unit": "ea"},
+            {"name": "Capers in Brine (1 jar)", "category": "Pantry & Dry Goods", "suggested_unit": "ea"},
+            {"name": "Fresh Italian Parsley", "category": "Produce", "suggested_unit": "ea"},
+            {"name": "Garlic (4 cloves)", "category": "Produce", "suggested_unit": "ea"}
+        ],
+        "instructions": [
+            "Cut chicken breasts in half horizontally into cutlets; dredge lightly in flour seasoned with salt and pepper.",
+            "Cook pasta in salted boiling water until al dente.",
+            "Heat olive oil and butter in a wide skillet; sear chicken cutlets 3-4 minutes per side until golden brown and cooked through; transfer to plate.",
+            "Deglaze pan with chicken broth and lemon juice; stir in capers and butter to emulsify into a silky sauce.",
+            "Toss cooked pasta with olive oil, garlic, and chopped parsley; top with chicken cutlets and spoon lemon caper sauce over top."
+        ]
+    },
+    {
+        "id": "recipe-salmon-teriyaki",
+        "title": "Honey Teriyaki Glazed Atlantic Salmon with Sesame Broccoli",
+        "description": "Pan-seared salmon fillets brushed with a savory-sweet honey teriyaki reduction, paired with tender steamed sesame broccoli.",
+        "cuisine": "Asian Fusion",
+        "prep_time": "10 mins",
+        "cook_time": "15 mins",
+        "calories": 560,
+        "key_protein_keywords": ["salmon", "fish", "seafood"],
+        "produce_keywords": ["broccoli", "ginger", "garlic", "green onion"],
+        "dietary_tags": ["High Protein", "Mediterranean & Fresh", "All"],
+        "base_cost": 17.00,
+        "ingredients": [
+            {"name": "Atlantic Salmon Fillets (1.5 lbs)", "category": "Meat & Seafood", "suggested_unit": "lb"},
+            {"name": "Fresh Broccoli Crowns (1.5 lbs)", "category": "Produce", "suggested_unit": "lb"},
+            {"name": "Honey Teriyaki Sauce (1 bottle)", "category": "Pantry & Dry Goods", "suggested_unit": "ea"},
+            {"name": "Jasmine Rice (2 cups)", "category": "Pantry & Dry Goods", "suggested_unit": "ea"},
+            {"name": "Toasted Sesame Seeds & Green Onions", "category": "Produce", "suggested_unit": "ea"}
+        ],
+        "instructions": [
+            "Cook jasmine rice according to package instructions.",
+            "Steam broccoli florets until bright green and tender-crisp; toss with sesame oil and a pinch of salt.",
+            "Season salmon fillets with salt and pepper; sear skin-side down in a hot skillet with sesame oil for 4 minutes.",
+            "Flip salmon, pour teriyaki sauce into skillet, and simmer for 3 minutes until glaze thickens and coats fish.",
+            "Serve salmon over steamed rice and broccoli, garnished with sesame seeds and sliced scallions."
+        ]
+    },
+    {
+        "id": "recipe-bolognese-pasta",
+        "title": "Classic Slow-Simmered Beef Bolognese with Garlic Toast",
+        "description": "Hearty ground beef simmered with crushed tomatoes, garlic, Italian herbs, and a touch of cream over al dente rigatoni.",
+        "cuisine": "Italian Classic",
+        "prep_time": "15 mins",
+        "cook_time": "30 mins",
+        "calories": 610,
+        "key_protein_keywords": ["ground beef", "beef", "meatball"],
+        "produce_keywords": ["onion", "garlic", "basil", "parsley"],
+        "dietary_tags": ["Family Favorites", "Budget Saver", "All"],
+        "base_cost": 13.00,
+        "ingredients": [
+            {"name": "Lean Ground Beef 85/15 (2 lbs)", "category": "Meat & Seafood", "suggested_unit": "lb"},
+            {"name": "Crushed San Marzano Tomatoes (28 oz can)", "category": "Pantry & Dry Goods", "suggested_unit": "ea"},
+            {"name": "Rigatoni or Penne Pasta (1 lb)", "category": "Pantry & Dry Goods", "suggested_unit": "ea"},
+            {"name": "Grated Parmesan Cheese (4 oz)", "category": "Dairy & Eggs", "suggested_unit": "ea"},
+            {"name": "Garlic (1 bulb)", "category": "Produce", "suggested_unit": "ea"},
+            {"name": "Crusty French Baguette", "category": "Bakery", "suggested_unit": "ea"}
+        ],
+        "instructions": [
+            "Brown ground beef in a heavy Dutch oven, breaking it into small crumbles; drain excess fat.",
+            "Add diced onions and minced garlic; cook until softened and fragrant.",
+            "Pour in crushed tomatoes, Italian seasoning, a pinch of red pepper flakes, and salt; simmer on low for 25 minutes.",
+            "Boil pasta in salted water until al dente; reserve 1/2 cup pasta cooking water.",
+            "Toss pasta directly into bolognese sauce; serve hot with fresh grated parmesan and toasted garlic baguette slices."
+        ]
+    },
+    {
+        "id": "recipe-pork-chops",
+        "title": "Tuscan Garlic Herb Seared Pork Chops with Sautéed Spinach",
+        "description": "Thick-cut pork chops seared until caramelized with rosemary, garlic, and olive oil, served alongside fresh wilted garlic spinach.",
+        "cuisine": "Italian Rustic",
+        "prep_time": "10 mins",
+        "cook_time": "18 mins",
+        "calories": 480,
+        "key_protein_keywords": ["pork chop", "pork", "chops"],
+        "produce_keywords": ["spinach", "garlic", "rosemary"],
+        "dietary_tags": ["High Protein", "Low Carb", "Budget Saver", "All"],
+        "base_cost": 11.50,
+        "ingredients": [
+            {"name": "Bone-in or Boneless Center Cut Pork Chops (2 lbs)", "category": "Meat & Seafood", "suggested_unit": "lb"},
+            {"name": "Fresh Baby Spinach (10 oz container)", "category": "Produce", "suggested_unit": "ea"},
+            {"name": "Fresh Garlic (6 cloves)", "category": "Produce", "suggested_unit": "ea"},
+            {"name": "Olive Oil (3 tbsp)", "category": "Pantry & Dry Goods", "suggested_unit": "ea"},
+            {"name": "Fresh Rosemary & Thyme", "category": "Produce", "suggested_unit": "ea"}
+        ],
+        "instructions": [
+            "Rub pork chops with olive oil, minced rosemary, garlic powder, salt, and pepper.",
+            "Heat a skillet over medium-high heat. Sear chops 4-5 minutes per side until internal temperature reaches 145°F.",
+            "Remove chops to a warm cutting board and rest 5 minutes.",
+            "In the same skillet, add a splash of olive oil and sliced garlic; toss in fresh baby spinach and cook 2 minutes until wilted.",
+            "Serve pork chops atop the garlic spinach, drizzled with natural pan drippings."
+        ]
+    },
+    {
+        "id": "recipe-sheetpan-fajitas",
+        "title": "Sizzling Sheet Pan Chicken Fajitas with Bell Peppers & Lime",
+        "description": "Sliced chicken breast tossed with colorful bell peppers, sweet onions, and Mexican spices, roasted on a single sheet pan.",
+        "cuisine": "Tex-Mex",
+        "prep_time": "15 mins",
+        "cook_time": "20 mins",
+        "calories": 490,
+        "key_protein_keywords": ["chicken breast", "chicken", "fajita"],
+        "produce_keywords": ["bell pepper", "onion", "lime", "cilantro"],
+        "dietary_tags": ["Family Favorites", "Quick & Easy", "All"],
+        "base_cost": 12.00,
+        "ingredients": [
+            {"name": "Boneless Skinless Chicken Breasts (2 lbs)", "category": "Meat & Seafood", "suggested_unit": "lb"},
+            {"name": "Tri-Color Bell Peppers (3 ct)", "category": "Produce", "suggested_unit": "ea"},
+            {"name": "Red and Yellow Onions (2 ct)", "category": "Produce", "suggested_unit": "ea"},
+            {"name": "Fajita Seasoning & Lime", "category": "Pantry & Dry Goods", "suggested_unit": "ea"},
+            {"name": "Flour Tortillas (1 pack)", "category": "Bakery", "suggested_unit": "ea"},
+            {"name": "Sour Cream & Salsa", "category": "Dairy & Eggs", "suggested_unit": "ea"}
+        ],
+        "instructions": [
+            "Slice chicken breasts, bell peppers, and onions into uniform strips.",
+            "Spread evenly across a large baking sheet; toss with 2 tbsp olive oil and fajita seasoning blend.",
+            "Bake at 425°F for 18-20 minutes until chicken is cooked through and peppers have charred edges.",
+            "Squeeze fresh lime juice generously over the hot baking sheet.",
+            "Serve family-style with warm flour tortillas, cool sour cream, and salsa."
+        ]
+    },
+    {
+        "id": "recipe-pork-tenderloin",
+        "title": "Balsamic Honey Roasted Pork Tenderloin with Green Beans",
+        "description": "Succulent pork tenderloin roasted with a glossy balsamic-honey glaze and crisp roasted green beans.",
+        "cuisine": "French Bistro",
+        "prep_time": "10 mins",
+        "cook_time": "25 mins",
+        "calories": 440,
+        "key_protein_keywords": ["pork tenderloin", "pork"],
+        "produce_keywords": ["green beans", "garlic", "shallot"],
+        "dietary_tags": ["High Protein", "Budget Saver", "All"],
+        "base_cost": 13.00,
+        "ingredients": [
+            {"name": "Pork Tenderloin (2 lbs)", "category": "Meat & Seafood", "suggested_unit": "lb"},
+            {"name": "Fresh Green Beans (1.5 lbs)", "category": "Produce", "suggested_unit": "lb"},
+            {"name": "Balsamic Vinegar & Honey Glaze", "category": "Pantry & Dry Goods", "suggested_unit": "ea"},
+            {"name": "Garlic (4 cloves)", "category": "Produce", "suggested_unit": "ea"},
+            {"name": "Dijon Mustard (1 tbsp)", "category": "Pantry & Dry Goods", "suggested_unit": "ea"}
+        ],
+        "instructions": [
+            "Whisk balsamic vinegar, honey, Dijon mustard, minced garlic, and salt for the glaze.",
+            "Sear pork tenderloin in an oven-safe skillet on all sides for 5 minutes total.",
+            "Toss green beans around the pork in the skillet with olive oil, salt, and pepper.",
+            "Brush glaze generously over pork; roast at 400°F for 18 minutes until 145°F internal temperature.",
+            "Rest tenderloin 8 minutes before slicing into medallions; serve alongside roasted green beans."
+        ]
+    },
+    {
+        "id": "recipe-chuck-roast",
+        "title": "Tender Prime Beef Chuck Pot Roast with Carrots & Potatoes",
+        "description": "Melt-in-your-mouth beef chuck roast braised low and slow with sweet carrots, baby red potatoes, and rich beef gravy.",
+        "cuisine": "American Comfort",
+        "prep_time": "20 mins",
+        "cook_time": "3 hrs",
+        "calories": 620,
+        "key_protein_keywords": ["chuck roast", "beef", "pot roast"],
+        "produce_keywords": ["carrots", "potatoes", "onion", "celery"],
+        "dietary_tags": ["Family Favorites", "Comfort Food", "All"],
+        "base_cost": 17.50,
+        "ingredients": [
+            {"name": "USDA Prime or Choice Beef Chuck Roast (3 lbs)", "category": "Meat & Seafood", "suggested_unit": "lb"},
+            {"name": "Baby Red or Yukon Gold Potatoes (1.5 lbs)", "category": "Produce", "suggested_unit": "lb"},
+            {"name": "Whole Carrots (1 lb bag)", "category": "Produce", "suggested_unit": "ea"},
+            {"name": "Yellow Onion (1 ct)", "category": "Produce", "suggested_unit": "ea"},
+            {"name": "Beef Broth & Tomato Paste", "category": "Pantry & Dry Goods", "suggested_unit": "ea"},
+            {"name": "Fresh Thyme & Bay Leaves", "category": "Produce", "suggested_unit": "ea"}
+        ],
+        "instructions": [
+            "Pat chuck roast dry and season liberally with salt, pepper, and garlic powder.",
+            "Sear roast on all sides in a hot Dutch oven until a deep brown crust develops; remove to plate.",
+            "Sauté chopped onions, tomato paste, and garlic in the pot; deglaze with beef broth.",
+            "Return roast to pot; cover tightly and braise at 300°F for 2 hours.",
+            "Add halved baby potatoes and carrot chunks; return to oven for another 45-60 minutes until fork-tender."
+        ]
+    },
+    {
+        "id": "recipe-shrimp-scampi",
+        "title": "Garlic Butter Shrimp Scampi with Linguine & Fresh Lemon",
+        "description": "Succulent shrimp tossed in white wine, butter, roasted garlic, and crushed red pepper flakes over ribbons of linguine.",
+        "cuisine": "Italian Seafood",
+        "prep_time": "10 mins",
+        "cook_time": "12 mins",
+        "calories": 510,
+        "key_protein_keywords": ["shrimp", "seafood"],
+        "produce_keywords": ["garlic", "lemon", "parsley"],
+        "dietary_tags": ["Quick & Easy", "Mediterranean & Fresh", "All"],
+        "base_cost": 15.00,
+        "ingredients": [
+            {"name": "Raw Peeled & Deveined Shrimp (1.5 lbs)", "category": "Meat & Seafood", "suggested_unit": "lb"},
+            {"name": "Linguine Pasta (1 lb box)", "category": "Pantry & Dry Goods", "suggested_unit": "ea"},
+            {"name": "Butter (4 tbsp) & Olive Oil", "category": "Dairy & Eggs", "suggested_unit": "ea"},
+            {"name": "Fresh Garlic (6 cloves, minced)", "category": "Produce", "suggested_unit": "ea"},
+            {"name": "Fresh Lemon & Italian Parsley", "category": "Produce", "suggested_unit": "ea"}
+        ],
+        "instructions": [
+            "Cook linguine in salted boiling water until al dente; reserve 1/2 cup pasta cooking water.",
+            "Melt 2 tbsp butter and 2 tbsp olive oil in a large skillet over medium-high heat.",
+            "Add minced garlic and red pepper flakes; cook for 1 minute until fragrant.",
+            "Add shrimp in a single layer; cook 2 minutes per side until pink and opaque.",
+            "Stir in remaining butter, lemon juice, and chopped parsley; toss pasta into sauce with a splash of pasta water."
+        ]
+    },
+    {
+        "id": "recipe-mediterranean-chicken",
+        "title": "Greek Lemon Herb Chicken with Cucumber Feta Salad",
+        "description": "Marinated grilled chicken breasts paired with crisp English cucumbers, heirloom cherry tomatoes, kalamata olives, and feta.",
+        "cuisine": "Mediterranean",
+        "prep_time": "15 mins",
+        "cook_time": "15 mins",
+        "calories": 460,
+        "key_protein_keywords": ["chicken breast", "chicken"],
+        "produce_keywords": ["cucumber", "tomato", "lemon", "feta", "olive"],
+        "dietary_tags": ["Low Carb", "Mediterranean & Fresh", "All"],
+        "base_cost": 14.00,
+        "ingredients": [
+            {"name": "Boneless Skinless Chicken Breasts (2 lbs)", "category": "Meat & Seafood", "suggested_unit": "lb"},
+            {"name": "English Cucumbers (2 ct)", "category": "Produce", "suggested_unit": "ea"},
+            {"name": "Cherry or Grape Tomatoes (1 pint)", "category": "Produce", "suggested_unit": "ea"},
+            {"name": "Crumbled Feta Cheese (6 oz)", "category": "Dairy & Eggs", "suggested_unit": "ea"},
+            {"name": "Kalamata Olives & Extra Virgin Olive Oil", "category": "Pantry & Dry Goods", "suggested_unit": "ea"},
+            {"name": "Dried Oregano & Lemon", "category": "Pantry & Dry Goods", "suggested_unit": "ea"}
+        ],
+        "instructions": [
+            "Marinate chicken with olive oil, lemon juice, oregano, garlic, salt, and pepper for 15 minutes.",
+            "Chop cucumbers and halve tomatoes; toss in a bowl with kalamata olives, crumbled feta, olive oil, and oregano.",
+            "Grill or sear chicken on medium-high heat for 6-7 minutes per side until cooked through (165°F).",
+            "Rest chicken 5 minutes, then slice diagonally.",
+            "Serve sliced chicken alongside refreshing chilled Greek salad with a wedge of lemon."
+        ]
+    },
+    {
+        "id": "recipe-smash-burgers",
+        "title": "Double Cheddar Smash Burgers with Sweet Potato Wedges",
+        "description": "Crispy lace-edged beef patties topped with melted sharp cheddar, caramelized onions, and secret burger sauce on brioche.",
+        "cuisine": "American Comfort",
+        "prep_time": "15 mins",
+        "cook_time": "15 mins",
+        "calories": 680,
+        "key_protein_keywords": ["ground beef", "beef", "patty"],
+        "produce_keywords": ["sweet potato", "onion", "lettuce", "pickle"],
+        "dietary_tags": ["Family Favorites", "Budget Saver", "All"],
+        "base_cost": 14.50,
+        "ingredients": [
+            {"name": "Ground Beef 80/20 (2 lbs)", "category": "Meat & Seafood", "suggested_unit": "lb"},
+            {"name": "Sharp Cheddar Cheese Slices (8 ct)", "category": "Dairy & Eggs", "suggested_unit": "ea"},
+            {"name": "Brioche Hamburger Buns (4 pack)", "category": "Bakery", "suggested_unit": "ea"},
+            {"name": "Sweet Potatoes (2 lbs)", "category": "Produce", "suggested_unit": "lb"},
+            {"name": "Yellow Onion (1 ct)", "category": "Produce", "suggested_unit": "ea"},
+            {"name": "Pickles & Burger Sauce", "category": "Pantry & Dry Goods", "suggested_unit": "ea"}
+        ],
+        "instructions": [
+            "Cut sweet potatoes into wedges; toss with olive oil, paprika, and salt; roast at 425°F for 25 minutes.",
+            "Thinly slice onion and caramelize in a skillet with butter until golden brown.",
+            "Divide ground beef into 8 loose meatballs; heat a cast-iron skillet screaming hot.",
+            "Press meatballs firmly with a heavy spatula onto dry hot skillet; season heavily with salt and pepper.",
+            "Flip after 2 minutes of hard searing; immediately top each patty with cheddar; assemble double burgers on toasted brioche."
+        ]
+    }
+]
+
+def generate_smart_meal_plan(
+    user_id: str,
+    plan_type: str = "week",
+    dietary_pref: str = "All",
+    servings: int = 4,
+    start_date_str: str = None,
+    custom_notes: str = "",
+    all_stores: list = None,
+    user_prefs: dict = None
+) -> dict:
+    if not all_stores:
+        all_stores = []
+    if not user_prefs:
+        user_prefs = {
+            "liked_cuisines": [],
+            "disliked_cuisines": [],
+            "liked_ingredients": [],
+            "disliked_ingredients": [],
+            "liked_meals": [],
+            "disliked_meals": []
+        }
+        
+    days_count = 28 if plan_type == "month" else 7
+    
+    if start_date_str:
+        try:
+            start_dt = datetime.strptime(start_date_str[:10], "%Y-%m-%d")
+        except Exception:
+            start_dt = datetime.now()
+    else:
+        now = datetime.now()
+        days_ahead = (0 - now.weekday()) % 7
+        if days_ahead == 0 and now.hour < 14:
+            start_dt = now
+        elif days_ahead == 0:
+            start_dt = now + timedelta(days=7)
+        else:
+            start_dt = now + timedelta(days=days_ahead)
+            
+    end_dt = start_dt + timedelta(days=days_count - 1)
+    
+    sale_proteins = set()
+    sale_produce = set()
+    for s in all_stores:
+        for d in s.get("deals", []):
+            item_name = (d.get("item") or "").lower()
+            toks = normalize_item_tokens(item_name)
+            cat = (d.get("category") or "").lower()
+            if "meat" in cat or "seafood" in cat:
+                sale_proteins.update(toks)
+            elif "produce" in cat:
+                sale_produce.update(toks)
+                
+    disliked_c = set(c.lower() for c in user_prefs.get("disliked_cuisines", []))
+    liked_c = set(c.lower() for c in user_prefs.get("liked_cuisines", []))
+    disliked_i = set(i.lower() for i in user_prefs.get("disliked_ingredients", []))
+    liked_i = set(i.lower() for i in user_prefs.get("liked_ingredients", []))
+    disliked_m = set(m.lower() for m in user_prefs.get("disliked_meals", []))
+    
+    scored_recipes = []
+    for r in MEAL_RECIPES_CATALOG:
+        title_low = r["title"].lower()
+        if any(dm in title_low for dm in disliked_m):
+            continue
+        cuis_low = r["cuisine"].lower()
+        if any(dc in cuis_low for dc in disliked_c):
+            continue
+            
+        score = 10
+        for pk in r["key_protein_keywords"]:
+            if any(stem in pk for stem in sale_proteins):
+                score += 15
+                break
+        for prk in r["produce_keywords"]:
+            if any(stem in prk for stem in sale_produce):
+                score += 5
+                break
+        if any(lc in cuis_low for lc in liked_c):
+            score += 12
+        for ing in r["ingredients"]:
+            ing_low = ing["name"].lower()
+            if any(li in ing_low for li in liked_i):
+                score += 8
+            if any(di in ing_low for di in disliked_i):
+                score -= 20
+                
+        if dietary_pref and dietary_pref != "All":
+            tags = [t.lower() for t in r.get("dietary_tags", [])]
+            pref_low = dietary_pref.lower()
+            if any(pref_low in t or t in pref_low for t in tags):
+                score += 25
+                
+        scored_recipes.append((score, r))
+        
+    scored_recipes.sort(key=lambda x: x[0], reverse=True)
+    candidate_recipes = [x[1] for x in scored_recipes] if scored_recipes else MEAL_RECIPES_CATALOG
+    
+    meals = []
+    total_cost = 0.0
+    total_savings = 0.0
+    day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    
+    for i in range(days_count):
+        cur_date = start_dt + timedelta(days=i)
+        date_str = cur_date.strftime("%Y-%m-%d")
+        day_name = day_names[cur_date.weekday()]
+        week_num = (i // 7) + 1
+        
+        prev_protein = meals[-1]["key_protein"] if meals else None
+        selected_recipe = None
+        for cand in candidate_recipes:
+            cand_id = cand["id"]
+            if any(m["recipe_id"] == cand_id for m in meals[-min(len(meals), 6):]):
+                continue
+            cand_protein = cand["key_protein_keywords"][0] if cand["key_protein_keywords"] else ""
+            if prev_protein and cand_protein == prev_protein and len(candidate_recipes) > 2:
+                continue
+            selected_recipe = cand
+            break
+            
+        if not selected_recipe:
+            selected_recipe = candidate_recipes[i % len(candidate_recipes)]
+            
+        meal_ingredients = []
+        sale_highlights = []
+        meal_cost = 0.0
+        meal_savings = 0.0
+        
+        for base_ing in selected_recipe["ingredients"]:
+            ing_name = base_ing["name"]
+            ing_cat = base_ing["category"]
+            best_match = find_best_store_for_ingredient(ing_name, ing_cat, all_stores)
+            
+            ing_cost = 3.50
+            if "strip" in ing_name.lower() or "steak" in ing_name.lower() or "salmon" in ing_name.lower() or "shrimp" in ing_name.lower():
+                ing_cost = 8.50
+            elif "chicken" in ing_name.lower() or "beef" in ing_name.lower() or "pork" in ing_name.lower():
+                ing_cost = 5.50
+            elif "produce" in ing_cat.lower():
+                ing_cost = 2.00
+            elif "dairy" in ing_cat.lower():
+                ing_cost = 2.50
+            else:
+                ing_cost = 1.75
+                
+            if best_match["on_sale"]:
+                sale_saving = round(ing_cost * 0.35, 2)
+                meal_savings += sale_saving
+                ing_cost -= sale_saving
+                sale_highlights.append({
+                    "item": ing_name.split("(")[0].strip(),
+                    "store": best_match["store"],
+                    "price": best_match["price"],
+                    "savings": f"Save ${sale_saving:.2f} at {best_match['store']}"
+                })
+                
+            meal_cost += ing_cost
+            meal_ingredients.append({
+                "name": ing_name,
+                "category": ing_cat,
+                "store": best_match["store"],
+                "price": best_match["price"],
+                "on_sale": best_match["on_sale"],
+                "image_url": best_match.get("image_url", ""),
+                "savings": best_match.get("savings", "")
+            })
+            
+        meal_cost_serv = meal_cost / max(servings, 1)
+        total_cost += meal_cost
+        total_savings += meal_savings
+        
+        meal_obj = {
+            "id": str(uuid.uuid4()),
+            "recipe_id": selected_recipe["id"],
+            "day": day_name,
+            "date": date_str,
+            "week_num": week_num,
+            "meal_type": "Dinner",
+            "title": selected_recipe["title"],
+            "description": selected_recipe["description"],
+            "cuisine": selected_recipe["cuisine"],
+            "prep_time": selected_recipe["prep_time"],
+            "cook_time": selected_recipe["cook_time"],
+            "servings": servings,
+            "calories": selected_recipe["calories"],
+            "key_protein": selected_recipe["key_protein_keywords"][0] if selected_recipe["key_protein_keywords"] else "",
+            "estimated_cost": f"${meal_cost:.2f}",
+            "estimated_cost_per_serving": f"${meal_cost_serv:.2f}",
+            "sale_highlights": sale_highlights,
+            "ingredients": meal_ingredients,
+            "instructions": selected_recipe["instructions"],
+            "feedback": None,
+            "calendar_synced": False,
+            "calendar_event_id": None
+        }
+        meals.append(meal_obj)
+        
+    plan_title = f"{'Weekly' if plan_type == 'week' else 'Monthly'} Smart Meal Plan ({start_dt.strftime('%b %d')} – {end_dt.strftime('%b %d')})"
+    
+    return {
+        "id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "plan_type": plan_type,
+        "start_date": start_dt.strftime("%Y-%m-%d"),
+        "end_date": end_dt.strftime("%Y-%m-%d"),
+        "title": plan_title,
+        "created_at": datetime.now().isoformat(),
+        "updated_at": datetime.now().isoformat(),
+        "dietary_pref": dietary_pref,
+        "servings": servings,
+        "notes": custom_notes,
+        "total_meals": len(meals),
+        "total_estimated_cost": f"${total_cost:.2f}",
+        "total_estimated_savings": f"${total_savings:.2f}",
+        "meals_data": meals
+    }
+
+# --- Smart Meal Planner Routes ---
+
+@app.get("/api/meals/current")
+def get_current_meal_plan(user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
+    c = conn.cursor()
+    c.execute("SELECT id, plan_type, start_date, end_date, title, created_at, updated_at, meals_data, dietary_pref, servings, notes FROM meal_plans WHERE user_id=? ORDER BY start_date DESC LIMIT 1", (user_id,))
+    row = c.fetchone()
+    
+    c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
+    u_row = c.fetchone()
+    settings = json.loads(u_row['settings']) if u_row and u_row['settings'] else {}
+    user_prefs = settings.get("meal_preferences", {
+        "liked_cuisines": [],
+        "disliked_cuisines": [],
+        "liked_ingredients": [],
+        "disliked_ingredients": [],
+        "liked_meals": [],
+        "disliked_meals": []
+    })
+    
+    c.execute("SELECT count(*) FROM grocery_stores WHERE user_id=?", (user_id,))
+    stores_count = c.fetchone()[0]
+    conn.close()
+    
+    if not row:
+        return {"plan": None, "preferences": user_prefs, "stores_count": stores_count}
+        
+    plan_dict = dict(row)
+    try:
+        plan_dict["meals_data"] = json.loads(plan_dict["meals_data"])
+    except Exception:
+        plan_dict["meals_data"] = []
+        
+    return {"plan": plan_dict, "preferences": user_prefs, "stores_count": stores_count}
+
+@app.get("/api/meals/plans")
+def list_meal_plans(user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
+    c = conn.cursor()
+    c.execute("SELECT id, plan_type, start_date, end_date, title, created_at, updated_at, dietary_pref, servings FROM meal_plans WHERE user_id=? ORDER BY start_date DESC", (user_id,))
+    rows = [dict(r) for r in c.fetchall()]
+    conn.close()
+    return rows
+
+@app.get("/api/meals/plans/{plan_id}")
+def get_meal_plan(plan_id: str, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
+    c = conn.cursor()
+    c.execute("SELECT id, plan_type, start_date, end_date, title, created_at, updated_at, meals_data, dietary_pref, servings, notes FROM meal_plans WHERE id=? AND user_id=?", (plan_id, user_id))
+    row = c.fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="Meal plan not found.")
+    plan_dict = dict(row)
+    try:
+        plan_dict["meals_data"] = json.loads(plan_dict["meals_data"])
+    except Exception:
+        plan_dict["meals_data"] = []
+    return plan_dict
+
+@app.post("/api/meals/generate")
+def create_meal_plan(req: MealPlanGenerateRequest, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
+    c = conn.cursor()
+    
+    c.execute("SELECT name, cached_deals FROM grocery_stores WHERE user_id=?", (user_id,))
+    all_stores = []
+    for r in c.fetchall():
+        deals = []
+        if r["cached_deals"]:
+            try: deals = json.loads(r["cached_deals"])
+            except Exception: deals = []
+        all_stores.append({"name": r["name"], "deals": deals})
+        
+    c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
+    u_row = c.fetchone()
+    settings = json.loads(u_row['settings']) if u_row and u_row['settings'] else {}
+    user_prefs = settings.get("meal_preferences", {
+        "liked_cuisines": [],
+        "disliked_cuisines": [],
+        "liked_ingredients": [],
+        "disliked_ingredients": [],
+        "liked_meals": [],
+        "disliked_meals": []
+    })
+    
+    plan = generate_smart_meal_plan(
+        user_id=user_id,
+        plan_type=req.plan_type,
+        dietary_pref=req.dietary_pref or "All",
+        servings=req.servings or 4,
+        start_date_str=req.start_date,
+        custom_notes=req.custom_notes or "",
+        all_stores=all_stores,
+        user_prefs=user_prefs
+    )
+    
+    c.execute("""
+        INSERT INTO meal_plans (id, user_id, plan_type, start_date, end_date, title, created_at, updated_at, meals_data, dietary_pref, servings, notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        plan["id"],
+        user_id,
+        plan["plan_type"],
+        plan["start_date"],
+        plan["end_date"],
+        plan["title"],
+        plan["created_at"],
+        plan["updated_at"],
+        json.dumps(plan["meals_data"]),
+        plan["dietary_pref"],
+        plan["servings"],
+        plan["notes"]
+    ))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "plan": plan}
+
+@app.post("/api/meals/{plan_id}/meal/{meal_id}/feedback")
+def submit_meal_feedback(plan_id: str, meal_id: str, req: MealFeedbackRequest, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
+    c = conn.cursor()
+    c.execute("SELECT meals_data FROM meal_plans WHERE id=? AND user_id=?", (plan_id, user_id))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Meal plan not found.")
+        
+    meals = json.loads(row["meals_data"])
+    target_meal = None
+    for m in meals:
+        if m.get("id") == meal_id:
+            target_meal = m
+            m["feedback"] = req.feedback
+            break
+            
+    if not target_meal:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Meal not found in plan.")
+        
+    c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
+    u_row = c.fetchone()
+    settings = json.loads(u_row['settings']) if u_row and u_row['settings'] else {}
+    prefs = settings.get("meal_preferences", {
+        "liked_cuisines": [],
+        "disliked_cuisines": [],
+        "liked_ingredients": [],
+        "disliked_ingredients": [],
+        "liked_meals": [],
+        "disliked_meals": []
+    })
+    
+    m_cuisine = target_meal.get("cuisine", "")
+    m_title = target_meal.get("title", "")
+    m_protein = target_meal.get("key_protein", "")
+    
+    if req.feedback == "like":
+        if m_cuisine and m_cuisine not in prefs["liked_cuisines"]:
+            prefs["liked_cuisines"].append(m_cuisine)
+        if m_cuisine in prefs["disliked_cuisines"]:
+            prefs["disliked_cuisines"].remove(m_cuisine)
+        if m_protein and m_protein not in prefs["liked_ingredients"]:
+            prefs["liked_ingredients"].append(m_protein)
+        if m_protein in prefs["disliked_ingredients"]:
+            prefs["disliked_ingredients"].remove(m_protein)
+        if m_title and m_title not in prefs["liked_meals"]:
+            prefs["liked_meals"].append(m_title)
+        if m_title in prefs["disliked_meals"]:
+            prefs["disliked_meals"].remove(m_title)
+            
+    elif req.feedback == "dislike":
+        if m_cuisine and m_cuisine not in prefs["disliked_cuisines"]:
+            prefs["disliked_cuisines"].append(m_cuisine)
+        if m_cuisine in prefs["liked_cuisines"]:
+            prefs["liked_cuisines"].remove(m_cuisine)
+        if m_protein and m_protein not in prefs["disliked_ingredients"]:
+            prefs["disliked_ingredients"].append(m_protein)
+        if m_protein in prefs["liked_ingredients"]:
+            prefs["liked_ingredients"].remove(m_protein)
+        if m_title and m_title not in prefs["disliked_meals"]:
+            prefs["disliked_meals"].append(m_title)
+        if m_title in prefs["liked_meals"]:
+            prefs["liked_meals"].remove(m_title)
+            
+    settings["meal_preferences"] = prefs
+    now = datetime.now().isoformat()
+    c.execute("UPDATE users SET settings=? WHERE id=?", (json.dumps(settings), user_id))
+    c.execute("UPDATE meal_plans SET meals_data=?, updated_at=? WHERE id=? AND user_id=?", (json.dumps(meals), now, plan_id, user_id))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "feedback": req.feedback, "meal": target_meal, "preferences": prefs}
+
+@app.post("/api/meals/{plan_id}/meal/{meal_id}/swap")
+def swap_meal_recipe(plan_id: str, meal_id: str, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
+    c = conn.cursor()
+    c.execute("SELECT meals_data, servings FROM meal_plans WHERE id=? AND user_id=?", (plan_id, user_id))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Meal plan not found.")
+        
+    meals = json.loads(row["meals_data"])
+    target_idx = None
+    for idx, m in enumerate(meals):
+        if m.get("id") == meal_id:
+            target_idx = idx
+            break
+            
+    if target_idx is None:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Meal not found in plan.")
+        
+    old_meal = meals[target_idx]
+    current_recipe_ids = {m.get("recipe_id") for m in meals}
+    servings = int(row["servings"] or 4)
+    
+    c.execute("SELECT name, cached_deals FROM grocery_stores WHERE user_id=?", (user_id,))
+    all_stores = []
+    for r in c.fetchall():
+        deals = []
+        if r["cached_deals"]:
+            try: deals = json.loads(r["cached_deals"])
+            except Exception: deals = []
+        all_stores.append({"name": r["name"], "deals": deals})
+        
+    c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
+    u_row = c.fetchone()
+    settings = json.loads(u_row['settings']) if u_row and u_row['settings'] else {}
+    user_prefs = settings.get("meal_preferences", {
+        "disliked_cuisines": [],
+        "liked_cuisines": [],
+        "disliked_ingredients": [],
+        "liked_ingredients": [],
+        "disliked_meals": []
+    })
+    
+    # Select alternative candidate not used in plan
+    candidates = [r for r in MEAL_RECIPES_CATALOG if r["id"] not in current_recipe_ids]
+    if not candidates:
+        candidates = [r for r in MEAL_RECIPES_CATALOG if r["id"] != old_meal.get("recipe_id")]
+    if not candidates:
+        candidates = MEAL_RECIPES_CATALOG
+        
+    # Prefer recipes with on-sale proteins
+    sale_proteins = set()
+    for s in all_stores:
+        for d in s.get("deals", []):
+            item_name = (d.get("item") or "").lower()
+            toks = normalize_item_tokens(item_name)
+            cat = (d.get("category") or "").lower()
+            if "meat" in cat or "seafood" in cat:
+                sale_proteins.update(toks)
+                
+    best_candidate = candidates[0]
+    for cand in candidates:
+        for pk in cand["key_protein_keywords"]:
+            if any(stem in pk for stem in sale_proteins):
+                best_candidate = cand
+                break
+                
+        # Match ingredients to stores
+    meal_ingredients = []
+    sale_highlights = []
+    meal_cost = 0.0
+    for base_ing in best_candidate["ingredients"]:
+        ing_name = base_ing["name"]
+        ing_cat = base_ing["category"]
+        best_match = find_best_store_for_ingredient(ing_name, ing_cat, all_stores)
+        ing_cost = 3.50
+        if "strip" in ing_name.lower() or "steak" in ing_name.lower() or "salmon" in ing_name.lower() or "shrimp" in ing_name.lower():
+            ing_cost = 8.50
+        elif "chicken" in ing_name.lower() or "beef" in ing_name.lower() or "pork" in ing_name.lower():
+            ing_cost = 5.50
+        elif "produce" in ing_cat.lower():
+            ing_cost = 2.00
+        elif "dairy" in ing_cat.lower():
+            ing_cost = 2.50
+        else:
+            ing_cost = 1.75
+            
+        if best_match["on_sale"]:
+            sale_saving = round(ing_cost * 0.35, 2)
+            ing_cost -= sale_saving
+            sale_highlights.append({
+                "item": ing_name.split("(")[0].strip(),
+                "store": best_match["store"],
+                "price": best_match["price"],
+                "savings": f"Save ${sale_saving:.2f} at {best_match['store']}"
+            })
+        meal_cost += ing_cost
+        meal_ingredients.append({
+            "name": ing_name,
+            "category": ing_cat,
+            "store": best_match["store"],
+            "price": best_match["price"],
+            "on_sale": best_match["on_sale"],
+            "image_url": best_match.get("image_url", ""),
+            "savings": best_match.get("savings", "")
+        })
+        
+    meal_cost_serv = meal_cost / max(servings, 1)
+    
+    new_meal = {
+        "id": old_meal["id"],
+        "recipe_id": best_candidate["id"],
+        "day": old_meal["day"],
+        "date": old_meal["date"],
+        "week_num": old_meal.get("week_num", 1),
+        "meal_type": "Dinner",
+        "title": best_candidate["title"],
+        "description": best_candidate["description"],
+        "cuisine": best_candidate["cuisine"],
+        "prep_time": best_candidate["prep_time"],
+        "cook_time": best_candidate["cook_time"],
+        "servings": servings,
+        "calories": best_candidate["calories"],
+        "key_protein": best_candidate["key_protein_keywords"][0] if best_candidate["key_protein_keywords"] else "",
+        "estimated_cost": f"${meal_cost:.2f}",
+        "estimated_cost_per_serving": f"${meal_cost_serv:.2f}",
+        "sale_highlights": sale_highlights,
+        "ingredients": meal_ingredients,
+        "instructions": best_candidate["instructions"],
+        "feedback": None,
+        "calendar_synced": False,
+        "calendar_event_id": None
+    }
+    
+    meals[target_idx] = new_meal
+    now = datetime.now().isoformat()
+    c.execute("UPDATE meal_plans SET meals_data=?, updated_at=? WHERE id=? AND user_id=?", (json.dumps(meals), now, plan_id, user_id))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "meal": new_meal}
+
+@app.post("/api/meals/{plan_id}/meal/{meal_id}/calendar")
+def sync_meal_to_calendar(plan_id: str, meal_id: str, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
+    c = conn.cursor()
+    c.execute("SELECT meals_data FROM meal_plans WHERE id=? AND user_id=?", (plan_id, user_id))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Meal plan not found.")
+        
+    meals = json.loads(row["meals_data"])
+    target_meal = None
+    for m in meals:
+        if m.get("id") == meal_id:
+            target_meal = m
+            break
+            
+    if not target_meal:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Meal not found in plan.")
+        
+    event_id = str(uuid.uuid4())
+    event_date = f"{target_meal['date']}T18:30:00"
+    event_title = f"🍽️ Dinner: {target_meal['title']}"
+    
+    ing_lines = []
+    for ing in target_meal.get("ingredients", []):
+        ing_lines.append(f"- {ing['name']} ({ing['store']} • {ing['price']})")
+        
+    step_lines = []
+    for idx, s in enumerate(target_meal.get("instructions", [])):
+        step_lines.append(f"{idx+1}. {s}")
+        
+    event_desc = f"""🍽️ {target_meal['title']} ({target_meal['cuisine']})
+⏱️ Prep: {target_meal['prep_time']} | Cook: {target_meal['cook_time']} | Servings: {target_meal['servings']}
+🔥 Calories: {target_meal['calories']} kcal | Cost: {target_meal['estimated_cost']}
+
+🛒 Recommended Store Ingredients:
+{chr(10).join(ing_lines)}
+
+👩‍🍳 Cooking Directions:
+{chr(10).join(step_lines)}
+"""
+    first_store = target_meal["ingredients"][0]["store"] if target_meal.get("ingredients") else "Local Store"
+    
+    # Check if Google Calendar is authorized for user
+    token_file = os.path.join(DATA_DIR, f"token_{user_id}.json")
+    status = "pending"
+    if os.path.exists(token_file):
+        try:
+            creds = Credentials.from_authorized_user_file(token_file, SCOPES)
+            service = build('calendar', 'v3', credentials=creds)
+            push_event_to_gcal(service, event_title, event_desc, event_date, first_store)
+            status = "added"
+        except Exception as e:
+            logger.warning(f"Could not push meal to Google Calendar directly: {e}")
+            status = "pending"
+            
+    c.execute("INSERT INTO events (id, user_id, account, title, date, description, status, location) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+              (event_id, user_id, "Smart Meal Planner", event_title, event_date, event_desc, status, first_store))
+              
+    target_meal["calendar_synced"] = True
+    target_meal["calendar_event_id"] = event_id
+    now = datetime.now().isoformat()
+    c.execute("UPDATE meal_plans SET meals_data=?, updated_at=? WHERE id=? AND user_id=?", (json.dumps(meals), now, plan_id, user_id))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "event_id": event_id, "synced": True}
+
+@app.post("/api/meals/{plan_id}/calendar_all")
+def sync_all_meals_to_calendar(plan_id: str, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
+    c = conn.cursor()
+    c.execute("SELECT meals_data FROM meal_plans WHERE id=? AND user_id=?", (plan_id, user_id))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Meal plan not found.")
+        
+    meals = json.loads(row["meals_data"])
+    token_file = os.path.join(DATA_DIR, f"token_{user_id}.json")
+    has_gcal = os.path.exists(token_file)
+    service = None
+    if has_gcal:
+        try:
+            creds = Credentials.from_authorized_user_file(token_file, SCOPES)
+            service = build('calendar', 'v3', credentials=creds)
+        except Exception as e:
+            logger.warning(f"Google Calendar auth error: {e}")
+            
+    synced_count = 0
+    for target_meal in meals:
+        if target_meal.get("calendar_synced"):
+            continue
+            
+        event_id = str(uuid.uuid4())
+        event_date = f"{target_meal['date']}T18:30:00"
+        event_title = f"🍽️ Dinner: {target_meal['title']}"
+        
+        ing_lines = [f"- {ing['name']} ({ing['store']} • {ing['price']})" for ing in target_meal.get("ingredients", [])]
+        step_lines = [f"{idx+1}. {s}" for idx, s in enumerate(target_meal.get("instructions", []))]
+        
+        event_desc = f"""🍽️ {target_meal['title']} ({target_meal['cuisine']})
+⏱️ Prep: {target_meal['prep_time']} | Cook: {target_meal['cook_time']} | Servings: {target_meal['servings']}
+🔥 Calories: {target_meal['calories']} kcal | Cost: {target_meal['estimated_cost']}
+
+🛒 Recommended Store Ingredients:
+{chr(10).join(ing_lines)}
+
+👩‍🍳 Cooking Directions:
+{chr(10).join(step_lines)}
+"""
+        first_store = target_meal["ingredients"][0]["store"] if target_meal.get("ingredients") else "Local Store"
+        status = "pending"
+        if service:
+            try:
+                push_event_to_gcal(service, event_title, event_desc, event_date, first_store)
+                status = "added"
+            except Exception:
+                pass
+                
+        c.execute("INSERT INTO events (id, user_id, account, title, date, description, status, location) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                  (event_id, user_id, "Smart Meal Planner", event_title, event_date, event_desc, status, first_store))
+                  
+        target_meal["calendar_synced"] = True
+        target_meal["calendar_event_id"] = event_id
+        synced_count += 1
+        
+    now = datetime.now().isoformat()
+    c.execute("UPDATE meal_plans SET meals_data=?, updated_at=? WHERE id=? AND user_id=?", (json.dumps(meals), now, plan_id, user_id))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "synced_count": synced_count}
+
+@app.post("/api/meals/{plan_id}/export_grocery_list")
+def export_meal_plan_to_grocery_list(plan_id: str, req: MealExportGroceryRequest, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
+    c = conn.cursor()
+    c.execute("SELECT title, start_date, meals_data FROM meal_plans WHERE id=? AND user_id=?", (plan_id, user_id))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Meal plan not found.")
+        
+    meals = json.loads(row["meals_data"])
+    target_meals = []
+    if req.meal_ids:
+        target_meals = [m for m in meals if m.get("id") in req.meal_ids]
+    else:
+        target_meals = meals
+        
+    now = datetime.now().isoformat()
+    target_list_id = req.list_id
+    target_title = req.list_title
+    
+    if target_list_id:
+        c.execute("SELECT id, title FROM grocery_lists WHERE id=? AND user_id=?", (target_list_id, user_id))
+        r = c.fetchone()
+        if not r:
+            target_list_id = None
+        else:
+            target_title = r["title"]
+            
+    if not target_list_id:
+        target_list_id = str(uuid.uuid4())
+        target_title = target_title or f"Meal Plan Groceries ({row['start_date']})"
+        c.execute("INSERT INTO grocery_lists (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+                  (target_list_id, user_id, target_title, now, now))
+                  
+    added_count = 0
+    for m in target_meals:
+        m_title = m.get("title", "Dinner")
+        for ing in m.get("ingredients", []):
+            item_id = str(uuid.uuid4())
+            name = ing.get("name", "Ingredient")
+            store = ing.get("store", "Any")
+            price = ing.get("price", "")
+            cat = ing.get("category", "General")
+            img = ing.get("image_url", "")
+            notes = f"{price} ({m_title})" if price else m_title
+            
+            c.execute("INSERT INTO grocery_list_items (id, list_id, user_id, item_name, store_name, price_notes, category, is_checked, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)",
+                      (item_id, target_list_id, user_id, name, store, notes, cat, img))
+            added_count += 1
+            
+    c.execute("UPDATE grocery_lists SET updated_at=? WHERE id=? AND user_id=?", (now, target_list_id, user_id))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "list_id": target_list_id, "list_title": target_title, "items_count": added_count}
+
+@app.delete("/api/meals/{plan_id}")
+def delete_meal_plan(plan_id: str, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
+    c = conn.cursor()
+    c.execute("DELETE FROM meal_plans WHERE id=? AND user_id=?", (plan_id, user_id))
+    conn.commit()
+    conn.close()
+    return {"status": "success"}
 

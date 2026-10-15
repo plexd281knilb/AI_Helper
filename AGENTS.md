@@ -155,14 +155,32 @@ All tables are initialized and automatically migrated on startup in `init_db()` 
 | `category` | TEXT | Department / category |
 | `recorded_at` | TEXT | ISO timestamp of price recording |
 
+### `meal_plans`
+| Column | Type | Description |
+|---|---|---|
+| `id` | TEXT PRIMARY KEY | Meal plan UUID |
+| `user_id` | TEXT | Foreign key referencing `users.id` |
+| `plan_type` | TEXT | Plan timeframe: `'week'` (7 days) or `'month'` (28 days) |
+| `start_date` | TEXT | ISO start date (`YYYY-MM-DD`) |
+| `end_date` | TEXT | ISO end date (`YYYY-MM-DD`) |
+| `title` | TEXT | Clean plan title (e.g. "Weekly Smart Meal Plan (Oct 19 – Oct 25)") |
+| `created_at` | TEXT | ISO creation timestamp |
+| `updated_at` | TEXT | ISO last updated timestamp |
+| `meals_data` | TEXT (JSON) | Complete JSON array of meal objects with on-sale highlights, ingredients, directions, and feedback |
+| `dietary_pref` | TEXT | Dietary filter (e.g. "All", "High Protein", "Budget Saver", "Low Carb", "Quick & Easy", "Mediterranean") |
+| `servings` | INTEGER | Servings per meal (default `4`) |
+| `notes` | TEXT | Optional custom notes or dietary instructions |
+
 ### Database Indexes
 For fast sub-millisecond query performance on multi-user and large datasets, the following indexes are maintained in `init_db()`:
 - `idx_events_user_status_date` on `events(user_id, status, date)`
 - `idx_email_acc_user` on `email_accounts(user_id)`
 - `idx_pe_user_date` on `processed_emails_v2(user_id, date DESC)`
 - `idx_gs_user` on `grocery_stores(user_id)`
+- `idx_gs_user_valid_to` on `grocery_stores(user_id, valid_to)`
 - `idx_gl_user` on `grocery_lists(user_id)`
 - `idx_gli_list_user` on `grocery_list_items(list_id, user_id)`
+- `idx_mp_user_date` on `meal_plans(user_id, start_date DESC)`
 
 ---
 
@@ -241,6 +259,14 @@ For fast sub-millisecond query performance on multi-user and large datasets, the
 - **Interactive Grocery Lists**: Create custom lists, group items by category or store, check off bought items, clear checked items, copy markdown/plain text lists to clipboard, and 1-click add deals directly to any list with pictures.
 - **AI Meal-Prep List Generator**: Generates full recipe-based grocery lists with assigned stores, circular deal images, and estimated pricing based on user dietary or meal planning prompts.
 
+### 8. Smart Meal Planner Engine (`/api/meals/*`)
+- **Sale-Matched Recipe Planning**: Plans cohesive dinner schedules for the week (7 days) or month (28 days / 4 weeks) explicitly centered around what is currently on sale at the user's local supermarkets (from `grocery_stores.cached_deals`).
+- **On-Sale Highlight Tags**: Each meal card prominently highlights which ingredients are currently on sale and at which supermarket (e.g. `🟢 New York Strip Steaks ($16.99 at Costco • Save $2.97)`).
+- **Interactive Preference Learning (👍 / 👎 Feedback)**: Users can give thumbs up or thumbs down to individual meals. Feedback is permanently stored in `users.settings.meal_preferences` (`liked_cuisines`, `disliked_cuisines`, `liked_ingredients`, `disliked_ingredients`, `liked_meals`, `disliked_meals`) and continuously shapes future plan generations and single-meal recipe swaps.
+- **Instant Single-Meal Swapping (🔄)**: Replaces any individual dinner with an alternative on-sale recipe respecting the user's dietary preferences without altering the rest of the week's or month's schedule.
+- **1-Click Google Calendar Synchronization**: Push individual meals or the entire plan (`/api/meals/{plan_id}/calendar_all`) to the calendar. Automatically creates detailed dinner events (6:30 PM) populated with recipe descriptions, on-sale ingredient notes, and numbered step-by-step cooking directions. Direct push to Google Calendar is executed automatically if the user's Google Calendar OAuth token exists.
+- **Store-by-Store Lowest-Price Grocery Export**: Batch exports all recipe ingredients into `grocery_lists` / `grocery_list_items`. Each ingredient is automatically mapped to the specific supermarket offering the lowest price (e.g. Ribeye -> Albertsons, Asparagus -> Sprouts, Butter -> ALDI) with high-res packaging/cutout product photos and discount notes.
+
 ---
 
 ## 6. API Route Reference
@@ -300,6 +326,16 @@ For fast sub-millisecond query performance on multi-user and large datasets, the
 | `DELETE` | `/api/groceries/items/{id}` | Delete item from grocery list | Yes |
 | `POST` | `/api/groceries/lists/{id}/clear_checked` | Remove all checked items from a list | Yes |
 | `POST` | `/api/groceries/ai_generate_list` | Generate meal-prep grocery list with AI | Yes |
+| `GET` | `/api/meals/current` | Get active meal plan, preferences, and stores count | Yes |
+| `GET` | `/api/meals/plans` | List historical meal plans for user | Yes |
+| `GET` | `/api/meals/plans/{id}` | Get specific meal plan with full meals data | Yes |
+| `POST` | `/api/meals/generate` | Generate weekly or monthly meal plan based on circular sales | Yes |
+| `POST` | `/api/meals/{plan_id}/meal/{meal_id}/feedback` | Submit 👍 / 👎 feedback and learn meal preferences | Yes |
+| `POST` | `/api/meals/{plan_id}/meal/{meal_id}/swap` | Swap single meal with alternative on-sale recipe | Yes |
+| `POST` | `/api/meals/{plan_id}/meal/{meal_id}/calendar` | Sync single meal to Google Calendar / events | Yes |
+| `POST` | `/api/meals/{plan_id}/calendar_all` | Bulk sync all meals in plan to Calendar | Yes |
+| `POST` | `/api/meals/{plan_id}/export_grocery_list` | Batch export ingredients to grocery list with best store pricing | Yes |
+| `DELETE` | `/api/meals/{plan_id}` | Delete a meal plan | Yes |
 
 ---
 
