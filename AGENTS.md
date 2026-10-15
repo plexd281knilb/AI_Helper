@@ -219,6 +219,7 @@ For fast sub-millisecond query performance on multi-user and large datasets, the
 - Safe connection cleanup guaranteed by top-level `try...finally` database closure.
 - Connects via IMAP (`MailBox.login`).
 - Reads user-configured `lookback_days` (default 7 days) and `email_fetch_limit` (default 20 per account).
+- **Inbox Safety & Unread Preservation**: Messages are fetched with `mark_seen=False` (using IMAP `BODY.PEEK[]` per RFC 3501), ensuring analyzed emails remain untouched and unread in the user's inbox by default (configurable via `keep_emails_unread`).
 - Fetches messages (`AND(date_gte=...)`, reverse order).
 - Checks `processed_emails_v2` to skip already-analyzed emails.
 - Webview Announcement Scraper: Automatically resolves and fetches full linked school/portal announcement text using resilient SSL contexts.
@@ -333,7 +334,7 @@ For fast sub-millisecond query performance on multi-user and large datasets, the
      - **Sport & Location Normalization**: Replaces any variations of "Cross Country" with `"XC"` and expands `"liberty"` to `"Liberty Christian School, Argyle, Texas"`.
      - **Child & Self Attribution**: Enforces the title suffix pattern: appends `- ChildName` (or `- Dominic`), stripping any accidental grade prefixes.
 - **Granular Configurable Checkbox Settings UI**:
-  - Live toggles for school grade filtering, teacher email assumption, sports tracking, camp solicitation rejection, bill reminders, bill dollar amount hiding, invite reminders, delivery filtering, and promotion/travel noise suppression.
+  - Live toggles for school grade filtering, teacher email assumption, sports tracking, camp solicitation rejection, bill reminders, bill dollar amount hiding, invite reminders, inbox unread preservation (`keep_emails_unread`), delivery filtering, and promotion/travel noise suppression.
   - **Live AI Prompt Preview**: Expandable accordion in the Settings tab allowing users to inspect the exact prompt compiled from their active rules in real time.
 
 ---

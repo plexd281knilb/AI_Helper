@@ -147,6 +147,7 @@ DEFAULT_PARSING_RULES = {
     "filter_package_deliveries": True,
     "filter_corporate_webinars": True,
     "invite_reminders": True,
+    "keep_emails_unread": True,
     "custom_instructions": ""
 }
 
@@ -627,6 +628,9 @@ def init_db():
                 changed = True
             if "parsing_rules" not in s:
                 s["parsing_rules"] = DEFAULT_PARSING_RULES
+                changed = True
+            elif isinstance(s["parsing_rules"], dict) and "keep_emails_unread" not in s["parsing_rules"]:
+                s["parsing_rules"]["keep_emails_unread"] = True
                 changed = True
             if changed:
                 c.execute("UPDATE users SET settings=? WHERE id=?", (json.dumps(s), uid))
@@ -1801,17 +1805,32 @@ def process_user_emails(user_id: str):
         lookback_days = int(settings.get("lookback_days", 7) or 7)
         email_fetch_limit = int(settings.get("email_fetch_limit", 20) or 20)
         
+        # Check whether user wants to mark emails as seen in inbox (default: do NOT mark as seen, keep unread via IMAP PEEK)
+        keep_unread = True
+        rules = settings.get("parsing_rules", {})
+        if isinstance(rules, dict):
+            if "keep_emails_unread" in rules:
+                keep_unread = bool(rules["keep_emails_unread"])
+            elif "mark_emails_as_read" in rules:
+                keep_unread = not bool(rules["mark_emails_as_read"])
+        if "keep_emails_unread" in settings:
+            keep_unread = bool(settings["keep_emails_unread"])
+        elif "mark_emails_as_read" in settings:
+            keep_unread = not bool(settings["mark_emails_as_read"])
+        
+        mark_seen_flag = not keep_unread
+        
         for account in accounts:
             email_user = account['email_user']
             email_pass = account['email_pass']
             email_host = account['email_host']
             
-            logger.info(f"Fetching emails for user {user_id} ({email_user}) from {email_host} (lookback: {lookback_days}d, limit: {email_fetch_limit})...")
+            logger.info(f"Fetching emails for user {user_id} ({email_user}) from {email_host} (lookback: {lookback_days}d, limit: {email_fetch_limit}, keep_unread: {keep_unread})...")
             try:
                 with MailBox(email_host).login(email_user, email_pass) as mailbox:
                     since_date = (datetime.now() - timedelta(days=lookback_days)).date()
-                    messages = list(mailbox.fetch(AND(date_gte=since_date), limit=email_fetch_limit, reverse=True))
-                    logger.info(f"Retrieved {len(messages)} messages for {email_user}.")
+                    messages = list(mailbox.fetch(AND(date_gte=since_date), limit=email_fetch_limit, reverse=True, mark_seen=mark_seen_flag))
+                    logger.info(f"Retrieved {len(messages)} messages for {email_user} (unread status preserved: {not mark_seen_flag}).")
                     
                     for msg in messages:
                         c.execute("SELECT id FROM processed_emails_v2 WHERE id=? AND user_id=? AND account=?", (msg.uid, user_id, email_user))

@@ -3465,6 +3465,16 @@
                                     <span style="color: #94a3b8; font-size: 11.5px; line-height: 1.4; display: block;">Scan for direct meeting invitations, appointments, and RSVP deadlines.</span>
                                 </div>
                             </label>
+
+                            <div style="font-size: 12.5px; font-weight: 700; color: #a78bfa; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 8px;">📬 Inbox Safety &amp; Read Status</div>
+
+                            <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; background: rgba(255,255,255,0.02); padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 6px;">
+                                <input type="checkbox" id="rules-keep-unread" checked style="margin-top: 3px; transform: scale(1.15); cursor: pointer;">
+                                <div>
+                                    <strong style="color: #fff; font-size: 13px; display: block;">Keep Emails Unread in Inbox (Do Not Mark as Read)</strong>
+                                    <span style="color: #94a3b8; font-size: 11.5px; line-height: 1.4; display: block;">When enabled (recommended), emails are inspected via IMAP PEEK mode without modifying their seen flags. Messages remain untouched and unread in your inbox.</span>
+                                </div>
+                            </label>
                         </div>
                     </div>
 
@@ -4898,6 +4908,7 @@
             setCheck('rules-filter-delivery', rules.filter_package_deliveries !== false);
             setCheck('rules-filter-webinars', rules.filter_corporate_webinars !== false);
             setCheck('rules-invite-reminders', rules.invite_reminders !== false);
+            setCheck('rules-keep-unread', rules.keep_emails_unread !== false);
         }
 
         function renderSettingsFamilyProfile() {
@@ -5021,7 +5032,8 @@
                 filter_promotions_and_travel: isChecked('rules-filter-promo'),
                 filter_package_deliveries: isChecked('rules-filter-delivery'),
                 filter_corporate_webinars: isChecked('rules-filter-webinars'),
-                invite_reminders: isChecked('rules-invite-reminders')
+                invite_reminders: isChecked('rules-invite-reminders'),
+                keep_emails_unread: isChecked('rules-keep-unread')
             };
 
             try {
@@ -5087,7 +5099,8 @@
                 filter_promotions_and_travel: true,
                 filter_package_deliveries: true,
                 filter_corporate_webinars: true,
-                invite_reminders: true
+                invite_reminders: true,
+                keep_emails_unread: true
             });
 
             await saveParsingRules();
@@ -5106,7 +5119,8 @@
                 fetch_interval_minutes: getSelectedIntervalMinutes(),
                 lookback_days: parseInt(document.getElementById('lookback_days').value, 10) || 7,
                 email_fetch_limit: parseInt(document.getElementById('email_fetch_limit').value, 10) || 20,
-                parsing_rules: currentParsingRules,
+                keep_emails_unread: document.getElementById('rules-keep-unread') ? document.getElementById('rules-keep-unread').checked : true,
+                parsing_rules: currentParsingRules ? { ...currentParsingRules, keep_emails_unread: (document.getElementById('rules-keep-unread') ? document.getElementById('rules-keep-unread').checked : true) } : currentParsingRules,
                 family_profile: currentSettingsFamilyProfile
             };
         }
