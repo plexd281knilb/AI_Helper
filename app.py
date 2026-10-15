@@ -39,7 +39,8 @@ os.makedirs(DATA_DIR, exist_ok=True)
 DB_FILE = os.path.join(DATA_DIR, "app.db")
 CLIENT_SECRETS_FILE = os.path.join(DATA_DIR, "client_secret.json")
 LOG_FILE = os.path.join(DATA_DIR, "app.log")
-SCOPES = ['https://www.googleapis.com/auth/calendar']
+CALENDAR_SCOPES = ['https://www.googleapis.com/auth/calendar']
+SCOPES = ['https://www.googleapis.com/auth/calendar', 'https://www.googleapis.com/auth/userinfo.email', 'openid']
 
 # --- Logging Setup ---
 file_handler = RotatingFileHandler(LOG_FILE, maxBytes=1024*1024, backupCount=1) # 1 MB max
@@ -631,19 +632,120 @@ def save_ai_settings(s: SettingsSave, user_id: str = Depends(verify_auth)):
     logger.info(f"User {user_id} saved settings (job interval: {s.fetch_interval_minutes}m, lookback: {s.lookback_days}d).")
     return {"status": "success"}
 
+class AccountTest(BaseModel):
+    email_user: str
+    email_pass: str
+    email_host: str = "imap.gmail.com"
+
+@app.post("/api/accounts/test", dependencies=[Depends(verify_auth)])
+def test_account_connection(req: AccountTest):
+    clean_user = req.email_user.strip()
+    clean_pass = req.email_pass.replace(" ", "")
+    clean_host = req.email_host.strip()
+    try:
+        with MailBox(clean_host).login(clean_user, clean_pass) as mailbox:
+            return {
+                "status": "success",
+                "message": f"Successfully connected to {clean_user} on {clean_host}!"
+            }
+    except Exception as e:
+        err_msg = str(e)
+        logger.warning(f"Test email connection failed for {clean_user}@{clean_host}: {err_msg}")
+        hint = ""
+        err_upper = err_msg.upper()
+        if "AUTHENTICATIONFAILED" in err_upper or "INVALID CREDENTIALS" in err_upper or "LOGIN FAILED" in err_upper:
+            if "gmail" in clean_host.lower():
+                hint = "Gmail requires a 16-character App Password (not your normal Google account password). Make sure 2-Step Verification is ON in your Google Account Security settings."
+            elif "apple" in clean_host.lower() or "icloud" in clean_host.lower():
+                hint = "iCloud requires an App-Specific Password generated at appleid.apple.com."
+            elif "outlook" in clean_host.lower() or "office365" in clean_host.lower():
+                hint = "Microsoft Outlook/Hotmail accounts require an App Password generated at account.microsoft.com."
+            elif "yahoo" in clean_host.lower():
+                hint = "Yahoo Mail requires an App Password generated under Yahoo Account Security."
+        elif "TIMED OUT" in err_upper or "REFUSED" in err_upper or "NAME OR SERVICE NOT KNOWN" in err_upper:
+            hint = f"Could not reach {clean_host}. Please double-check the IMAP server host name."
+
+        return {
+            "status": "error",
+            "message": f"Connection failed: {err_msg}",
+            "hint": hint
+        }
+
 @app.post("/api/accounts")
 def save_account(acc: AccountSave, user_id: str = Depends(verify_auth)):
+    clean_user = acc.email_user.strip()
+    clean_pass = acc.email_pass.replace(" ", "")
+    clean_host = acc.email_host.strip()
     conn = get_db_conn()
     c = conn.cursor()
     acc_id = acc.id or str(uuid.uuid4())
     c.execute("SELECT id FROM email_accounts WHERE id=? AND user_id=?", (acc_id, user_id))
     if c.fetchone():
-        c.execute("UPDATE email_accounts SET email_user=?, email_pass=?, email_host=? WHERE id=?", (acc.email_user, acc.email_pass, acc.email_host, acc_id))
+        c.execute("UPDATE email_accounts SET email_user=?, email_pass=?, email_host=? WHERE id=?", (clean_user, clean_pass, clean_host, acc_id))
     else:
-        c.execute("INSERT INTO email_accounts (id, user_id, email_user, email_pass, email_host) VALUES (?, ?, ?, ?, ?)", (acc_id, user_id, acc.email_user, acc.email_pass, acc.email_host))
+        c.execute("INSERT INTO email_accounts (id, user_id, email_user, email_pass, email_host) VALUES (?, ?, ?, ?, ?)", (acc_id, user_id, clean_user, clean_pass, clean_host))
     conn.commit()
     conn.close()
     return {"status": "success", "id": acc_id}
+
+# --- Onboarding Setup Wizard Endpoints ---
+@app.get("/api/onboarding/status", dependencies=[Depends(verify_auth)])
+def get_onboarding_status(user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
+    c = conn.cursor()
+    c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
+    row = c.fetchone()
+    settings = json.loads(row[0]) if row and row[0] else {}
+    c.execute("SELECT id, email_user, email_host FROM email_accounts WHERE user_id=?", (user_id,))
+    accounts = [dict(r) for r in c.fetchall()]
+    conn.close()
+
+    token_file = os.path.join(DATA_DIR, f"token_{user_id}.json")
+    google_connected = os.path.exists(token_file)
+    google_auth_ready = os.path.exists(CLIENT_SECRETS_FILE)
+    onboarding_completed = settings.get("onboarding_completed", False)
+    google_email = settings.get("google_email", "")
+
+    return {
+        "onboarding_completed": bool(onboarding_completed),
+        "google_connected": google_connected,
+        "google_auth_ready": google_auth_ready,
+        "google_email": google_email,
+        "accounts": accounts,
+        "accounts_count": len(accounts),
+        "has_accounts": len(accounts) > 0,
+        "postal_code": settings.get("postal_code", "76262"),
+        "lookback_days": int(settings.get("lookback_days", 7)),
+        "fetch_interval_minutes": int(settings.get("fetch_interval_minutes", 60)),
+        "family_size": 5
+    }
+
+@app.post("/api/onboarding/complete", dependencies=[Depends(verify_auth)])
+def complete_onboarding(user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
+    c = conn.cursor()
+    c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
+    row = c.fetchone()
+    settings = json.loads(row[0]) if row and row[0] else {}
+    settings["onboarding_completed"] = True
+    c.execute("UPDATE users SET settings=? WHERE id=?", (json.dumps(settings), user_id))
+    conn.commit()
+    conn.close()
+    logger.info(f"User {user_id} completed onboarding setup wizard.")
+    return {"status": "success"}
+
+@app.post("/api/onboarding/reset", dependencies=[Depends(verify_auth)])
+def reset_onboarding(user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
+    c = conn.cursor()
+    c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
+    row = c.fetchone()
+    settings = json.loads(row[0]) if row and row[0] else {}
+    settings["onboarding_completed"] = False
+    c.execute("UPDATE users SET settings=? WHERE id=?", (json.dumps(settings), user_id))
+    conn.commit()
+    conn.close()
+    return {"status": "success"}
 
 @app.delete("/api/accounts/{acc_id}")
 def delete_account(acc_id: str, user_id: str = Depends(verify_auth)):
@@ -1327,7 +1429,7 @@ def process_user_emails(user_id: str):
                                         token_file = os.path.join(DATA_DIR, f"token_{user_id}.json")
                                         if os.path.exists(token_file):
                                             try:
-                                                creds = Credentials.from_authorized_user_file(token_file, SCOPES)
+                                                creds = Credentials.from_authorized_user_file(token_file, CALENDAR_SCOPES)
                                                 service = build('calendar', 'v3', credentials=creds)
                                                 try:
                                                     res = push_event_to_gcal(
@@ -1486,7 +1588,7 @@ def get_events(user_id: str = Depends(verify_auth)):
 
 # --- Google Calendar OAuth & Sync ---
 @app.get("/api/auth/google/url")
-def get_google_auth_url(request: Request, user_id: str = Depends(verify_auth)):
+def get_google_auth_url(request: Request, from_wizard: Optional[bool] = False, user_id: str = Depends(verify_auth)):
     if not os.path.exists(CLIENT_SECRETS_FILE):
         return {"error": "Client secrets missing"}
     conn = get_db_conn()
@@ -1496,9 +1598,10 @@ def get_google_auth_url(request: Request, user_id: str = Depends(verify_auth)):
     base_url = s.get("public_url") or f"{request.url.scheme}://{request.url.netloc}"
     redirect_uri = f"{base_url.rstrip('/')}/api/auth/google/callback"
     flow = Flow.from_client_secrets_file(CLIENT_SECRETS_FILE, scopes=SCOPES, redirect_uri=redirect_uri)
-    auth_url, state = flow.authorization_url(prompt='consent')
+    auth_url, state = flow.authorization_url(prompt='consent', access_type='offline')
     s["oauth_state"] = state
     s["oauth_verifier"] = flow.code_verifier
+    s["oauth_from_wizard"] = bool(from_wizard)
     c.execute("UPDATE users SET settings=? WHERE id=?", (json.dumps(s), user_id))
     conn.commit()
     conn.close()
@@ -1524,6 +1627,7 @@ def google_auth_callback(request: Request, state: str):
         return "Error: Invalid state or session expired. Try logging in with Google again."
     base_url = user_settings.get("public_url") or f"{request.url.scheme}://{request.url.netloc}"
     redirect_uri = f"{base_url.rstrip('/')}/api/auth/google/callback"
+    from_wizard = user_settings.pop("oauth_from_wizard", False)
     try:
         flow = Flow.from_client_secrets_file(CLIENT_SECRETS_FILE, scopes=SCOPES, redirect_uri=redirect_uri)
         os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
@@ -1532,9 +1636,36 @@ def google_auth_callback(request: Request, state: str):
         token_file = os.path.join(DATA_DIR, f"token_{user_id}.json")
         with open(token_file, 'w') as f:
             f.write(flow.credentials.to_json())
+
+        # Extract user's Google email if returned in id_token
+        google_email = ""
+        if flow.credentials and flow.credentials.id_token:
+            try:
+                import base64
+                parts = flow.credentials.id_token.split(".")
+                if len(parts) >= 2:
+                    padding = "=" * (4 - len(parts[1]) % 4)
+                    payload_json = base64.urlsafe_b64decode(parts[1] + padding).decode("utf-8")
+                    payload = json.loads(payload_json)
+                    google_email = payload.get("email", "")
+            except Exception as e:
+                logger.debug(f"Could not parse email from id_token: {e}")
+        
+        if google_email:
+            user_settings["google_email"] = google_email
+
+        conn = get_db_conn()
+        c = conn.cursor()
+        c.execute("UPDATE users SET settings=? WHERE id=?", (json.dumps(user_settings), user_id))
+        conn.commit()
+        conn.close()
+
     except Exception as e:
         logger.error(f"Google OAuth Failed for user {user_id}: {e}")
-    return RedirectResponse(url="/")
+
+    if from_wizard:
+        return RedirectResponse(url="/?wizard_step=3&oauth_success=1")
+    return RedirectResponse(url="/?oauth_success=1")
 
 @app.delete("/api/auth/google/token", dependencies=[Depends(verify_auth)])
 def disconnect_google(user_id: str = Depends(verify_auth)):
@@ -1569,7 +1700,7 @@ def sync_event(event_id: str, user_id: str = Depends(verify_auth)):
         raise HTTPException(status_code=400, detail="Google Calendar not connected. Please connect in Settings.")
         
     try:
-        creds = Credentials.from_authorized_user_file(token_file, SCOPES)
+        creds = Credentials.from_authorized_user_file(token_file, CALENDAR_SCOPES)
         service = build('calendar', 'v3', credentials=creds)
         res = push_event_to_gcal(service, title, description, date_str, location)
         
@@ -1606,7 +1737,7 @@ def bulk_sync_events(req: BulkEventAction, user_id: str = Depends(verify_auth)):
         raise HTTPException(status_code=400, detail="Google Calendar not connected. Please connect in Settings.")
         
     try:
-        creds = Credentials.from_authorized_user_file(token_file, SCOPES)
+        creds = Credentials.from_authorized_user_file(token_file, CALENDAR_SCOPES)
         service = build('calendar', 'v3', credentials=creds)
     except Exception as e:
         err_str = str(e)
@@ -1666,7 +1797,7 @@ def sync_history_email(account: str, uid: str, user_id: str = Depends(verify_aut
         raise HTTPException(status_code=400, detail="Google Calendar not connected. Please connect your Google account in Settings.")
         
     try:
-        creds = Credentials.from_authorized_user_file(token_file, SCOPES)
+        creds = Credentials.from_authorized_user_file(token_file, CALENDAR_SCOPES)
         service = build('calendar', 'v3', credentials=creds)
     except Exception as e:
         err_str = str(e)
@@ -1774,7 +1905,7 @@ def bulk_sync_history(req: BulkHistorySync, user_id: str = Depends(verify_auth))
         raise HTTPException(status_code=400, detail="Google Calendar not connected. Please connect in Settings.")
         
     try:
-        creds = Credentials.from_authorized_user_file(token_file, SCOPES)
+        creds = Credentials.from_authorized_user_file(token_file, CALENDAR_SCOPES)
         service = build('calendar', 'v3', credentials=creds)
     except Exception as e:
         err_str = str(e)
@@ -5495,7 +5626,7 @@ def create_meal_plan(req: MealPlanGenerateRequest, user_id: str = Depends(verify
     service = None
     if os.path.exists(token_file):
         try:
-            creds = Credentials.from_authorized_user_file(token_file, SCOPES)
+            creds = Credentials.from_authorized_user_file(token_file, CALENDAR_SCOPES)
             service = build('calendar', 'v3', credentials=creds)
         except Exception as ge:
             logger.warning(f"Google Calendar check during meal plan generation: {ge}")
@@ -5813,7 +5944,7 @@ def sync_meal_to_calendar(plan_id: str, meal_id: str, user_id: str = Depends(ver
     service = None
     if os.path.exists(token_file):
         try:
-            creds = Credentials.from_authorized_user_file(token_file, SCOPES)
+            creds = Credentials.from_authorized_user_file(token_file, CALENDAR_SCOPES)
             service = build('calendar', 'v3', credentials=creds)
         except Exception as e:
             logger.warning(f"Google Calendar auth error in sync_meal: {e}")
@@ -5857,7 +5988,7 @@ def sync_meal_to_calendar(plan_id: str, meal_id: str, user_id: str = Depends(ver
     status = "pending"
     if os.path.exists(token_file):
         try:
-            creds = Credentials.from_authorized_user_file(token_file, SCOPES)
+            creds = Credentials.from_authorized_user_file(token_file, CALENDAR_SCOPES)
             service = build('calendar', 'v3', credentials=creds)
             push_event_to_gcal(service, event_title, event_desc, event_date, first_store, is_meal=True)
             status = "added"
@@ -5892,7 +6023,7 @@ def sync_all_meals_to_calendar(plan_id: str, user_id: str = Depends(verify_auth)
     service = None
     if has_gcal:
         try:
-            creds = Credentials.from_authorized_user_file(token_file, SCOPES)
+            creds = Credentials.from_authorized_user_file(token_file, CALENDAR_SCOPES)
             service = build('calendar', 'v3', credentials=creds)
         except Exception as e:
             logger.warning(f"Google Calendar auth error: {e}")

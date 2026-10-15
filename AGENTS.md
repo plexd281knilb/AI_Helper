@@ -305,6 +305,14 @@ For fast sub-millisecond query performance on multi-user and large datasets, the
   - Open suggestions are listed with live notification badges on the floating button.
   - Features a 1-click **"✓ Mark Done & Remove"** button so completed updates are soft-resolved and archived out of the active view.
 
+### 10. Mobile Onboarding Setup Wizard & Google OAuth Integration (`/api/onboarding/*`)
+- **Mobile-First Step-by-Step Stepper**: Automatically activates on first user login/registration (or on-demand via navigation bar, mobile header, or settings banner) to guide users through 4 easy steps:
+  1. **Welcome**: Quick visual intro to email event scanning, Google Calendar sync, and grocery circular deal matching.
+  2. **Google Calendar Authorization**: 1-click Google OAuth flow. Passes `from_wizard=1` to redirect back directly into Step 3 upon successful authorization.
+  3. **Email Connection**: Segmented provider tabs for **Gmail** (with 1-tap deep links to Google App Passwords), **iCloud**, **Outlook**, and **Other**. Extracts the user's Google email from the OAuth token to auto-populate the field. Features live connection testing (`/api/accounts/test`) and automatic space stripping for pasted 16-character passwords.
+  4. **Household & Preferences**: Configures local zip code (for circular ads), family servings (default 5 people), scan frequency, and lookback window.
+  5. **Completion & Immediate First Scan**: Congratulates user and offers instant 1-click trigger to fetch their first batch of emails.
+
 ---
 
 ## 6. API Route Reference
@@ -382,6 +390,10 @@ For fast sub-millisecond query performance on multi-user and large datasets, the
 | `POST` | `/api/suggestions` | Submit a new edit suggestion from wife / user | Yes |
 | `PUT` | `/api/suggestions/{id}` | Update suggestion status (e.g. mark completed & removed) | Yes |
 | `DELETE` | `/api/suggestions/{id}` | Delete a suggestion permanently | Yes |
+| `GET` | `/api/onboarding/status` | Check user onboarding completion, calendar connection, and account count | Yes |
+| `POST` | `/api/onboarding/complete` | Mark onboarding wizard as completed | Yes |
+| `POST` | `/api/onboarding/reset` | Reset onboarding status to trigger wizard again | Yes |
+| `POST` | `/api/accounts/test` | Test IMAP credentials with auto space stripping and helpful hints | Yes |
 
 ---
 

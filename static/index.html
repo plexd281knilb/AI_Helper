@@ -1852,6 +1852,108 @@
             border: 1px solid rgba(239, 68, 68, 0.3);
         }
 
+
+        /* Onboarding Setup Wizard Styles (Mobile-First) */
+        #onboarding-wizard-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(10, 14, 23, 0.96);
+            z-index: 10002;
+            backdrop-filter: blur(8px);
+            justify-content: center;
+            align-items: center;
+            padding: 12px;
+            box-sizing: border-box;
+            overflow-y: auto;
+        }
+        .wizard-container {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 16px;
+            width: 100%;
+            max-width: 580px;
+            max-height: 94vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 16px 48px rgba(0,0,0,0.85);
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+        .wizard-btn-primary {
+            width: 100%;
+            padding: 14px 18px;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.2s;
+            box-sizing: border-box;
+        }
+        .wizard-btn-primary:hover {
+            filter: brightness(1.1);
+        }
+        .wizard-btn-secondary {
+            padding: 10px 16px;
+            background: #21262d;
+            color: #e2e8f0;
+            border: 1px solid #30363d;
+            border-radius: var(--radius-sm);
+            font-size: 13.5px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .wizard-btn-secondary:hover {
+            background: #30363d;
+        }
+        .wizard-step-tab {
+            cursor: pointer;
+            padding: 3px 6px;
+            border-radius: 4px;
+            transition: color 0.2s;
+        }
+        .wizard-step-tab.active {
+            color: #38bdf8;
+            font-weight: 700;
+        }
+        .wizard-provider-tab {
+            flex: 1;
+            padding: 9px 8px;
+            background: transparent;
+            border: none;
+            border-radius: 6px;
+            color: #94a3b8;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+        .wizard-provider-tab.active {
+            background: #21262d;
+            color: #38bdf8;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        @media (max-width: 480px) {
+            .wizard-container {
+                max-height: 98vh;
+                border-radius: 12px;
+            }
+            .wizard-step-tab {
+                font-size: 10.5px;
+            }
+            .wizard-provider-tab {
+                font-size: 11.5px;
+                padding: 7px 4px;
+            }
+        }
+
     </style>
 </head>
 <body>
@@ -1881,6 +1983,7 @@
                 </div>
             </div>
             <div style="display: flex; align-items: center; gap: 8px;">
+                <button class="mobile-menu-btn" onclick="openOnboardingWizard(1)" title="Setup Wizard" style="color: #38bdf8; border-color: rgba(56, 189, 248, 0.4); padding: 4px 8px; font-size: 14px;">🚀</button>
                 <button class="mobile-menu-btn" onclick="openSuggestionModal()" title="Suggest Edit" style="color: #fbbf24; border-color: rgba(245, 158, 11, 0.4); padding: 4px 8px; font-size: 14px;">💡</button>
                 <button class="mobile-fetch-btn" onclick="fetchEmails()" title="Fetch New Emails">📥 Fetch</button>
                 <div class="user-avatar-mini" id="mobile-user-avatar" onclick="toggleMobileSidebar()">U</div>
@@ -1932,6 +2035,10 @@
                     <button class="tab-link nav-tree-item" onclick="openTab('meals', event)">
                         <span class="nav-item-icon">🍲</span>
                         <span>Meal Planner</span>
+                    </button>
+                    <button class="tab-link nav-tree-item" id="nav-wizard-btn" onclick="openOnboardingWizard(1)" style="color: #38bdf8;">
+                        <span class="nav-item-icon">🚀</span>
+                        <span>Setup Wizard</span>
                     </button>
                     <button class="tab-link nav-tree-item" id="nav-sugg-btn" onclick="openSuggestionModal()">
                         <span class="nav-item-icon">💡</span>
@@ -2791,6 +2898,20 @@
             <div id="settings" class="view">
                 <h1>Settings</h1>
                 
+                <!-- Onboarding Wizard Banner -->
+                <div style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 10px; padding: 14px 18px; margin-bottom: 22px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <span style="font-size: 24px;">🚀</span>
+                        <div>
+                            <strong style="color: #38bdf8; font-size: 14px; display: block;">Mobile Setup Wizard</strong>
+                            <span style="color: #94a3b8; font-size: 12.5px;">Need help setting up your Google Calendar, email accounts, or family preferences step-by-step?</span>
+                        </div>
+                    </div>
+                    <button type="button" class="add-btn" onclick="openOnboardingWizard(1)" style="margin: 0; background: #0284c7; padding: 8px 16px; font-size: 13px; font-weight: 700;">
+                        Launch Setup Wizard →
+                    </button>
+                </div>
+                
                 <!-- Google Calendar Section -->
                 <h3 class="section-title">
                     Google Calendar Integration
@@ -2995,6 +3116,7 @@
                     window.isCurrentUserAdmin = Boolean(data.is_admin);
                     updateNavigationUserDisplay();
                     initializeApp();
+                    checkOnboardingTrigger();
                 } else {
                     overlay.style.display = 'flex';
                     container.style.display = 'block';
