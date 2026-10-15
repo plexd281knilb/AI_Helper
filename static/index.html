@@ -1970,6 +1970,288 @@
         </div>
     </div>
 
+
+    <!-- Mobile-Optimized Onboarding Setup Wizard Modal -->
+    <div id="onboarding-wizard-modal" style="display: none; position: fixed; inset: 0; background: rgba(10, 14, 23, 0.96); z-index: 10002; backdrop-filter: blur(8px); justify-content: center; align-items: center; padding: 12px; box-sizing: border-box; overflow-y: auto;">
+        <div class="wizard-container">
+            
+            <!-- Wizard Header & Progress Bar -->
+            <div style="background: #0d1117; border-bottom: 1px solid #30363d; padding: 16px 20px 14px 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 20px;">🚀</span>
+                        <div>
+                            <h2 style="margin: 0; color: #fff; font-size: 17px; font-weight: 700;">Getting Started Guide</h2>
+                            <span id="wizard-step-label" style="font-size: 12px; color: #94a3b8;">Step 1 of 4: Welcome</span>
+                        </div>
+                    </div>
+                    <button type="button" onclick="closeOnboardingWizard(true)" title="Close wizard" style="background: none; border: none; color: #94a3b8; font-size: 20px; cursor: pointer; padding: 4px 8px; border-radius: 6px;">✕</button>
+                </div>
+
+                <!-- Stepper Track -->
+                <div style="background: #21262d; border-radius: 999px; height: 6px; overflow: hidden; position: relative;">
+                    <div id="wizard-progress-bar" style="height: 100%; width: 25%; background: linear-gradient(90deg, #3b82f6, #38bdf8); border-radius: 999px; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);"></div>
+                </div>
+
+                <!-- Step Pill Badges (Mobile friendly touch tabs) -->
+                <div style="display: flex; justify-content: space-between; margin-top: 10px; font-size: 11.5px; color: #64748b; font-weight: 600;">
+                    <span class="wizard-step-tab active" id="wizard-tab-1" onclick="goToWizardStep(1)">1. Welcome</span>
+                    <span class="wizard-step-tab" id="wizard-tab-2" onclick="goToWizardStep(2)">2. Calendar</span>
+                    <span class="wizard-step-tab" id="wizard-tab-3" onclick="goToWizardStep(3)">3. Email</span>
+                    <span class="wizard-step-tab" id="wizard-tab-4" onclick="goToWizardStep(4)">4. Preferences</span>
+                </div>
+            </div>
+
+            <!-- Wizard Scrollable Body -->
+            <div style="padding: 22px 20px; overflow-y: auto; flex: 1;">
+                
+                <!-- Global Wizard Feedback Alert Box -->
+                <div id="wizard-alert-msg" style="margin-bottom: 14px; display: none;"></div>
+
+                <!-- STEP 1: WELCOME -->
+                <div class="wizard-step-pane" id="wizard-pane-1">
+                    <div style="text-align: center; padding: 10px 0 16px 0;">
+                        <div style="width: 64px; height: 64px; margin: 0 auto 14px auto; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 32px; box-shadow: 0 0 24px rgba(56, 189, 248, 0.2);">
+                            ⚡
+                        </div>
+                        <h3 style="margin: 0 0 8px 0; color: #fff; font-size: 20px;">Welcome to AI Helper!</h3>
+                        <p style="margin: 0; color: #94a3b8; font-size: 13.5px; line-height: 1.5; max-width: 440px; margin: 0 auto;">
+                            Your self-hosted smart assistant that turns messy emails into organized calendar events and optimizes your weekly grocery shopping.
+                        </p>
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; gap: 12px; margin: 20px 0;">
+                        <div style="display: flex; gap: 14px; align-items: flex-start; background: #0d1117; padding: 14px; border: 1px solid #30363d; border-radius: 10px;">
+                            <span style="font-size: 24px; line-height: 1;">📬</span>
+                            <div>
+                                <strong style="color: #f1f5f9; font-size: 14px; display: block; margin-bottom: 2px;">Email Intelligence</strong>
+                                <span style="color: #94a3b8; font-size: 12.5px; line-height: 1.4;">Scans incoming emails to extract events, flights, appointments, and school notices without manual typing.</span>
+                            </div>
+                        </div>
+
+                        <div style="display: flex; gap: 14px; align-items: flex-start; background: #0d1117; padding: 14px; border: 1px solid #30363d; border-radius: 10px;">
+                            <span style="font-size: 24px; line-height: 1;">📅</span>
+                            <div>
+                                <strong style="color: #f1f5f9; font-size: 14px; display: block; margin-bottom: 2px;">Google Calendar Sync</strong>
+                                <span style="color: #94a3b8; font-size: 12.5px; line-height: 1.4;">1-click Google OAuth authorization synchronizes confirmed events and family dinner schedules seamlessly.</span>
+                            </div>
+                        </div>
+
+                        <div style="display: flex; gap: 14px; align-items: flex-start; background: #0d1117; padding: 14px; border: 1px solid #30363d; border-radius: 10px;">
+                            <span style="font-size: 24px; line-height: 1;">🛒</span>
+                            <div>
+                                <strong style="color: #f1f5f9; font-size: 14px; display: block; margin-bottom: 2px;">Smart Deals &amp; Meal Plans</strong>
+                                <span style="color: #94a3b8; font-size: 12.5px; line-height: 1.4;">Tracks local supermarket sales (H-E-B, Kroger, Costco) and plans dinners scaled for your household.</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 24px;">
+                        <button type="button" class="wizard-btn-primary" onclick="goToWizardStep(2)">
+                            <span>Get Started with Calendar Setup</span>
+                            <span>→</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- STEP 2: GOOGLE CALENDAR AUTHORIZATION -->
+                <div class="wizard-step-pane" id="wizard-pane-2" style="display: none;">
+                    <div style="margin-bottom: 18px;">
+                        <h3 style="margin: 0 0 6px 0; color: #fff; font-size: 18px; display: flex; align-items: center; gap: 8px;">
+                            <span>📅</span> Authorize Google Calendar
+                        </h3>
+                        <p style="margin: 0; color: #94a3b8; font-size: 13px; line-height: 1.45;">
+                            Connect your Google account so AI Helper can automatically create events, reminders, and dinner plans on your personal or family calendar.
+                        </p>
+                    </div>
+
+                    <!-- Google Connection Status Card -->
+                    <div id="wizard-gcal-card" style="margin-bottom: 18px;">
+                        <!-- Injected by updateWizardCalendarView() -->
+                    </div>
+
+                    <!-- Explain Google OAuth -->
+                    <div style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 10px; padding: 14px; font-size: 12.5px; color: #cbd5e1; line-height: 1.45; margin-bottom: 20px;">
+                        <strong style="color: #60a5fa; display: block; margin-bottom: 4px;">🔒 Secure OAuth 2.0 Authorization:</strong>
+                        Your Google password is never stored or seen by AI Helper. Google provides a secure, revocable token strictly for managing your calendar events.
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <div style="display: flex; gap: 10px; justify-content: space-between;">
+                            <button type="button" class="wizard-btn-secondary" onclick="goToWizardStep(1)">← Back</button>
+                            <button type="button" class="wizard-btn-secondary" onclick="goToWizardStep(3)" style="color: #94a3b8;">Skip for now →</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- STEP 3: EMAIL INGESTION SETUP -->
+                <div class="wizard-step-pane" id="wizard-pane-3" style="display: none;">
+                    <div style="margin-bottom: 16px;">
+                        <h3 style="margin: 0 0 6px 0; color: #fff; font-size: 18px; display: flex; align-items: center; gap: 8px;">
+                            <span>📬</span> Connect Email Accounts
+                        </h3>
+                        <p style="margin: 0; color: #94a3b8; font-size: 13px; line-height: 1.45;">
+                            AI Helper connects via IMAP to read incoming announcements, school flyers, and invitations.
+                        </p>
+                    </div>
+
+                    <!-- Google Auto-fill Hint (If Google was authorized) -->
+                    <div id="wizard-google-email-hint" style="display: none; background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.35); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 12.5px; color: #86efac; align-items: center; justify-content: space-between;">
+                        <div>
+                            <strong>Connected Google Account:</strong> <span id="wizard-google-email-addr">user@gmail.com</span>
+                        </div>
+                        <button type="button" onclick="useGoogleEmailInWizard()" style="background: #22c55e; color: #000; border: none; border-radius: 4px; padding: 4px 8px; font-size: 11.5px; font-weight: 700; cursor: pointer;">Auto-Fill</button>
+                    </div>
+
+                    <!-- Provider Tabs (Mobile friendly segmented control) -->
+                    <div style="display: flex; gap: 4px; background: #0d1117; padding: 4px; border-radius: 8px; border: 1px solid #30363d; margin-bottom: 16px;">
+                        <button type="button" class="wizard-provider-tab active" id="tab-prov-gmail" onclick="switchWizardEmailProvider('gmail')">⚡ Gmail</button>
+                        <button type="button" class="wizard-provider-tab" id="tab-prov-icloud" onclick="switchWizardEmailProvider('icloud')">🍏 iCloud</button>
+                        <button type="button" class="wizard-provider-tab" id="tab-prov-outlook" onclick="switchWizardEmailProvider('outlook')">🔷 Outlook</button>
+                        <button type="button" class="wizard-provider-tab" id="tab-prov-other" onclick="switchWizardEmailProvider('other')">🌐 Other</button>
+                    </div>
+
+                    <!-- Provider Helper Accordion / Guide -->
+                    <div id="wizard-provider-guide" style="background: rgba(30, 41, 59, 0.6); border: 1px solid #334155; border-radius: 8px; padding: 12px 14px; font-size: 12px; color: #cbd5e1; line-height: 1.45; margin-bottom: 16px;">
+                        <!-- Dynamically injected guide -->
+                    </div>
+
+                    <!-- Email Form Inputs -->
+                    <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;">
+                        <div>
+                            <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 4px;">Email Address</label>
+                            <input type="email" id="wizard-email-user" placeholder="yourname@gmail.com" inputmode="email" autocomplete="email" style="width: 100%; box-sizing: border-box; background: #0d1117; border: 1px solid #334155; border-radius: 8px; color: #fff; padding: 12px; font-size: 15px;">
+                        </div>
+
+                        <div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                <label style="font-size: 12px; font-weight: 600; color: #cbd5e1;" id="wizard-pass-label">16-Character App Password</label>
+                                <span id="wizard-pass-help-link"></span>
+                            </div>
+                            <div style="position: relative;">
+                                <input type="password" id="wizard-email-pass" placeholder="abcd efgh ijkl mnop" autocomplete="current-password" style="width: 100%; box-sizing: border-box; background: #0d1117; border: 1px solid #334155; border-radius: 8px; color: #fff; padding: 12px 42px 12px 12px; font-size: 15px; letter-spacing: 0.5px;">
+                                <button type="button" onclick="toggleWizardPassVisibility()" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #94a3b8; font-size: 16px; cursor: pointer;">👁️</button>
+                            </div>
+                            <span style="font-size: 11px; color: #64748b; margin-top: 3px; display: block;">Spaces are automatically removed for you.</span>
+                        </div>
+
+                        <div>
+                            <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 4px;">IMAP Server Host</label>
+                            <input type="text" id="wizard-email-host" value="imap.gmail.com" style="width: 100%; box-sizing: border-box; background: #0d1117; border: 1px solid #334155; border-radius: 8px; color: #cbd5e1; padding: 10px 12px; font-size: 13.5px;">
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 10px; margin-bottom: 18px;">
+                        <button type="button" class="wizard-btn-primary" id="wizard-test-save-btn" onclick="testAndSaveEmailFromWizard()" style="margin: 0; background: #0284c7;">
+                            <span>🧪 Test &amp; Save Email Account</span>
+                        </button>
+                    </div>
+
+                    <!-- Existing Connected Accounts List in Wizard -->
+                    <div id="wizard-accounts-list-container" style="margin-bottom: 16px;">
+                        <!-- Injected by renderWizardAccountsList() -->
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; border-top: 1px solid #30363d; padding-top: 14px;">
+                        <button type="button" class="wizard-btn-secondary" onclick="goToWizardStep(2)">← Back</button>
+                        <button type="button" class="wizard-btn-secondary" onclick="goToWizardStep(4)" style="color: #38bdf8; font-weight: 700;">Continue to Preferences →</button>
+                    </div>
+                </div>
+
+                <!-- STEP 4: PREFERENCES & HOUSEHOLD SIZING -->
+                <div class="wizard-step-pane" id="wizard-pane-4" style="display: none;">
+                    <div style="margin-bottom: 16px;">
+                        <h3 style="margin: 0 0 6px 0; color: #fff; font-size: 18px; display: flex; align-items: center; gap: 8px;">
+                            <span>⚙️</span> Customize Your Household
+                        </h3>
+                        <p style="margin: 0; color: #94a3b8; font-size: 13px; line-height: 1.45;">
+                            Set your shopping area and family size so circular deals and meal plans are tailored to your home.
+                        </p>
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; gap: 14px; margin-bottom: 20px;">
+                        <div class="form-group" style="margin: 0;">
+                            <label style="display: block; font-size: 12.5px; font-weight: 600; color: #cbd5e1; margin-bottom: 4px;">Local Postal / Zip Code</label>
+                            <input type="text" id="wizard-postal-code" placeholder="76262" maxlength="10" inputmode="numeric" style="width: 100%; box-sizing: border-box; background: #0d1117; border: 1px solid #334155; border-radius: 8px; color: #fff; padding: 12px; font-size: 15px;">
+                            <span style="font-size: 11.5px; color: #94a3b8; margin-top: 4px; display: block;">Used to pull weekly circular ads from H-E-B, Kroger, Albertsons, Tom Thumb, Costco, and Sprouts.</span>
+                        </div>
+
+                        <div class="form-group" style="margin: 0;">
+                            <label style="display: block; font-size: 12.5px; font-weight: 600; color: #cbd5e1; margin-bottom: 4px;">Family / Household Servings</label>
+                            <select id="wizard-servings-select" style="width: 100%; box-sizing: border-box; background: #0d1117; border: 1px solid #334155; border-radius: 8px; color: #fff; padding: 12px; font-size: 15px;">
+                                <option value="1">1 Person (Single)</option>
+                                <option value="2">2 People (Couple)</option>
+                                <option value="3">3 People</option>
+                                <option value="4">4 People</option>
+                                <option value="5" selected>5 People (Our Family Profile) ⭐</option>
+                                <option value="6">6 People</option>
+                                <option value="7">7 People</option>
+                                <option value="8">8 People (Large Family)</option>
+                            </select>
+                            <span style="font-size: 11.5px; color: #94a3b8; margin-top: 4px; display: block;">Scales raw meat (~2.5 lbs) and produce (~1.8 lbs) automatically for dinner batches.</span>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <div class="form-group" style="margin: 0;">
+                                <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 4px;">Auto-Fetch Scan</label>
+                                <select id="wizard-fetch-interval" style="width: 100%; box-sizing: border-box; background: #0d1117; border: 1px solid #334155; border-radius: 8px; color: #fff; padding: 10px; font-size: 14px;">
+                                    <option value="30">Every 30 mins</option>
+                                    <option value="60" selected>Every 1 hour</option>
+                                    <option value="120">Every 2 hours</option>
+                                    <option value="240">Every 4 hours</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="margin: 0;">
+                                <label style="display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 4px;">Email History Lookback</label>
+                                <select id="wizard-lookback-days" style="width: 100%; box-sizing: border-box; background: #0d1117; border: 1px solid #334155; border-radius: 8px; color: #fff; padding: 10px; font-size: 14px;">
+                                    <option value="3">Past 3 days</option>
+                                    <option value="7" selected>Past 7 days</option>
+                                    <option value="14">Past 14 days</option>
+                                    <option value="30">Past 30 days</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; border-top: 1px solid #30363d; padding-top: 14px;">
+                        <button type="button" class="wizard-btn-secondary" onclick="goToWizardStep(3)">← Back</button>
+                        <button type="button" class="wizard-btn-primary" onclick="savePreferencesAndFinishWizard()" style="margin: 0; background: #10b981; color: #000; font-weight: 700;">
+                            <span>Save &amp; Complete Setup 🎉</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- STEP 5: SETUP COMPLETED SUMMARY -->
+                <div class="wizard-step-pane" id="wizard-pane-5" style="display: none;">
+                    <div style="text-align: center; padding: 10px 0 16px 0;">
+                        <div style="width: 64px; height: 64px; margin: 0 auto 14px auto; background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.4); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 32px; box-shadow: 0 0 24px rgba(34, 197, 94, 0.25);">
+                            🎉
+                        </div>
+                        <h3 style="margin: 0 0 6px 0; color: #fff; font-size: 20px;">You're All Set!</h3>
+                        <p style="margin: 0; color: #94a3b8; font-size: 13.5px; line-height: 1.45;">
+                            AI Helper is now configured and ready to monitor your incoming emails and automate your family meals.
+                        </p>
+                    </div>
+
+                    <div id="wizard-summary-checklist" style="display: flex; flex-direction: column; gap: 10px; margin: 18px 0;">
+                        <!-- Injected by renderWizardSummary() -->
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 24px;">
+                        <button type="button" class="wizard-btn-primary" onclick="finishOnboardingAndScan()" style="background: linear-gradient(90deg, #2563eb, #0284c7);">
+                            <span>🚀 Scan Emails &amp; Open Dashboard</span>
+                        </button>
+                        <button type="button" class="wizard-btn-secondary" onclick="closeOnboardingWizard(false)" style="text-align: center;">
+                            Go to Dashboard
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+
     <!-- Main App Content -->
     <div id="app-content">
         <!-- Mobile Top Header Bar -->
@@ -7508,6 +7790,496 @@
                 console.error("Failed to delete suggestion", e);
             }
         }
+
+
+        // ==========================================
+        // --- ONBOARDING SETUP WIZARD LOGIC ---
+        // ==========================================
+        let currentWizardStep = 1;
+        let wizardOnboardingData = null;
+        let selectedWizardEmailProvider = 'gmail';
+
+        async function checkOnboardingTrigger() {
+            // Check if returning from Google OAuth redirect with parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            const wizardStep = urlParams.get('wizard_step');
+            const oauthSuccess = urlParams.get('oauth_success');
+            
+            if (wizardStep) {
+                window.history.replaceState({}, document.title, window.location.pathname);
+                openOnboardingWizard(parseInt(wizardStep) || 3, Boolean(oauthSuccess));
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/onboarding/status');
+                if (res.ok) {
+                    const status = await res.json();
+                    window.onboardingStatus = status;
+                    // If onboarding not completed AND user has missing accounts or calendar
+                    if (!status.onboarding_completed && (!status.has_accounts || !status.google_connected)) {
+                        openOnboardingWizard(1);
+                    }
+                }
+            } catch(e) {
+                console.debug("Could not verify onboarding status", e);
+            }
+        }
+
+        async function openOnboardingWizard(step = 1, oauthSuccess = false) {
+            const modal = document.getElementById('onboarding-wizard-modal');
+            if (modal) modal.style.display = 'flex';
+            
+            try {
+                const res = await fetch('/api/onboarding/status');
+                if (res.ok) {
+                    wizardOnboardingData = await res.json();
+                }
+            } catch(e) {
+                console.error("Failed to load onboarding status", e);
+            }
+
+            goToWizardStep(step);
+
+            if (oauthSuccess) {
+                showWizardAlert('🎉 Google Calendar connected successfully! Proceed to connect your email below.', 'success');
+            }
+        }
+
+        async function closeOnboardingWizard(markCompleted = false) {
+            const modal = document.getElementById('onboarding-wizard-modal');
+            if (modal) modal.style.display = 'none';
+
+            if (markCompleted) {
+                try {
+                    await fetch('/api/onboarding/complete', { method: 'POST' });
+                } catch(e) {
+                    console.debug("Error completing onboarding", e);
+                }
+            }
+        }
+
+        function showWizardAlert(msg, type = 'info') {
+            const box = document.getElementById('wizard-alert-msg');
+            if (!box) return;
+            box.style.display = 'block';
+            if (type === 'success') {
+                box.style.background = 'rgba(34, 197, 94, 0.15)';
+                box.style.border = '1px solid rgba(34, 197, 94, 0.4)';
+                box.style.color = '#86efac';
+            } else if (type === 'error') {
+                box.style.background = 'rgba(239, 68, 68, 0.15)';
+                box.style.border = '1px solid rgba(239, 68, 68, 0.4)';
+                box.style.color = '#fca5a5';
+            } else {
+                box.style.background = 'rgba(56, 189, 248, 0.12)';
+                box.style.border = '1px solid rgba(56, 189, 248, 0.35)';
+                box.style.color = '#7dd3fc';
+            }
+            box.style.padding = '10px 14px';
+            box.style.borderRadius = '8px';
+            box.style.fontSize = '13px';
+            box.style.lineHeight = '1.4';
+            box.innerHTML = msg;
+        }
+
+        function clearWizardAlert() {
+            const box = document.getElementById('wizard-alert-msg');
+            if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+        }
+
+        function goToWizardStep(step) {
+            currentWizardStep = Math.max(1, Math.min(5, step));
+            clearWizardAlert();
+
+            // Update Progress bar
+            const pct = (currentWizardStep / 5) * 100;
+            const bar = document.getElementById('wizard-progress-bar');
+            if (bar) bar.style.width = pct + '%';
+
+            // Update tabs
+            for (let i = 1; i <= 4; i++) {
+                const tab = document.getElementById(`wizard-tab-${i}`);
+                if (tab) tab.classList.toggle('active', i === currentWizardStep);
+            }
+
+            // Update step label
+            const labelEl = document.getElementById('wizard-step-label');
+            const stepNames = ['Welcome', 'Google Calendar', 'Email Accounts', 'Household Preferences', 'Ready!'];
+            if (labelEl) labelEl.innerText = `Step ${currentWizardStep} of 4: ${stepNames[currentWizardStep - 1]}`;
+
+            // Toggle panes
+            for (let i = 1; i <= 5; i++) {
+                const pane = document.getElementById(`wizard-pane-${i}`);
+                if (pane) pane.style.display = (i === currentWizardStep) ? 'block' : 'none';
+            }
+
+            // Trigger pane-specific initializers
+            if (currentWizardStep === 2) updateWizardCalendarView();
+            if (currentWizardStep === 3) updateWizardEmailView();
+            if (currentWizardStep === 4) updateWizardPreferencesView();
+            if (currentWizardStep === 5) updateWizardSummaryView();
+        }
+
+        function updateWizardCalendarView() {
+            const card = document.getElementById('wizard-gcal-card');
+            if (!card) return;
+
+            const isConnected = wizardOnboardingData && wizardOnboardingData.google_connected;
+
+            if (isConnected) {
+                card.innerHTML = `
+                    <div style="background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.4); border-radius: 12px; padding: 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <div style="width: 42px; height: 42px; background: rgba(34, 197, 94, 0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px;">✓</div>
+                            <div>
+                                <strong style="color: #86efac; font-size: 15px; display: block;">Google Calendar is Connected!</strong>
+                                <span style="color: #cbd5e1; font-size: 12.5px;">Ready to push events, flight notices &amp; meal plans</span>
+                            </div>
+                        </div>
+                        <button type="button" class="wizard-btn-primary" onclick="goToWizardStep(3)" style="width: auto; padding: 8px 16px; font-size: 13.5px; background: #22c55e; color: #000;">
+                            Continue to Email Setup →
+                        </button>
+                    </div>
+                `;
+            } else {
+                card.innerHTML = `
+                    <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 12px; padding: 18px; text-align: center;">
+                        <p style="margin: 0 0 16px 0; color: #cbd5e1; font-size: 13.5px;">
+                            Click below to authorize AI Helper with your Google Account. A consent screen will open securely on Google.com.
+                        </p>
+                        <button type="button" class="wizard-btn-primary" onclick="connectGoogleFromWizard()" style="padding: 14px; font-size: 15px; background: #ffffff; color: #1f2937; box-shadow: 0 4px 12px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0 auto; max-width: 320px;">
+                            <svg width="20" height="20" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg>
+                            <span style="font-weight: 700;">Connect with Google Calendar</span>
+                        </button>
+                    </div>
+                `;
+            }
+        }
+
+        async function connectGoogleFromWizard() {
+            try {
+                const res = await fetch('/api/auth/google/url?from_wizard=1');
+                const data = await res.json();
+                if (data.url) {
+                    window.location.href = data.url;
+                } else {
+                    showWizardAlert(data.error || 'Google Client Secret file is missing on server. Admin can upload in Settings.', 'error');
+                }
+            } catch(e) {
+                showWizardAlert('Network error initiating Google authorization.', 'error');
+            }
+        }
+
+        function updateWizardEmailView() {
+            const hintBox = document.getElementById('wizard-google-email-hint');
+            const addrEl = document.getElementById('wizard-google-email-addr');
+            if (wizardOnboardingData && wizardOnboardingData.google_email) {
+                if (hintBox) hintBox.style.display = 'flex';
+                if (addrEl) addrEl.innerText = wizardOnboardingData.google_email;
+            } else {
+                if (hintBox) hintBox.style.display = 'none';
+            }
+
+            switchWizardEmailProvider(selectedWizardEmailProvider);
+            renderWizardAccountsList();
+        }
+
+        function useGoogleEmailInWizard() {
+            if (wizardOnboardingData && wizardOnboardingData.google_email) {
+                document.getElementById('wizard-email-user').value = wizardOnboardingData.google_email;
+                switchWizardEmailProvider('gmail');
+            }
+        }
+
+        function switchWizardEmailProvider(prov) {
+            selectedWizardEmailProvider = prov;
+            ['gmail', 'icloud', 'outlook', 'other'].forEach(p => {
+                const tab = document.getElementById(`tab-prov-${p}`);
+                if (tab) tab.classList.toggle('active', p === prov);
+            });
+
+            const hostInput = document.getElementById('wizard-email-host');
+            const passLabel = document.getElementById('wizard-pass-label');
+            const helpLink = document.getElementById('wizard-pass-help-link');
+            const guide = document.getElementById('wizard-provider-guide');
+
+            if (prov === 'gmail') {
+                if (hostInput) hostInput.value = 'imap.gmail.com';
+                if (passLabel) passLabel.innerText = '16-Character App Password';
+                if (helpLink) helpLink.innerHTML = '<a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" style="color: #38bdf8; text-decoration: underline; font-size: 11.5px; font-weight: 600;">Get App Password ↗</a>';
+                if (guide) {
+                    guide.innerHTML = `
+                        <strong style="color: #60a5fa; display: block; margin-bottom: 4px;">⚡ How to connect Gmail in 30 seconds:</strong>
+                        <ol style="margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px;">
+                            <li>Tap <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" style="color: #38bdf8; font-weight: 700; text-decoration: underline;">Google App Passwords ↗</a> (opens in new tab).</li>
+                            <li>Sign in, type <strong>AI Helper</strong> as app name, and tap <strong>Create</strong>.</li>
+                            <li>Copy the 16-character code (e.g. <code>abcd efgh ijkl mnop</code>) and paste below.</li>
+                        </ol>
+                    `;
+                }
+            } else if (prov === 'icloud') {
+                if (hostInput) hostInput.value = 'imap.mail.me.com';
+                if (passLabel) passLabel.innerText = 'Apple App-Specific Password';
+                if (helpLink) helpLink.innerHTML = '<a href="https://appleid.apple.com/account/manage" target="_blank" rel="noopener noreferrer" style="color: #38bdf8; text-decoration: underline; font-size: 11.5px; font-weight: 600;">Apple ID ↗</a>';
+                if (guide) {
+                    guide.innerHTML = `
+                        <strong style="color: #60a5fa; display: block; margin-bottom: 4px;">🍏 How to connect Apple iCloud:</strong>
+                        <ol style="margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px;">
+                            <li>Visit <a href="https://appleid.apple.com/account/manage" target="_blank" rel="noopener noreferrer" style="color: #38bdf8; font-weight: 700; text-decoration: underline;">appleid.apple.com ↗</a>.</li>
+                            <li>Under <strong>Sign-In and Security</strong>, tap <strong>App-Specific Passwords</strong>.</li>
+                            <li>Generate a password named <strong>AI Helper</strong> and paste below.</li>
+                        </ol>
+                    `;
+                }
+            } else if (prov === 'outlook') {
+                if (hostInput) hostInput.value = 'outlook.office365.com';
+                if (passLabel) passLabel.innerText = 'Account Password / App Password';
+                if (helpLink) helpLink.innerHTML = '<a href="https://account.microsoft.com/security" target="_blank" rel="noopener noreferrer" style="color: #38bdf8; text-decoration: underline; font-size: 11.5px; font-weight: 600;">Microsoft Security ↗</a>';
+                if (guide) {
+                    guide.innerHTML = `
+                        <strong style="color: #60a5fa; display: block; margin-bottom: 4px;">🔷 How to connect Microsoft Outlook / Hotmail:</strong>
+                        <p style="margin: 0;">Enter your full email address (e.g. <code>@outlook.com</code> or <code>@hotmail.com</code>). If 2-Step Verification is enabled, generate an App Password in Microsoft Security.</p>
+                    `;
+                }
+            } else {
+                if (hostInput) hostInput.value = 'imap.mail.yahoo.com';
+                if (passLabel) passLabel.innerText = 'Account Password / App Password';
+                if (helpLink) helpLink.innerHTML = '';
+                if (guide) {
+                    guide.innerHTML = `
+                        <strong style="color: #60a5fa; display: block; margin-bottom: 4px;">🌐 Custom IMAP Provider:</strong>
+                        <p style="margin: 0;">Enter your IMAP server host (e.g. Yahoo: <code>imap.mail.yahoo.com</code>, Fastmail: <code>imap.fastmail.com</code>) and your login credentials.</p>
+                    `;
+                }
+            }
+        }
+
+        function toggleWizardPassVisibility() {
+            const input = document.getElementById('wizard-email-pass');
+            if (input) input.type = (input.type === 'password') ? 'text' : 'password';
+        }
+
+        async function testAndSaveEmailFromWizard() {
+            const user = (document.getElementById('wizard-email-user').value || '').trim();
+            const pass = document.getElementById('wizard-email-pass').value || '';
+            const host = (document.getElementById('wizard-email-host').value || 'imap.gmail.com').trim();
+            const btn = document.getElementById('wizard-test-save-btn');
+
+            if (!user || !pass) {
+                showWizardAlert('Please enter both your email address and password.', 'error');
+                return;
+            }
+
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span>⏳ Testing IMAP Connection...</span>';
+            }
+            clearWizardAlert();
+
+            try {
+                // Step 1: Test Connection
+                const testRes = await fetch('/api/accounts/test', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ email_user: user, email_pass: pass, email_host: host })
+                });
+                const testData = await testRes.json();
+
+                if (testData.status === 'success') {
+                    // Step 2: Auto-save account
+                    await fetch('/api/accounts', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ email_user: user, email_pass: pass, email_host: host })
+                    });
+
+                    // Clear password field for security
+                    document.getElementById('wizard-email-pass').value = '';
+                    showWizardAlert(`✓ ${testData.message}`, 'success');
+
+                    // Refresh onboarding data
+                    const stRes = await fetch('/api/onboarding/status');
+                    if (stRes.ok) wizardOnboardingData = await stRes.json();
+                    renderWizardAccountsList();
+                } else {
+                    let errMsg = `<strong>Connection Failed:</strong> ${escapeHtml(testData.message)}`;
+                    if (testData.hint) {
+                        errMsg += `<div style="margin-top: 6px; color: #fde68a;">💡 ${escapeHtml(testData.hint)}</div>`;
+                    }
+                    showWizardAlert(errMsg, 'error');
+                }
+            } catch(e) {
+                showWizardAlert('Network error testing email account.', 'error');
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<span>🧪 Test &amp; Save Email Account</span>';
+                }
+            }
+        }
+
+        function renderWizardAccountsList() {
+            const container = document.getElementById('wizard-accounts-list-container');
+            if (!container) return;
+
+            const accounts = (wizardOnboardingData && wizardOnboardingData.accounts) || [];
+            if (accounts.length === 0) {
+                container.innerHTML = `
+                    <div style="background: rgba(255,255,255,0.03); border: 1px dashed #334155; border-radius: 8px; padding: 12px; text-align: center; color: #94a3b8; font-size: 12.5px;">
+                        No email accounts configured yet. Enter your details above and tap Test &amp; Save.
+                    </div>
+                `;
+            } else {
+                container.innerHTML = `
+                    <div style="font-size: 12px; font-weight: 700; color: #cbd5e1; margin-bottom: 6px; text-transform: uppercase;">
+                        Connected Accounts (${accounts.length})
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                        ${accounts.map(acc => `
+                            <div style="display: flex; justify-content: space-between; align-items: center; background: #0d1117; padding: 8px 12px; border: 1px solid #30363d; border-radius: 6px;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span style="color: #22c55e;">✓</span>
+                                    <div>
+                                        <strong style="color: #fff; font-size: 13px;">${escapeHtml(acc.email_user)}</strong>
+                                        <span style="color: #94a3b8; font-size: 11.5px; margin-left: 6px;">(${escapeHtml(acc.email_host)})</span>
+                                    </div>
+                                </div>
+                                <button type="button" onclick="deleteWizardAccount('${acc.id}')" style="background: none; border: none; color: #f87171; cursor: pointer; font-size: 14px; padding: 2px 6px;" title="Remove account">✕</button>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+        }
+
+        async function deleteWizardAccount(accId) {
+            if (!confirm("Remove this email account?")) return;
+            try {
+                await fetch(`/api/accounts/${accId}`, { method: 'DELETE' });
+                const stRes = await fetch('/api/onboarding/status');
+                if (stRes.ok) wizardOnboardingData = await stRes.json();
+                renderWizardAccountsList();
+            } catch(e) {
+                console.error("Error deleting account", e);
+            }
+        }
+
+        function updateWizardPreferencesView() {
+            if (!wizardOnboardingData) return;
+            const zipInput = document.getElementById('wizard-postal-code');
+            if (zipInput && wizardOnboardingData.postal_code) zipInput.value = wizardOnboardingData.postal_code;
+
+            const intervalSelect = document.getElementById('wizard-fetch-interval');
+            if (intervalSelect && wizardOnboardingData.fetch_interval_minutes) intervalSelect.value = wizardOnboardingData.fetch_interval_minutes;
+
+            const lookbackSelect = document.getElementById('wizard-lookback-days');
+            if (lookbackSelect && wizardOnboardingData.lookback_days) lookbackSelect.value = wizardOnboardingData.lookback_days;
+        }
+
+        async function savePreferencesAndFinishWizard() {
+            const postalCode = (document.getElementById('wizard-postal-code').value || '76262').trim();
+            const servings = parseInt(document.getElementById('wizard-servings-select').value) || 5;
+            const interval = parseInt(document.getElementById('wizard-fetch-interval').value) || 60;
+            const lookback = parseInt(document.getElementById('wizard-lookback-days').value) || 7;
+
+            try {
+                await fetch('/api/settings/ai', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        postal_code: postalCode,
+                        fetch_interval_minutes: interval,
+                        lookback_days: lookback
+                    })
+                });
+
+                if (window.appSettings) {
+                    window.appSettings.postal_code = postalCode;
+                    window.appSettings.fetch_interval_minutes = interval;
+                    window.appSettings.lookback_days = lookback;
+                }
+
+                const stRes = await fetch('/api/onboarding/status');
+                if (stRes.ok) wizardOnboardingData = await stRes.json();
+
+                goToWizardStep(5);
+            } catch(e) {
+                showWizardAlert('Network error saving preferences.', 'error');
+            }
+        }
+
+        function updateWizardSummaryView() {
+            const checklist = document.getElementById('wizard-summary-checklist');
+            if (!checklist) return;
+
+            const hasCal = wizardOnboardingData && wizardOnboardingData.google_connected;
+            const accounts = (wizardOnboardingData && wizardOnboardingData.accounts) || [];
+            const postal = (wizardOnboardingData && wizardOnboardingData.postal_code) || '76262';
+            const servings = (document.getElementById('wizard-servings-select') && document.getElementById('wizard-servings-select').value) || 5;
+
+            checklist.innerHTML = `
+                <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span>📅</span>
+                        <div>
+                            <strong style="color: #f1f5f9; font-size: 13.5px;">Google Calendar</strong>
+                            <div style="color: #94a3b8; font-size: 12px;">Push detected events &amp; meal plans</div>
+                        </div>
+                    </div>
+                    <span style="font-weight: 700; font-size: 12.5px; color: ${hasCal ? '#22c55e' : '#f59e0b'};">
+                        ${hasCal ? '✓ Connected' : '⚪ Skipped'}
+                    </span>
+                </div>
+
+                <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span>📬</span>
+                        <div>
+                            <strong style="color: #f1f5f9; font-size: 13.5px;">Email Ingestion</strong>
+                            <div style="color: #94a3b8; font-size: 12px;">${accounts.length} account(s) active</div>
+                        </div>
+                    </div>
+                    <span style="font-weight: 700; font-size: 12.5px; color: ${accounts.length > 0 ? '#22c55e' : '#f59e0b'};">
+                        ${accounts.length > 0 ? `✓ ${accounts.length} Active` : '⚪ Not Set'}
+                    </span>
+                </div>
+
+                <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span>🛒</span>
+                        <div>
+                            <strong style="color: #f1f5f9; font-size: 13.5px;">Local Supermarket Deals</strong>
+                            <div style="color: #94a3b8; font-size: 12px;">Circulars for Zip: ${escapeHtml(postal)}</div>
+                        </div>
+                    </div>
+                    <span style="font-weight: 700; font-size: 12.5px; color: #22c55e;">✓ Configured</span>
+                </div>
+
+                <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span>🍲</span>
+                        <div>
+                            <strong style="color: #f1f5f9; font-size: 13.5px;">Family Meal Planner</strong>
+                            <div style="color: #94a3b8; font-size: 12px;">Portions scaled for ${servings} people</div>
+                        </div>
+                    </div>
+                    <span style="font-weight: 700; font-size: 12.5px; color: #22c55e;">✓ Ready</span>
+                </div>
+            `;
+        }
+
+        async function finishOnboardingAndScan() {
+            try {
+                await fetch('/api/onboarding/complete', { method: 'POST' });
+            } catch(e) {
+                console.debug("Error marking onboarding complete", e);
+            }
+            closeOnboardingWizard(false);
+            openTab('dashboard');
+            fetchEmails();
+        }
+
 
 // Kick off auth check on load
         checkAuth();
