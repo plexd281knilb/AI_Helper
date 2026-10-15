@@ -217,11 +217,12 @@ For fast sub-millisecond query performance on multi-user and large datasets, the
 - Fallback parsers handle raw JSON, markdown-wrapped JSON (```` ```json ````), legacy arrays, or `NO_EVENT`.
 - Automatically enforces Gemini rate limits (4.1s sleep per request for free-tier compatibility).
 
-### 4. Calendar Sync
+### 4. Calendar Sync & Deduplication Engine
 - When events are detected, they are inserted into the `events` table with status `'pending'`.
+- **Intelligent Calendar Deduplication**: Employs normalized string tokenization (`normalize_event_title`), emoji/routine prefix stripping (e.g. "Reminder:", "Notice:", "Invitation:"), and token overlap evaluation (`are_events_duplicate`) across both the SQLite database and Google Calendar (+/- 14 hour window). Checks `find_existing_event_in_db` before database insertion to prevent duplicate event rows.
 - Robust ISO 8601 parsing (`parse_flexible_iso_datetime`) supports standard ISO strings, date-only formats (`YYYY-MM-DD` defaulting to 9:00 AM), space-delimited timestamps, and common colloquial formats.
 - Dashboard queries filter by beginning of today (`today_start`) so events occurring earlier in the day remain visible.
-- If Google Calendar is connected (`token_<user_id>.json` exists), events are immediately auto-synced to Google Calendar and updated to status `'added'`.
+- If Google Calendar is connected (`token_<user_id>.json` exists), events are auto-synced to Google Calendar with duplicate checks and updated to status `'added'`.
 - If not connected, users can manually sync or click manual add links on the Dashboard.
 
 ### 5. Email Processing History
@@ -262,9 +263,14 @@ For fast sub-millisecond query performance on multi-user and large datasets, the
 ### 8. Smart Meal Planner Engine (`/api/meals/*`)
 - **Sale-Matched Recipe Planning**: Plans cohesive dinner schedules for the week (7 days) or month (28 days / 4 weeks) explicitly centered around what is currently on sale at the user's local supermarkets (from `grocery_stores.cached_deals`).
 - **On-Sale Highlight Tags**: Each meal card prominently highlights which ingredients are currently on sale and at which supermarket (e.g. `🟢 New York Strip Steaks ($16.99 at Costco • Save $2.97)`).
+- **Calendar Meal Conflict Avoidance**: Automatically detects existing meal and food events on the user's calendar (`is_food_or_meal_title` and `find_existing_meal_or_food_on_calendar`). Automatically reserves that day during plan generation with status `is_calendar_reserved=True` and $0.00 cost, preventing duplicate meal schedules.
+- **Configurable Day-of-Week Routine & Skip Rules (`/api/meals/rules`)**:
+  - **Skip Days / Family Gatherings**: Configurable days where home cooking is not needed (pre-seeded with **Sunday Dinner with Family**), generating clean cards with $0 cost and no ingredient clutter.
+  - **Themed Routines**: Configurable recurring theme nights (pre-seeded with **Friday Family Pizza Night**), automatically querying active circulars for frozen pizzas (Red Baron, Freschetta, DiGiorno) and extra toppings (mozzarella cheese, pepperoni, bell peppers).
+  - **Routine & Skip Days Modal**: In `static/index.html`, users can configure every day of the week with 1-click presets (`👨‍👩‍👧 Sunday Family Dinner`, `🍕 Friday Pizza Night`, `🌮 Taco Tuesday`, `🔄 Reset Defaults`).
 - **Interactive Preference Learning (👍 / 👎 Feedback)**: Users can give thumbs up or thumbs down to individual meals. Feedback is permanently stored in `users.settings.meal_preferences` (`liked_cuisines`, `disliked_cuisines`, `liked_ingredients`, `disliked_ingredients`, `liked_meals`, `disliked_meals`) and continuously shapes future plan generations and single-meal recipe swaps.
 - **Instant Single-Meal Swapping (🔄)**: Replaces any individual dinner with an alternative on-sale recipe respecting the user's dietary preferences without altering the rest of the week's or month's schedule.
-- **1-Click Google Calendar Synchronization**: Push individual meals or the entire plan (`/api/meals/{plan_id}/calendar_all`) to the calendar. Automatically creates detailed dinner events (6:30 PM) populated with recipe descriptions, on-sale ingredient notes, and numbered step-by-step cooking directions. Direct push to Google Calendar is executed automatically if the user's Google Calendar OAuth token exists.
+- **1-Click Google Calendar Synchronization**: Push individual meals or the entire plan (`/api/meals/{plan_id}/calendar_all`) to the calendar with duplicate prevention. Automatically creates detailed dinner events (6:30 PM) populated with recipe descriptions, on-sale ingredient notes, and numbered step-by-step cooking directions.
 - **Store-by-Store Lowest-Price Grocery Export**: Batch exports all recipe ingredients into `grocery_lists` / `grocery_list_items`. Each ingredient is automatically mapped to the specific supermarket offering the lowest price (e.g. Ribeye -> Albertsons, Asparagus -> Sprouts, Butter -> ALDI) with high-res packaging/cutout product photos and discount notes.
 
 ---
@@ -336,6 +342,8 @@ For fast sub-millisecond query performance on multi-user and large datasets, the
 | `POST` | `/api/meals/{plan_id}/calendar_all` | Bulk sync all meals in plan to Calendar | Yes |
 | `POST` | `/api/meals/{plan_id}/export_grocery_list` | Batch export ingredients to grocery list with best store pricing | Yes |
 | `DELETE` | `/api/meals/{plan_id}` | Delete a meal plan | Yes |
+| `GET` | `/api/meals/rules` | Get day-of-week routine and skip rules (e.g. Sunday family dinner, Friday pizza night) | Yes |
+| `POST` | `/api/meals/rules` | Update day-of-week routine and skip rules | Yes |
 
 ---
 

@@ -2250,6 +2250,49 @@
                 </div>
             </div>
 
+            <!-- Day Rules & Routine Modal -->
+            <div id="day-rules-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center; padding: 20px;">
+                <div class="account-box" style="width: 95%; max-width: 780px; max-height: 90vh; display: flex; flex-direction: column; background: #161b22; border: 1px solid #30363d; border-radius: var(--radius-md); padding: 24px; box-shadow: 0 12px 35px rgba(0,0,0,0.7); overflow-y: auto;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
+                        <div>
+                            <h2 style="margin: 0 0 4px 0; color: #fff; display: flex; align-items: center; gap: 8px; font-size: 18px;">
+                                <span>⚙️</span> Routine &amp; Skip Days Configuration
+                            </h2>
+                            <p style="margin: 0; color: #94a3b8; font-size: 13px;">
+                                Configure recurring family meal routines (like Friday Pizza Night) or mark days where home cooking is skipped (like Sunday Family Dinner).
+                            </p>
+                        </div>
+                        <button onclick="closeDayRulesModal()" style="background: none; border: none; color: #94a3b8; font-size: 20px; cursor: pointer;">✕</button>
+                    </div>
+
+                    <!-- Presets Bar -->
+                    <div style="background: rgba(30, 41, 59, 0.7); border: 1px solid #334155; border-radius: 8px; padding: 12px 16px; margin-bottom: 18px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;">
+                        <div>
+                            <strong style="color: #60a5fa; font-size: 13px; display: block;">⚡ Quick Family Presets:</strong>
+                            <span style="font-size: 12px; color: #cbd5e1;">Click to instantly populate family routines and skip days.</span>
+                        </div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                            <button type="button" class="add-btn" onclick="applyDayRulePreset('Sunday', 'no_meal', 'Sunday Dinner with Family', 'Weekly dinner with extended family — no home cooking or meal prep needed.')" style="margin: 0; padding: 5px 10px; font-size: 12px; background: #9333ea;">👨‍👩‍👧 Sunday Family Dinner</button>
+                            <button type="button" class="add-btn" onclick="applyDayRulePreset('Friday', 'themed', 'Friday Family Pizza Night', 'Pick up favorite frozen pizzas and extra toppings to bake together at home.')" style="margin: 0; padding: 5px 10px; font-size: 12px; background: #f59e0b; color: #000;">🍕 Friday Pizza Night</button>
+                            <button type="button" class="add-btn" onclick="applyDayRulePreset('Tuesday', 'themed', 'Taco Tuesday Fiesta', 'Ground beef or chicken tacos with fresh salsa, avocado, and shredded cheese.')" style="margin: 0; padding: 5px 10px; font-size: 12px; background: #10b981;">🌮 Taco Tuesday</button>
+                            <button type="button" class="add-btn" onclick="resetDayRulesToDefault()" style="margin: 0; padding: 5px 10px; font-size: 12px; background: #475569;">🔄 Reset Defaults</button>
+                        </div>
+                    </div>
+
+                    <div id="day-rules-msg" style="margin-bottom: 10px;"></div>
+
+                    <!-- 7 Days Container -->
+                    <div id="day-rules-grid" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px;">
+                        <!-- Injected by renderDayRules() -->
+                    </div>
+
+                    <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border-color); padding-top: 14px;">
+                        <button class="remove-btn" onclick="closeDayRulesModal()" style="margin: 0; background: #374151; color: #e5e7eb;">Cancel</button>
+                        <button class="save-btn" id="day-rules-save-btn" onclick="saveDayRules()" style="margin: 0; background: #3b82f6;">💾 Save Routine Rules</button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Smart Meal Planner View -->
             <div id="meals" class="view">
                 <div class="meals-header-bar">
@@ -2301,6 +2344,9 @@
 
                     <button class="btn-generate-meals" id="btn-generate-meals" onclick="generateMealPlan()">
                         <span id="btn-generate-meals-icon">✨</span> Generate Meal Plan
+                    </button>
+                    <button class="btn-meal-action" onclick="openDayRulesModal()" style="padding: 10px 16px; font-size: 13px; background: rgba(51, 65, 85, 0.8); border: 1px solid #475569; border-radius: 8px; cursor: pointer; color: #f8fafc; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s ease;">
+                        ⚙️ Routine &amp; Skip Days
                     </button>
                 </div>
 
@@ -5734,6 +5780,9 @@
                     if (badge) badge.innerText = `🏪 ${data.stores_count} Stores Active`;
                 }
                 
+                if (data.preferences && data.preferences.day_rules) {
+                    userDayRules = data.preferences.day_rules;
+                }
                 currentMealPlan = data.plan;
                 renderMealPlanUI();
             } catch(e) {
@@ -6056,6 +6105,194 @@
             renderMealCardsOnly();
         }
 
+        // --- Routine & Skip Days Rules Management ---
+        let userDayRules = null;
+        const DEFAULT_CLIENT_DAY_RULES = {
+            "Sunday": {
+                "mode": "no_meal",
+                "name": "Sunday Dinner with Family",
+                "notes": "Weekly dinner with extended family — no home cooking or meal prep needed."
+            },
+            "Friday": {
+                "mode": "themed",
+                "name": "Friday Family Pizza Night",
+                "notes": "Pick up favorite frozen pizzas and extra toppings to bake together at home."
+            },
+            "Monday": {"mode": "cook", "name": "", "notes": ""},
+            "Tuesday": {"mode": "cook", "name": "", "notes": ""},
+            "Wednesday": {"mode": "cook", "name": "", "notes": ""},
+            "Thursday": {"mode": "cook", "name": "", "notes": ""},
+            "Saturday": {"mode": "cook", "name": "", "notes": ""}
+        };
+
+        async function openDayRulesModal() {
+            const modal = document.getElementById('day-rules-modal');
+            if (!modal) return;
+            modal.style.display = 'flex';
+            await loadDayRules();
+        }
+
+        function closeDayRulesModal() {
+            const modal = document.getElementById('day-rules-modal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        async function loadDayRules() {
+            try {
+                const response = await fetch('/api/meals/rules');
+                await handleApiError(response);
+                const data = await response.json();
+                userDayRules = data.rules || DEFAULT_CLIENT_DAY_RULES;
+                renderDayRules();
+            } catch (e) {
+                console.error("Error loading day rules:", e);
+                userDayRules = DEFAULT_CLIENT_DAY_RULES;
+                renderDayRules();
+            }
+        }
+
+        function renderDayRules() {
+            const container = document.getElementById('day-rules-grid');
+            if (!container) return;
+            const daysOrder = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+            
+            container.innerHTML = daysOrder.map(day => {
+                const rule = (userDayRules && userDayRules[day]) ? userDayRules[day] : {mode: "cook", name: "", notes: ""};
+                const mode = rule.mode || "cook";
+                const isNoMeal = mode === "no_meal";
+                const isThemed = mode === "themed";
+                
+                let badgeHtml = '<span style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); font-size: 11px; padding: 2px 8px; border-radius: 9999px; font-weight: 600;">🍳 Cook at Home</span>';
+                if (isNoMeal) {
+                    badgeHtml = '<span style="background: rgba(147, 51, 234, 0.2); color: #c084fc; border: 1px solid rgba(147, 51, 234, 0.4); font-size: 11px; padding: 2px 8px; border-radius: 9999px; font-weight: 600;">👨‍👩‍👧 Skip / Family Dinner</span>';
+                } else if (isThemed) {
+                    badgeHtml = '<span style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); font-size: 11px; padding: 2px 8px; border-radius: 9999px; font-weight: 600;">🍕 Themed Routine</span>';
+                }
+
+                return `
+                    <div style="background: #0d1117; border: 1px solid ${isNoMeal ? '#9333ea' : (isThemed ? '#d97706' : '#30363d')}; border-radius: 8px; padding: 12px 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <strong style="font-size: 14px; color: #f8fafc;">${day}</strong>
+                                ${badgeHtml}
+                            </div>
+                            <div>
+                                <select id="rule-mode-${day}" onchange="onDayRuleModeChange('${day}')" style="background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; padding: 4px 8px; font-size: 12px;">
+                                    <option value="cook" ${mode === 'cook' ? 'selected' : ''}>🍳 Cook at Home (Standard Recipe)</option>
+                                    <option value="no_meal" ${mode === 'no_meal' ? 'selected' : ''}>👨‍👩‍👧 No Meal Needed (Family Dinner / Skip)</option>
+                                    <option value="themed" ${mode === 'themed' ? 'selected' : ''}>🍕 Themed Routine (Pizza Night / Favorites)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 6px;">
+                            <div>
+                                <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 3px;">Routine / Event Title</label>
+                                <input type="text" id="rule-name-${day}" value="${escapeHtml(rule.name || '')}" placeholder="${isNoMeal ? 'e.g. Sunday Dinner with Family' : (isThemed ? 'e.g. Friday Family Pizza Night' : 'Optional custom title')}" style="width: 100%; box-sizing: border-box; font-size: 12.5px; padding: 6px 8px; margin: 0; background: #161b22; border: 1px solid #334155; border-radius: 6px; color: #fff;">
+                            </div>
+                            <div>
+                                <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 3px;">Notes / Family Instructions</label>
+                                <input type="text" id="rule-notes-${day}" value="${escapeHtml(rule.notes || '')}" placeholder="${isNoMeal ? 'e.g. Dinner with grandparents — no cooking needed' : (isThemed ? 'e.g. Frozen pizzas + extra cheese baked at home' : 'Notes')}" style="width: 100%; box-sizing: border-box; font-size: 12.5px; padding: 6px 8px; margin: 0; background: #161b22; border: 1px solid #334155; border-radius: 6px; color: #fff;">
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function onDayRuleModeChange(day) {
+            const modeSelect = document.getElementById(`rule-mode-${day}`);
+            const nameInput = document.getElementById(`rule-name-${day}`);
+            const notesInput = document.getElementById(`rule-notes-${day}`);
+            if (!modeSelect || !nameInput || !notesInput) return;
+            
+            const mode = modeSelect.value;
+            if (mode === 'no_meal' && !nameInput.value.trim()) {
+                nameInput.value = `${day} Dinner with Family`;
+                notesInput.value = `Weekly family gathering — no home meal planning or cooking needed.`;
+            } else if (mode === 'themed' && !nameInput.value.trim()) {
+                if (day === 'Friday') {
+                    nameInput.value = 'Friday Family Pizza Night';
+                    notesInput.value = 'Pick up favorite frozen pizzas and extra toppings to bake together at home.';
+                } else if (day === 'Tuesday') {
+                    nameInput.value = 'Taco Tuesday Fiesta';
+                    notesInput.value = 'Tacos with ground beef/chicken and fresh toppings.';
+                } else {
+                    nameInput.value = `${day} Themed Dinner`;
+                    notesInput.value = 'Special routine dinner.';
+                }
+            }
+            if (userDayRules && userDayRules[day]) {
+                userDayRules[day].mode = mode;
+                userDayRules[day].name = nameInput.value;
+                userDayRules[day].notes = notesInput.value;
+            }
+            renderDayRules();
+        }
+
+        function applyDayRulePreset(day, mode, name, notes) {
+            if (!userDayRules) userDayRules = JSON.parse(JSON.stringify(DEFAULT_CLIENT_DAY_RULES));
+            userDayRules[day] = {
+                mode: mode,
+                name: name,
+                notes: notes
+            };
+            renderDayRules();
+            const msg = document.getElementById('day-rules-msg');
+            if (msg) {
+                msg.innerHTML = `<span style="color: #34d399; font-size: 13px;">✓ Applied ${name} for ${day}. Remember to click Save!</span>`;
+                setTimeout(() => { if (msg) msg.innerHTML = ''; }, 3000);
+            }
+        }
+
+        function resetDayRulesToDefault() {
+            userDayRules = JSON.parse(JSON.stringify(DEFAULT_CLIENT_DAY_RULES));
+            renderDayRules();
+            const msg = document.getElementById('day-rules-msg');
+            if (msg) {
+                msg.innerHTML = `<span style="color: #60a5fa; font-size: 13px;">✓ Reset rules to family defaults (Sunday Family Dinner + Friday Pizza Night).</span>`;
+                setTimeout(() => { if (msg) msg.innerHTML = ''; }, 3000);
+            }
+        }
+
+        async function saveDayRules() {
+            const btn = document.getElementById('day-rules-save-btn');
+            const msg = document.getElementById('day-rules-msg');
+            if (btn) btn.disabled = true;
+            
+            const daysOrder = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+            const rulesToSave = {};
+            
+            daysOrder.forEach(day => {
+                const modeSelect = document.getElementById(`rule-mode-${day}`);
+                const nameInput = document.getElementById(`rule-name-${day}`);
+                const notesInput = document.getElementById(`rule-notes-${day}`);
+                
+                rulesToSave[day] = {
+                    mode: modeSelect ? modeSelect.value : "cook",
+                    name: nameInput ? nameInput.value.trim() : "",
+                    notes: notesInput ? notesInput.value.trim() : ""
+                };
+            });
+            
+            try {
+                const response = await fetch('/api/meals/rules', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({rules: rulesToSave})
+                });
+                await handleApiError(response);
+                userDayRules = rulesToSave;
+                closeDayRulesModal();
+                showMealMsg("✓ Routine and skip day rules saved successfully! Generate a plan to apply.", "success");
+            } catch (e) {
+                if (e.message !== "Unauthorized") {
+                    if (msg) msg.innerHTML = `<div class="error">Failed to save rules: ${e.message}</div>`;
+                }
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+
         function renderMealCardsOnly() {
             const grid = document.getElementById('meals-cards-grid');
             if (!grid || !currentMealPlan || !currentMealPlan.meals_data) return;
@@ -6071,6 +6308,81 @@
                 const isLiked = m.feedback === 'like';
                 const isDisliked = m.feedback === 'dislike';
                 const isSynced = m.calendar_synced;
+
+                if (m.is_no_meal_needed) {
+                    return `
+                        <div class="meal-card" id="meal-card-${mealId}" style="border: 1px solid #7c3aed; background: linear-gradient(180deg, rgba(147, 51, 234, 0.08) 0%, #161b22 100%);">
+                            <div>
+                                <div class="meal-card-top">
+                                    <div class="meal-date-badge" style="background: rgba(147, 51, 234, 0.2); color: #d8b4fe; border-color: rgba(147, 51, 234, 0.4);">
+                                        <span>📅</span> ${escapeHtml(m.day)} • ${escapeHtml(m.date)}
+                                    </div>
+                                    <span class="meal-cuisine-pill" style="background: rgba(147, 51, 234, 0.25); color: #d8b4fe; border-color: rgba(147, 51, 234, 0.4);">👨‍👩‍👧 Family Dinner</span>
+                                </div>
+
+                                <h3 class="meal-title" style="color: #e9d5ff;">${escapeHtml(m.title)}</h3>
+                                <p class="meal-desc">${escapeHtml(m.description)}</p>
+
+                                <div class="meal-meta-row">
+                                    <span>✨ Family Gathering</span>
+                                    <span>🏠 No Home Cooking</span>
+                                    <span class="meal-cost-badge" style="background: rgba(147, 51, 234, 0.2); color: #c084fc;">$0.00</span>
+                                </div>
+
+                                <div style="margin: 14px 0; padding: 12px; background: rgba(147, 51, 234, 0.1); border: 1px dashed rgba(168, 85, 247, 0.4); border-radius: 8px; font-size: 13px; color: #d8b4fe; line-height: 1.4;">
+                                    👨‍👩‍👧 <strong>Routine Family Dinner:</strong> Dinner with family scheduled — no ingredients or meal preparation needed today!
+                                </div>
+                            </div>
+
+                            <div class="meal-actions-footer">
+                                <div class="meal-feedback-group">
+                                    <button class="btn-meal-action" onclick="swapMealCard('${planId}', '${mealId}', this)" title="Change mind and cook dinner instead">🔄 Cook Instead</button>
+                                </div>
+                                <div class="meal-action-buttons">
+                                    <button class="btn-meal-action ${isSynced ? 'synced' : ''}" onclick="syncMealCardToCalendar('${planId}', '${mealId}', this)" title="Add Family Dinner reminder to Calendar">
+                                        ${isSynced ? '✓ Synced' : '📅 Add to Cal'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                if (m.is_calendar_reserved) {
+                    return `
+                        <div class="meal-card" id="meal-card-${mealId}" style="border: 1px solid #0891b2; background: linear-gradient(180deg, rgba(6, 182, 212, 0.08) 0%, #161b22 100%);">
+                            <div>
+                                <div class="meal-card-top">
+                                    <div class="meal-date-badge" style="background: rgba(6, 182, 212, 0.2); color: #a5f3fc; border-color: rgba(6, 182, 212, 0.4);">
+                                        <span>📅</span> ${escapeHtml(m.day)} • ${escapeHtml(m.date)}
+                                    </div>
+                                    <span class="meal-cuisine-pill" style="background: rgba(6, 182, 212, 0.25); color: #a5f3fc; border-color: rgba(6, 182, 212, 0.4);">📅 Pre-Scheduled</span>
+                                </div>
+
+                                <h3 class="meal-title" style="color: #67e8f9;">${escapeHtml(m.title)}</h3>
+                                <p class="meal-desc">${escapeHtml(m.description)}</p>
+
+                                <div class="meal-meta-row">
+                                    <span>📅 Calendar Confirmed</span>
+                                    <span class="meal-cost-badge" style="background: rgba(6, 182, 212, 0.2); color: #67e8f9;">$0.00</span>
+                                </div>
+
+                                <div style="margin: 14px 0; padding: 12px; background: rgba(6, 182, 212, 0.1); border: 1px dashed rgba(6, 182, 212, 0.4); border-radius: 8px; font-size: 13px; color: #a5f3fc; line-height: 1.4;">
+                                    📅 <strong>Pre-Existing Meal on Calendar:</strong> An existing food or dinner event was already detected on your calendar. Kept open with no conflicting dinner planned.
+                                </div>
+                            </div>
+
+                            <div class="meal-actions-footer">
+                                <div class="meal-feedback-group">
+                                    <button class="btn-meal-action" onclick="swapMealCard('${planId}', '${mealId}', this)" title="Replace with cooked recipe">🔄 Cook Recipe</button>
+                                </div>
+                                <div class="meal-action-buttons">
+                                    <button class="btn-meal-action synced" disabled>✓ On Calendar</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
                 
                 let salesHtml = '';
                 if (m.sale_highlights && m.sale_highlights.length > 0) {
@@ -6102,13 +6414,13 @@
                 `).join('');
                 
                 return `
-                    <div class="meal-card" id="meal-card-${mealId}">
+                    <div class="meal-card" id="meal-card-${mealId}" style="${m.is_themed_routine ? 'border: 1px solid #d97706; background: linear-gradient(180deg, rgba(245, 158, 11, 0.08) 0%, #161b22 100%);' : ''}">
                         <div>
                             <div class="meal-card-top">
                                 <div class="meal-date-badge">
                                     <span>📅</span> ${escapeHtml(m.day)} • ${escapeHtml(m.date)}
                                 </div>
-                                <span class="meal-cuisine-pill">${escapeHtml(m.cuisine)}</span>
+                                <span class="meal-cuisine-pill" style="${m.is_themed_routine ? 'background: rgba(245, 158, 11, 0.25); color: #fde68a; border-color: rgba(245, 158, 11, 0.4);' : ''}">${m.is_themed_routine ? '🍕 ' : ''}${escapeHtml(m.cuisine)}</span>
                             </div>
 
                             <h3 class="meal-title">${escapeHtml(m.title)}</h3>

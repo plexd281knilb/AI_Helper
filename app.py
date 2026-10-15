@@ -1025,32 +1025,200 @@ def parse_flexible_iso_datetime(date_str: str) -> datetime:
         dt = dt.replace(tzinfo=datetime.now().astimezone().tzinfo)
     return dt
 
-def push_event_to_gcal(service, title: str, description: str, date_str: str, location: str = ""):
+def normalize_event_title(title: str) -> str:
+    """Normalize event title by removing routine prefixes, emojis, and punctuation."""
+    t = (title or "").lower()
+    t = re.sub(r'^(?:fwd|re|reminder|invitation|notice|alert|dinner|meal|lunch|event|meeting)\s*[:\-]\s*', '', t, flags=re.IGNORECASE)
+    t = re.sub(r'[\U00010000-\U0010ffff]', '', t) # remove emojis
+    t = re.sub(r'[^a-z0-9\s]', ' ', t)
+    return ' '.join(t.split())
+
+def are_events_duplicate(title1: str, date1_str: str, title2: str, date2_str: str) -> bool:
     """
-    Pushes an event to Google Calendar, with duplicate prevention by checking
-    events around the same time window (+/- 2 hours) on the user's primary calendar.
+    Determines if two events are duplicates based on title similarity and calendar day overlap (+/- 4 hours).
+    """
+    if not title1 or not title2 or not date1_str or not date2_str:
+        return False
+        
+    try:
+        d1 = parse_flexible_iso_datetime(date1_str)
+        d2 = parse_flexible_iso_datetime(date2_str)
+    except Exception:
+        if date1_str[:10] != date2_str[:10]:
+            return False
+        d1 = None
+        d2 = None
+        
+    if d1 and d2:
+        same_day = (d1.date() == d2.date())
+        time_diff = abs((d1 - d2).total_seconds())
+        if not same_day and time_diff > 14400: # 4 hours
+            return False
+            
+    n1 = normalize_event_title(title1)
+    n2 = normalize_event_title(title2)
+    
+    if not n1 or not n2:
+        return False
+        
+    if n1 == n2:
+        return True
+    if len(n1) >= 6 and (n1 in n2 or n2 in n1):
+        return True
+        
+    toks1 = set(n1.split())
+    toks2 = set(n2.split())
+    stop = {'the', 'and', 'at', 'in', 'on', 'for', 'of', 'with', 'to', 'a', 'an'}
+    t1 = toks1 - stop
+    t2 = toks2 - stop
+    if not t1 or not t2:
+        return False
+        
+    overlap = t1.intersection(t2)
+    min_len = min(len(t1), len(t2))
+    jaccard = len(overlap) / len(t1.union(t2))
+    
+    if len(overlap) >= 2 and (len(overlap) / min_len >= 0.7 or jaccard >= 0.5):
+        return True
+        
+    return False
+
+def is_food_or_meal_title(title: str) -> bool:
+    """Detects whether an event summary or title corresponds to a meal, dinner, lunch, or food gathering."""
+    if not title:
+        return False
+    t = title.lower()
+    food_keywords = [
+        "dinner", "supper", "lunch", "meal", "food", "cook", "restaurant",
+        "pizza", "bbq", "barbecue", "eat out", "family dinner", "taco",
+        "steak", "brunch", "breakfast", "buffet", "potluck"
+    ]
+    if any(k in t for k in food_keywords):
+        return True
+    if re.search(r'[\U0001F354-\U0001F37F\U0001F950-\U0001F96F]', title): # Food emojis
+        return True
+    return False
+
+def find_existing_event_in_db(user_id: str, title: str, date_str: str, conn: sqlite3.Connection = None) -> dict:
+    """
+    Checks if an event with a similar title and time window already exists in the local database.
+    """
+    should_close = False
+    if conn is None:
+        conn = get_db_conn()
+        should_close = True
+    try:
+        try:
+            dt = parse_flexible_iso_datetime(date_str)
+            day_str = dt.date().isoformat()
+        except Exception:
+            day_str = date_str[:10] if date_str else ""
+        if not day_str:
+            return None
+        c = conn.cursor()
+        c.execute("""
+            SELECT id, user_id, account, email_id, title, date, description, location, status
+            FROM events
+            WHERE user_id=? AND date LIKE ? AND status IN ('pending', 'added')
+        """, (user_id, f"{day_str}%"))
+        rows = [dict(r) for r in c.fetchall()]
+        for r in rows:
+            if are_events_duplicate(title, date_str, r['title'], r['date']):
+                return r
+        return None
+    finally:
+        if should_close:
+            conn.close()
+
+def find_existing_meal_or_food_on_calendar(user_id: str, date_str: str, service=None, conn: sqlite3.Connection = None) -> dict:
+    """
+    Checks if a meal or dinner event is already scheduled for the given date,
+    checking both the local database 'events' table and Google Calendar (if service provided).
+    Returns dict with event details if found, or None.
+    """
+    should_close = False
+    if conn is None:
+        conn = get_db_conn()
+        should_close = True
+    try:
+        try:
+            dt = parse_flexible_iso_datetime(date_str)
+            day_str = dt.date().isoformat()
+        except Exception:
+            day_str = date_str[:10] if date_str else ""
+        if not day_str:
+            return None
+            
+        c = conn.cursor()
+        c.execute("""
+            SELECT id, user_id, account, email_id, title, date, description, location, status
+            FROM events
+            WHERE user_id=? AND date LIKE ? AND status IN ('pending', 'added')
+        """, (user_id, f"{day_str}%"))
+        rows = [dict(r) for r in c.fetchall()]
+        for r in rows:
+            if is_food_or_meal_title(r['title']) or r.get('account') == 'Smart Meal Planner':
+                return {"source": "local_db", "title": r['title'], "id": r['id'], "event": r}
+                
+        # If Google Calendar service is connected, check Google Calendar
+        if service:
+            try:
+                time_min = f"{day_str}T00:00:00Z"
+                time_max = f"{day_str}T23:59:59Z"
+                gcal_events = service.events().list(
+                    calendarId='primary',
+                    timeMin=time_min,
+                    timeMax=time_max,
+                    singleEvents=True,
+                    maxResults=50
+                ).execute()
+                for item in gcal_events.get('items', []):
+                    summary = item.get('summary', '')
+                    if is_food_or_meal_title(summary):
+                        return {"source": "google_calendar", "title": summary, "id": item.get('id')}
+            except Exception as ge:
+                logger.warning(f"GCal check for existing meal on {day_str}: {ge}")
+                
+        return None
+    finally:
+        if should_close:
+            conn.close()
+
+def push_event_to_gcal(service, title: str, description: str, date_str: str, location: str = "", is_meal: bool = False):
+    """
+    Pushes an event to Google Calendar, with comprehensive duplicate prevention:
+    - Queries a full day window (+/- 14 hours) on the user's primary calendar
+    - Checks are_events_duplicate for resilient title & token similarity
+    - If is_meal is True, checks if any food/dinner event already exists on that date
     """
     start_time = parse_flexible_iso_datetime(date_str)
     end_time = start_time + timedelta(hours=1)
     
-    # Check Google Calendar for existing events in a +/- 2 hour window
+    # Check Google Calendar for existing events in a full-day (+/- 14 hour) window
     try:
-        time_min = (start_time - timedelta(hours=2)).isoformat()
-        time_max = (end_time + timedelta(hours=2)).isoformat()
+        time_min = (start_time - timedelta(hours=14)).isoformat()
+        time_max = (end_time + timedelta(hours=14)).isoformat()
         existing = service.events().list(
             calendarId='primary',
             timeMin=time_min,
             timeMax=time_max,
             singleEvents=True,
-            maxResults=25
+            maxResults=50
         ).execute()
         
-        norm_title = (title or "").strip().lower()
         for item in existing.get('items', []):
-            item_summary = (item.get('summary') or "").strip().lower()
-            if item_summary == norm_title or (len(norm_title) > 4 and norm_title in item_summary):
-                logger.info(f"Duplicate check: Event '{title}' already exists on Google Calendar around {start_time.isoformat()}. Skipping insertion.")
-                return {"status": "already_exists", "event_id": item.get("id")}
+            item_summary = (item.get('summary') or "").strip()
+            item_start = item.get('start', {}).get('dateTime') or item.get('start', {}).get('date') or date_str
+            
+            # Check duplicate by title and time
+            if are_events_duplicate(title, date_str, item_summary, item_start):
+                logger.info(f"Duplicate check: Event '{title}' matches existing Google Calendar event '{item_summary}'. Skipping insertion.")
+                return {"status": "already_exists", "event_id": item.get("id"), "title": item_summary}
+                
+            # If is_meal, prevent duplicate meal events on the same calendar day
+            if is_meal and is_food_or_meal_title(item_summary):
+                logger.info(f"Meal duplicate check: Existing meal/dinner '{item_summary}' found on Google Calendar for {start_time.date()}. Skipping insertion.")
+                return {"status": "already_exists", "event_id": item.get("id"), "title": item_summary, "meal_conflict": True}
     except Exception as check_err:
         logger.warning(f"Google Calendar duplicate check skipped due to notice: {check_err}")
 
@@ -1120,13 +1288,25 @@ def process_user_emails(user_id: str):
                                     email_status = "added"
                                     sync_details = []
                                     for event_data in event_data_list:
+                                        ev_title = event_data.get("title", "Untitled")
+                                        ev_date = event_data.get("date", "")
+                                        ev_desc = event_data.get("description", "")
+                                        ev_loc = event_data.get("location", "")
+                                        
+                                        # Duplicate prevention in local DB
+                                        existing_db = find_existing_event_in_db(user_id, ev_title, ev_date, conn=conn)
+                                        if existing_db:
+                                            logger.info(f"Duplicate check (DB): Event '{ev_title}' on {ev_date} already exists (ID: {existing_db['id']}). Skipping duplicate insertion.")
+                                            sync_details.append(f"Already tracked '{ev_title}' (duplicate skipped)")
+                                            continue
+
                                         event_id = str(uuid.uuid4())
                                         c.execute("INSERT INTO events (id, user_id, account, email_id, title, date, description, location, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')", 
                                                   (event_id, user_id, email_user, msg.uid,
-                                                   event_data.get("title", "Untitled"),
-                                                   event_data.get("date", ""),
-                                                   event_data.get("description", ""),
-                                                   event_data.get("location", "")
+                                                   ev_title,
+                                                   ev_date,
+                                                   ev_desc,
+                                                   ev_loc
                                                   ))
                                         conn.commit()
                                         
@@ -1139,25 +1319,25 @@ def process_user_emails(user_id: str):
                                                 try:
                                                     res = push_event_to_gcal(
                                                         service,
-                                                        event_data.get("title", "Untitled"),
-                                                        event_data.get("description", ""),
-                                                        event_data.get("date", ""),
-                                                        event_data.get("location", "")
+                                                        ev_title,
+                                                        ev_desc,
+                                                        ev_date,
+                                                        ev_loc
                                                     )
                                                     c.execute("UPDATE events SET status='added' WHERE id=?", (event_id,))
                                                     if res.get("status") == "already_exists":
-                                                        logger.info(f"Background: event '{event_data['title']}' already on Google Calendar for {user_id}")
-                                                        sync_details.append(f"Already on Google Calendar '{event_data['title']}'")
+                                                        logger.info(f"Background: event '{ev_title}' already on Google Calendar for {user_id}")
+                                                        sync_details.append(f"Already on Google Calendar '{ev_title}'")
                                                     else:
-                                                        logger.info(f"Background auto-synced event '{event_data['title']}' for {user_id}")
-                                                        sync_details.append(f"Auto-synced '{event_data['title']}' to Google Calendar")
+                                                        logger.info(f"Background auto-synced event '{ev_title}' for {user_id}")
+                                                        sync_details.append(f"Auto-synced '{ev_title}' to Google Calendar")
                                                 except Exception as date_err:
                                                     err_str = str(date_err)
                                                     if "invalid_grant" in err_str:
                                                         logger.warning(f"Google Calendar OAuth token for {user_id} is expired or revoked.")
                                                         sync_details.append("Saved to Dashboard (Google Calendar token expired — reconnect in Settings)")
                                                     else:
-                                                        logger.error(f"Failed to auto-sync event {event_data['title']}: {date_err}")
+                                                        logger.error(f"Failed to auto-sync event {ev_title}: {date_err}")
                                                         sync_details.append(f"Saved to Dashboard (sync error: {err_str})")
                                             except Exception as e:
                                                 err_str = str(e)
@@ -1512,17 +1692,21 @@ def sync_history_email(account: str, uid: str, user_id: str = Depends(verify_aut
             raise HTTPException(status_code=400, detail=f"No calendar events detected in this email: {ai_result.get('reason', '')}")
             
         for ed in extracted:
-            eid = str(uuid.uuid4())
-            c.execute("INSERT INTO events (id, user_id, account, email_id, title, date, description, location, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
-                      (eid, user_id, account, uid, ed.get("title", "Untitled"), ed.get("date", ""), ed.get("description", ""), ed.get("location", "")))
-            event_rows.append({
-                "id": eid,
-                "title": ed.get("title", "Untitled"),
-                "date": ed.get("date", ""),
-                "description": ed.get("description", ""),
-                "location": ed.get("location", ""),
-                "status": "pending"
-            })
+            existing_ev = find_existing_event_in_db(user_id, ed.get("title", ""), ed.get("date", ""), conn=conn)
+            if existing_ev:
+                event_rows.append(existing_ev)
+            else:
+                eid = str(uuid.uuid4())
+                c.execute("INSERT INTO events (id, user_id, account, email_id, title, date, description, location, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
+                          (eid, user_id, account, uid, ed.get("title", "Untitled"), ed.get("date", ""), ed.get("description", ""), ed.get("location", "")))
+                event_rows.append({
+                    "id": eid,
+                    "title": ed.get("title", "Untitled"),
+                    "date": ed.get("date", ""),
+                    "description": ed.get("description", ""),
+                    "location": ed.get("location", ""),
+                    "status": "pending"
+                })
         conn.commit()
         
     synced_count = 0
@@ -1618,10 +1802,14 @@ def bulk_sync_history(req: BulkHistorySync, user_id: str = Depends(verify_auth))
             try:
                 ai_result = extract_event(email_row["body"] or email_row["subject"], email_date, email_row["subject"] or "", settings)
                 for ed in ai_result.get("events", []):
-                    eid = str(uuid.uuid4())
-                    c.execute("INSERT INTO events (id, user_id, account, email_id, title, date, description, location, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
-                              (eid, user_id, acc, uid, ed.get("title", "Untitled"), ed.get("date", ""), ed.get("description", ""), ed.get("location", "")))
-                    event_rows.append({"id": eid, "title": ed.get("title", "Untitled"), "date": ed.get("date", ""), "description": ed.get("description", ""), "location": ed.get("location", "")})
+                    existing_ev = find_existing_event_in_db(user_id, ed.get("title", ""), ed.get("date", ""), conn=conn)
+                    if existing_ev:
+                        event_rows.append(existing_ev)
+                    else:
+                        eid = str(uuid.uuid4())
+                        c.execute("INSERT INTO events (id, user_id, account, email_id, title, date, description, location, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
+                                  (eid, user_id, acc, uid, ed.get("title", "Untitled"), ed.get("date", ""), ed.get("description", ""), ed.get("location", "")))
+                        event_rows.append({"id": eid, "title": ed.get("title", "Untitled"), "date": ed.get("date", ""), "description": ed.get("description", ""), "location": ed.get("location", "")})
             except Exception as ex:
                 all_errors.append(f"AI parse error on email {uid}: {ex}")
                 continue
@@ -4181,6 +4369,191 @@ MEAL_RECIPES_CATALOG = [
     }
 ]
 
+DEFAULT_DAY_RULES = {
+    "Sunday": {
+        "mode": "no_meal",
+        "name": "Sunday Dinner with Family",
+        "notes": "Weekly dinner with extended family — no home cooking or meal prep needed."
+    },
+    "Friday": {
+        "mode": "themed",
+        "name": "Friday Family Pizza Night",
+        "notes": "Pick up favorite frozen pizzas and extra toppings to bake together at home.",
+        "recipe_title": "Friday Family Pizza Night (Frozen Pizzas & Extra Toppings)",
+        "cuisine": "Family Pizza Night",
+        "prep_time": "5 mins",
+        "cook_time": "18 mins",
+        "calories": 650,
+        "base_cost": 12.00,
+        "ingredients": [
+            {"name": "Frozen Pizzas (DiGiorno, Freschetta, or Red Baron - 2 ct)", "category": "Frozen"},
+            {"name": "Shredded Mozzarella Cheese (8 oz)", "category": "Dairy & Eggs"},
+            {"name": "Sliced Pepperoni (5 oz pack)", "category": "Meat & Seafood"},
+            {"name": "Fresh Bell Pepper or Toppings", "category": "Produce"}
+        ],
+        "instructions": [
+            "Preheat oven to 425°F (or per frozen pizza package instructions).",
+            "Unwrap frozen pizzas and place on baking sheets or pizza stone.",
+            "Layer generously with extra shredded mozzarella cheese, pepperoni slices, and desired veggie toppings.",
+            "Bake 15-18 minutes until the crust is crisp-golden and cheese is melted and bubbling.",
+            "Let rest 3 minutes, slice into wedges, and enjoy family pizza night!"
+        ]
+    },
+    "Monday": {"mode": "cook", "name": "", "notes": ""},
+    "Tuesday": {"mode": "cook", "name": "", "notes": ""},
+    "Wednesday": {"mode": "cook", "name": "", "notes": ""},
+    "Thursday": {"mode": "cook", "name": "", "notes": ""},
+    "Saturday": {"mode": "cook", "name": "", "notes": ""}
+}
+
+def build_themed_pizza_night_meal(date_str: str, day_name: str, week_num: int, servings: int, rule: dict, all_stores: list) -> dict:
+    pizza_title = rule.get("name") or "Friday Family Pizza Night"
+    pizza_desc = rule.get("notes") or "Pick up favorite frozen pizzas and extra toppings to bake together at home."
+    cuisine = rule.get("cuisine", "Family Pizza Night")
+    prep_time = rule.get("prep_time", "5 mins")
+    cook_time = rule.get("cook_time", "18 mins")
+    calories = rule.get("calories", 650)
+    instructions = rule.get("instructions", [
+        "Preheat oven to 425°F (or per frozen pizza package instructions).",
+        "Unwrap frozen pizzas and place on baking sheets or pizza stone.",
+        "Layer generously with extra shredded mozzarella cheese, pepperoni slices, and desired veggie toppings.",
+        "Bake 15-18 minutes until the crust is crisp-golden and cheese is melted and bubbling.",
+        "Let rest 3 minutes, slice into wedges, and enjoy family pizza night!"
+    ])
+    
+    target_items = [
+        {"name": "Frozen Pizzas (DiGiorno, Freschetta, or Red Baron - 2 ct)", "search_term": "pizza", "category": "Frozen", "base_cost": 8.00},
+        {"name": "Shredded Mozzarella Cheese (8 oz)", "search_term": "mozzarella cheese", "category": "Dairy & Eggs", "base_cost": 2.50},
+        {"name": "Sliced Pepperoni (5 oz pack)", "search_term": "pepperoni", "category": "Meat & Seafood", "base_cost": 2.50},
+        {"name": "Fresh Bell Pepper or Toppings", "search_term": "bell pepper", "category": "Produce", "base_cost": 1.50}
+    ]
+    
+    ingredients = []
+    sale_highlights = []
+    meal_cost = 0.0
+    meal_savings = 0.0
+    
+    for item in target_items:
+        best_match = find_best_store_for_ingredient(item["search_term"], item["category"], all_stores)
+        ing_cost = item["base_cost"]
+        if best_match["on_sale"]:
+            sale_saving = round(ing_cost * 0.30, 2)
+            meal_savings += sale_saving
+            ing_cost -= sale_saving
+            sale_highlights.append({
+                "item": item["name"].split("(")[0].strip(),
+                "store": best_match["store"],
+                "price": best_match["price"],
+                "savings": f"Save ${sale_saving:.2f} at {best_match['store']}"
+            })
+            
+        meal_cost += ing_cost
+        ingredients.append({
+            "name": item["name"],
+            "category": item["category"],
+            "store": best_match["store"],
+            "price": best_match["price"],
+            "on_sale": best_match["on_sale"],
+            "image_url": best_match.get("image_url", ""),
+            "savings": best_match.get("savings", "")
+        })
+        
+    meal_cost_serv = meal_cost / max(servings, 1)
+    
+    return {
+        "id": str(uuid.uuid4()),
+        "recipe_id": "routine-friday-pizza",
+        "day": day_name,
+        "date": date_str,
+        "week_num": week_num,
+        "meal_type": "Dinner",
+        "title": pizza_title,
+        "description": pizza_desc,
+        "cuisine": cuisine,
+        "prep_time": prep_time,
+        "cook_time": cook_time,
+        "servings": servings,
+        "calories": calories,
+        "key_protein": "pepperoni / cheese",
+        "estimated_cost": f"${meal_cost:.2f}",
+        "estimated_cost_per_serving": f"${meal_cost_serv:.2f}",
+        "sale_highlights": sale_highlights,
+        "ingredients": ingredients,
+        "instructions": instructions,
+        "feedback": None,
+        "calendar_synced": False,
+        "calendar_event_id": None,
+        "is_themed_routine": True,
+        "theme_type": "pizza",
+        "is_no_meal_needed": False,
+        "is_calendar_reserved": False,
+        "_cost_num": meal_cost,
+        "_savings_num": meal_savings
+    }
+
+def build_no_meal_needed_day(date_str: str, day_name: str, week_num: int, servings: int, rule: dict) -> dict:
+    title = rule.get("name") or f"{day_name} Dinner with Family"
+    desc = rule.get("notes") or "Weekly dinner with extended family — no home cooking or meal prep needed."
+    return {
+        "id": str(uuid.uuid4()),
+        "recipe_id": f"no-meal-{day_name.lower()}",
+        "day": day_name,
+        "date": date_str,
+        "week_num": week_num,
+        "meal_type": "Dinner",
+        "title": title,
+        "description": desc,
+        "cuisine": "Family Gathering",
+        "prep_time": "0 min",
+        "cook_time": "0 min",
+        "servings": servings,
+        "calories": 0,
+        "key_protein": "none",
+        "estimated_cost": "$0.00",
+        "estimated_cost_per_serving": "$0.00",
+        "sale_highlights": [],
+        "ingredients": [],
+        "instructions": ["Spend quality time with family. No grocery shopping or home cooking required today!"],
+        "feedback": None,
+        "calendar_synced": False,
+        "calendar_event_id": None,
+        "is_no_meal_needed": True,
+        "is_themed_routine": False,
+        "is_calendar_reserved": False,
+        "_cost_num": 0.0,
+        "_savings_num": 0.0
+    }
+
+def build_calendar_reserved_meal(date_str: str, day_name: str, week_num: int, servings: int, existing_title: str) -> dict:
+    return {
+        "id": str(uuid.uuid4()),
+        "recipe_id": "calendar-reserved",
+        "day": day_name,
+        "date": date_str,
+        "week_num": week_num,
+        "meal_type": "Dinner",
+        "title": f"📅 Scheduled: {existing_title}",
+        "description": f"Pre-scheduled meal already found on your calendar: '{existing_title}'. No duplicate dinner planned.",
+        "cuisine": "Scheduled Event",
+        "prep_time": "0 min",
+        "cook_time": "0 min",
+        "servings": servings,
+        "calories": 0,
+        "key_protein": "calendar",
+        "estimated_cost": "$0.00",
+        "estimated_cost_per_serving": "$0.00",
+        "sale_highlights": [],
+        "ingredients": [],
+        "instructions": [f"Enjoy your pre-scheduled meal: '{existing_title}'!"],
+        "feedback": None,
+        "calendar_synced": True,
+        "calendar_event_id": None,
+        "is_no_meal_needed": False,
+        "is_themed_routine": False,
+        "is_calendar_reserved": True,
+        "_cost_num": 0.0,
+        "_savings_num": 0.0
+    }
 def generate_smart_meal_plan(
     user_id: str,
     plan_type: str = "week",
@@ -4189,7 +4562,9 @@ def generate_smart_meal_plan(
     start_date_str: str = None,
     custom_notes: str = "",
     all_stores: list = None,
-    user_prefs: dict = None
+    user_prefs: dict = None,
+    conn: sqlite3.Connection = None,
+    service = None
 ) -> dict:
     if not all_stores:
         all_stores = []
@@ -4282,12 +4657,46 @@ def generate_smart_meal_plan(
     total_cost = 0.0
     total_savings = 0.0
     day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    day_rules = user_prefs.get("day_rules", DEFAULT_DAY_RULES) if user_prefs else DEFAULT_DAY_RULES
+    if not isinstance(day_rules, dict):
+        day_rules = DEFAULT_DAY_RULES
     
     for i in range(days_count):
         cur_date = start_dt + timedelta(days=i)
         date_str = cur_date.strftime("%Y-%m-%d")
         day_name = day_names[cur_date.weekday()]
         week_num = (i // 7) + 1
+        
+        # 1. Check if calendar already has a meal / dinner event on this date
+        calendar_meal = find_existing_meal_or_food_on_calendar(user_id, date_str, service=service, conn=conn)
+        if calendar_meal:
+            existing_title = calendar_meal.get("title") or calendar_meal.get("event", {}).get("title", "Scheduled Dinner")
+            logger.info(f"Meal plan generator: Found existing calendar meal '{existing_title}' on {date_str}. Reserving day.")
+            m_obj = build_calendar_reserved_meal(date_str, day_name, week_num, servings, existing_title)
+            m_obj.pop("_cost_num", None)
+            m_obj.pop("_savings_num", None)
+            meals.append(m_obj)
+            continue
+            
+        # 2. Check Day-of-Week Routine Rules
+        rule = day_rules.get(day_name, {"mode": "cook"})
+        rule_mode = rule.get("mode", "cook")
+        
+        if rule_mode == "no_meal":
+            logger.info(f"Meal plan generator: Day rule for {day_name} is no_meal ({rule.get('name')}).")
+            m_obj = build_no_meal_needed_day(date_str, day_name, week_num, servings, rule)
+            m_obj.pop("_cost_num", None)
+            m_obj.pop("_savings_num", None)
+            meals.append(m_obj)
+            continue
+            
+        if rule_mode == "themed":
+            logger.info(f"Meal plan generator: Day rule for {day_name} is themed ({rule.get('name')}).")
+            m_obj = build_themed_pizza_night_meal(date_str, day_name, week_num, servings, rule, all_stores)
+            total_cost += m_obj.pop("_cost_num", 0.0)
+            total_savings += m_obj.pop("_savings_num", 0.0)
+            meals.append(m_obj)
+            continue
         
         prev_protein = meals[-1]["key_protein"] if meals else None
         selected_recipe = None
@@ -4374,7 +4783,10 @@ def generate_smart_meal_plan(
             "instructions": selected_recipe["instructions"],
             "feedback": None,
             "calendar_synced": False,
-            "calendar_event_id": None
+            "calendar_event_id": None,
+            "is_no_meal_needed": False,
+            "is_themed_routine": False,
+            "is_calendar_reserved": False
         }
         meals.append(meal_obj)
         
@@ -4400,6 +4812,36 @@ def generate_smart_meal_plan(
 
 # --- Smart Meal Planner Routes ---
 
+class DayRulesSaveRequest(BaseModel):
+    rules: dict
+
+@app.get("/api/meals/rules")
+def get_meal_day_rules(user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
+    c = conn.cursor()
+    c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
+    row = c.fetchone()
+    conn.close()
+    settings = json.loads(row['settings']) if row and row['settings'] else {}
+    user_prefs = settings.get("meal_preferences", {})
+    rules = user_prefs.get("day_rules", DEFAULT_DAY_RULES)
+    return {"status": "success", "rules": rules}
+
+@app.post("/api/meals/rules")
+def save_meal_day_rules(req: DayRulesSaveRequest, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
+    c = conn.cursor()
+    c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
+    row = c.fetchone()
+    settings = json.loads(row['settings']) if row and row['settings'] else {}
+    if "meal_preferences" not in settings:
+        settings["meal_preferences"] = {}
+    settings["meal_preferences"]["day_rules"] = req.rules
+    c.execute("UPDATE users SET settings=? WHERE id=?", (json.dumps(settings), user_id))
+    conn.commit()
+    conn.close()
+    return {"status": "success", "rules": req.rules}
+
 @app.get("/api/meals/current")
 def get_current_meal_plan(user_id: str = Depends(verify_auth)):
     conn = get_db_conn()
@@ -4418,6 +4860,8 @@ def get_current_meal_plan(user_id: str = Depends(verify_auth)):
         "liked_meals": [],
         "disliked_meals": []
     })
+    if "day_rules" not in user_prefs:
+        user_prefs["day_rules"] = DEFAULT_DAY_RULES
     
     c.execute("SELECT count(*) FROM grocery_stores WHERE user_id=?", (user_id,))
     stores_count = c.fetchone()[0]
@@ -4485,6 +4929,15 @@ def create_meal_plan(req: MealPlanGenerateRequest, user_id: str = Depends(verify
         "disliked_meals": []
     })
     
+    token_file = os.path.join(DATA_DIR, f"token_{user_id}.json")
+    service = None
+    if os.path.exists(token_file):
+        try:
+            creds = Credentials.from_authorized_user_file(token_file, SCOPES)
+            service = build('calendar', 'v3', credentials=creds)
+        except Exception as ge:
+            logger.warning(f"Google Calendar check during meal plan generation: {ge}")
+    
     plan = generate_smart_meal_plan(
         user_id=user_id,
         plan_type=req.plan_type,
@@ -4493,7 +4946,9 @@ def create_meal_plan(req: MealPlanGenerateRequest, user_id: str = Depends(verify
         start_date_str=req.start_date,
         custom_notes=req.custom_notes or "",
         all_stores=all_stores,
-        user_prefs=user_prefs
+        user_prefs=user_prefs,
+        conn=conn,
+        service=service
     )
     
     c.execute("""
@@ -4755,9 +5210,40 @@ def sync_meal_to_calendar(plan_id: str, meal_id: str, user_id: str = Depends(ver
         conn.close()
         raise HTTPException(status_code=404, detail="Meal not found in plan.")
         
-    event_id = str(uuid.uuid4())
     event_date = f"{target_meal['date']}T18:30:00"
-    event_title = f"🍽️ Dinner: {target_meal['title']}"
+    
+    # Check if Google Calendar is authorized for user
+    token_file = os.path.join(DATA_DIR, f"token_{user_id}.json")
+    service = None
+    if os.path.exists(token_file):
+        try:
+            creds = Credentials.from_authorized_user_file(token_file, SCOPES)
+            service = build('calendar', 'v3', credentials=creds)
+        except Exception as e:
+            logger.warning(f"Google Calendar auth error in sync_meal: {e}")
+
+    # Deduplication: check if meal or food event is already on calendar for this date
+    existing_cal_meal = find_existing_meal_or_food_on_calendar(user_id, target_meal['date'], service=service, conn=conn)
+    if existing_cal_meal:
+        logger.info(f"Meal already on calendar for {target_meal['date']}: '{existing_cal_meal.get('title')}'. Skipping duplicate.")
+        target_meal["calendar_synced"] = True
+        if existing_cal_meal.get("id"):
+            target_meal["calendar_event_id"] = existing_cal_meal.get("id")
+        now = datetime.now().isoformat()
+        c.execute("UPDATE meal_plans SET meals_data=?, updated_at=? WHERE id=? AND user_id=?", (json.dumps(meals), now, plan_id, user_id))
+        conn.commit()
+        conn.close()
+        return {"status": "success", "event_id": existing_cal_meal.get("id"), "synced": True, "already_existed": True, "title": existing_cal_meal.get("title")}
+
+    event_id = str(uuid.uuid4())
+    if target_meal.get("is_no_meal_needed"):
+        event_title = f"👨‍👩‍👧 {target_meal['title']}"
+    elif target_meal.get("is_themed_routine"):
+        event_title = f"🍕 {target_meal['title']}"
+    else:
+        event_title = f"🍽️ Dinner: {target_meal['title']}"
+    # event_date set above
+    # event_title set above with routine emojis
     
     ing_lines = []
     for ing in target_meal.get("ingredients", []):
@@ -4786,7 +5272,7 @@ def sync_meal_to_calendar(plan_id: str, meal_id: str, user_id: str = Depends(ver
         try:
             creds = Credentials.from_authorized_user_file(token_file, SCOPES)
             service = build('calendar', 'v3', credentials=creds)
-            push_event_to_gcal(service, event_title, event_desc, event_date, first_store)
+            push_event_to_gcal(service, event_title, event_desc, event_date, first_store, is_meal=True)
             status = "added"
         except Exception as e:
             logger.warning(f"Could not push meal to Google Calendar directly: {e}")
@@ -4829,9 +5315,23 @@ def sync_all_meals_to_calendar(plan_id: str, user_id: str = Depends(verify_auth)
         if target_meal.get("calendar_synced"):
             continue
             
+        existing_cal = find_existing_meal_or_food_on_calendar(user_id, target_meal['date'], service=service, conn=conn)
+        if existing_cal:
+            logger.info(f"Calendar check: meal '{existing_cal.get('title')}' already exists on {target_meal['date']}. Skipping duplicate.")
+            target_meal["calendar_synced"] = True
+            if existing_cal.get("id"):
+                target_meal["calendar_event_id"] = existing_cal.get("id")
+            synced_count += 1
+            continue
+            
         event_id = str(uuid.uuid4())
         event_date = f"{target_meal['date']}T18:30:00"
-        event_title = f"🍽️ Dinner: {target_meal['title']}"
+        if target_meal.get("is_no_meal_needed"):
+            event_title = f"👨‍👩‍👧 {target_meal['title']}"
+        elif target_meal.get("is_themed_routine"):
+            event_title = f"🍕 {target_meal['title']}"
+        else:
+            event_title = f"🍽️ Dinner: {target_meal['title']}"
         
         ing_lines = [f"- {ing['name']} ({ing['store']} • {ing['price']})" for ing in target_meal.get("ingredients", [])]
         step_lines = [f"{idx+1}. {s}" for idx, s in enumerate(target_meal.get("instructions", []))]
@@ -4850,7 +5350,7 @@ def sync_all_meals_to_calendar(plan_id: str, user_id: str = Depends(verify_auth)
         status = "pending"
         if service:
             try:
-                push_event_to_gcal(service, event_title, event_desc, event_date, first_store)
+                push_event_to_gcal(service, event_title, event_desc, event_date, first_store, is_meal=True)
                 status = "added"
             except Exception:
                 pass
