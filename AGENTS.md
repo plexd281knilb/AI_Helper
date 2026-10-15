@@ -168,8 +168,22 @@ All tables are initialized and automatically migrated on startup in `init_db()` 
 | `updated_at` | TEXT | ISO last updated timestamp |
 | `meals_data` | TEXT (JSON) | Complete JSON array of meal objects with on-sale highlights, ingredients, directions, and feedback |
 | `dietary_pref` | TEXT | Dietary filter (e.g. "All", "High Protein", "Budget Saver", "Low Carb", "Quick & Easy", "Mediterranean") |
-| `servings` | INTEGER | Servings per meal (default `4`) |
+| `servings` | INTEGER | Servings per meal (default `5` for family profile) |
 | `notes` | TEXT | Optional custom notes or dietary instructions |
+
+### `site_suggestions`
+| Column | Type | Description |
+|---|---|---|
+| `id` | TEXT PRIMARY KEY | Suggestion UUID |
+| `user_id` | TEXT | Foreign key referencing `users.id` |
+| `author` | TEXT | Person submitting suggestion (e.g. "Wife", "Dom") |
+| `page` | TEXT | Target page / area (e.g. "Dashboard", "Meal Planner", "General") |
+| `title` | TEXT | Short summary / title of suggested edit |
+| `description` | TEXT | Detailed feedback, tweak, or feature request |
+| `priority` | TEXT | `'improvement'`, `'idea'`, `'fix'`, or `'high'` |
+| `status` | TEXT | `'open'` or `'completed'` (soft-archived and removed from active view once updated) |
+| `created_at` | TEXT | ISO creation timestamp |
+| `updated_at` | TEXT | ISO last updated timestamp |
 
 ### Database Indexes
 For fast sub-millisecond query performance on multi-user and large datasets, the following indexes are maintained in `init_db()`:
@@ -181,6 +195,7 @@ For fast sub-millisecond query performance on multi-user and large datasets, the
 - `idx_gl_user` on `grocery_lists(user_id)`
 - `idx_gli_list_user` on `grocery_list_items(list_id, user_id)`
 - `idx_mp_user_date` on `meal_plans(user_id, start_date DESC)`
+- `idx_sug_user_status` on `site_suggestions(user_id, status, created_at DESC)`
 
 ---
 
@@ -267,11 +282,28 @@ For fast sub-millisecond query performance on multi-user and large datasets, the
 - **Configurable Day-of-Week Routine & Skip Rules (`/api/meals/rules`)**:
   - **Skip Days / Family Gatherings**: Configurable days where home cooking is not needed (pre-seeded with **Sunday Dinner with Family**), generating clean cards with $0 cost and no ingredient clutter.
   - **Themed Routines**: Configurable recurring theme nights (pre-seeded with **Friday Family Pizza Night**), automatically querying active circulars for frozen pizzas (Red Baron, Freschetta, DiGiorno) and extra toppings (mozzarella cheese, pepperoni, bell peppers).
-  - **Routine & Skip Days Modal**: In `static/index.html`, users can configure every day of the week with 1-click presets (`👨‍👩‍👧 Sunday Family Dinner`, `🍕 Friday Pizza Night`, `🌮 Taco Tuesday`, `🔄 Reset Defaults`).
+  - **Effort Levels by Weekday**: Configurable effort per day (`easy` < 25m, `standard` 30-40m, `involved` 45-75m). The planner automatically prioritizes quick dinners on busy weekdays and more involved/gourmet meals on weekends.
+  - **Routine & Skip Days Modal**: In `static/index.html`, users can configure every day of the week with 1-click presets (`👨‍👩‍👧 Sunday Family Dinner`, `🍕 Friday Pizza Night`, `🌮 Taco Tuesday`, `⚡ Fast Week & Gourmet Weekend`, `🔄 Reset Defaults`).
+- **Family Profile & Scientific Portion Sizing (`/api/meals/family_profile`)**:
+  - Direct 5-person family sizing (and scalable to any household roster) taking into account member ages, gender, and appetites.
+  - Calculates USDA Dietary Reference Intake (DRI) ratios and real batch quantities for dinner preparation: recommended raw meat/protein (~2.5 lbs), fresh produce (~1.8 lbs), starches (~1.5 lbs), and dinner batch calories (~3,100 kcal).
+- **Bulk Ingredient Synergy Engine**:
+  - Automatically identifies ingredient overlap across dinners in the week (e.g. pairing Monday Lemon Chicken Piccata with Thursday Sheet Pan Fajitas to purchase a 5 lb family pack of chicken breasts; or Tuesday Pork Chops with Wednesday Pork Tenderloin).
+  - Reduces food waste and leverages family bulk packaging at Costco, Sam's Club, and H-E-B to lower grocery bills by $4.50–$6.50/week.
+- **Nutritional Macro Tracking**:
+  - Tracks and displays calories, protein (g), carbohydrates (g), healthy fats (g), and dietary fiber (g) per serving and for the whole family batch on meal cards and synced calendar events.
 - **Interactive Preference Learning (👍 / 👎 Feedback)**: Users can give thumbs up or thumbs down to individual meals. Feedback is permanently stored in `users.settings.meal_preferences` (`liked_cuisines`, `disliked_cuisines`, `liked_ingredients`, `disliked_ingredients`, `liked_meals`, `disliked_meals`) and continuously shapes future plan generations and single-meal recipe swaps.
 - **Instant Single-Meal Swapping (🔄)**: Replaces any individual dinner with an alternative on-sale recipe respecting the user's dietary preferences without altering the rest of the week's or month's schedule.
-- **1-Click Google Calendar Synchronization**: Push individual meals or the entire plan (`/api/meals/{plan_id}/calendar_all`) to the calendar with duplicate prevention. Automatically creates detailed dinner events (6:30 PM) populated with recipe descriptions, on-sale ingredient notes, and numbered step-by-step cooking directions.
+- **1-Click Google Calendar Synchronization**: Push individual meals or the entire plan (`/api/meals/{plan_id}/calendar_all`) to the calendar with duplicate prevention. Automatically creates detailed dinner events (6:30 PM) populated with recipe descriptions, on-sale ingredient notes, macro breakdown, and numbered step-by-step cooking directions.
 - **Store-by-Store Lowest-Price Grocery Export**: Batch exports all recipe ingredients into `grocery_lists` / `grocery_list_items`. Each ingredient is automatically mapped to the specific supermarket offering the lowest price (e.g. Ribeye -> Albertsons, Asparagus -> Sprouts, Butter -> ALDI) with high-res packaging/cutout product photos and discount notes.
+
+### 9. Universal Site Suggestions & Wife Edit Request Engine (`/api/suggestions/*`)
+- **Universal "💡 Suggest Edit" Button**: Floating, non-intrusive action button accessible across every page and tab of the application, alongside quick triggers in the navigation sidebar and mobile drawer.
+- **Context-Aware Submissions**: Automatically detects the active page (e.g., Dashboard, Meal Planner, Deals & Groceries) and allows the wife or family members to log suggestions, tweaks, and bug reports.
+- **Persistent Storage & Lifecycle**:
+  - Saved to `site_suggestions` SQLite table.
+  - Open suggestions are listed with live notification badges on the floating button.
+  - Features a 1-click **"✓ Mark Done & Remove"** button so completed updates are soft-resolved and archived out of the active view.
 
 ---
 
@@ -342,8 +374,14 @@ For fast sub-millisecond query performance on multi-user and large datasets, the
 | `POST` | `/api/meals/{plan_id}/calendar_all` | Bulk sync all meals in plan to Calendar | Yes |
 | `POST` | `/api/meals/{plan_id}/export_grocery_list` | Batch export ingredients to grocery list with best store pricing | Yes |
 | `DELETE` | `/api/meals/{plan_id}` | Delete a meal plan | Yes |
-| `GET` | `/api/meals/rules` | Get day-of-week routine and skip rules (e.g. Sunday family dinner, Friday pizza night) | Yes |
+| `GET` | `/api/meals/rules` | Get day-of-week routine and skip rules (e.g. Sunday family dinner, Friday pizza night, effort levels) | Yes |
 | `POST` | `/api/meals/rules` | Update day-of-week routine and skip rules | Yes |
+| `GET` | `/api/meals/family_profile` | Get user family roster, ages, gender, appetites, and USDA nutrition metrics | Yes |
+| `POST` | `/api/meals/family_profile` | Update user family profile and scientific portion settings | Yes |
+| `GET` | `/api/suggestions` | List site edit suggestions and feature requests | Yes |
+| `POST` | `/api/suggestions` | Submit a new edit suggestion from wife / user | Yes |
+| `PUT` | `/api/suggestions/{id}` | Update suggestion status (e.g. mark completed & removed) | Yes |
+| `DELETE` | `/api/suggestions/{id}` | Delete a suggestion permanently | Yes |
 
 ---
 

@@ -1628,6 +1628,230 @@
             font-size: 48px;
             margin-bottom: 15px;
         }
+    
+        /* Floating Suggestion Button & Badges */
+        .floating-suggest-btn {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            color: #000;
+            border: none;
+            border-radius: 9999px;
+            padding: 10px 18px;
+            font-size: 13.5px;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            box-shadow: 0 6px 20px rgba(245, 158, 11, 0.4);
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .floating-suggest-btn:hover {
+            transform: translateY(-2px) scale(1.03);
+            box-shadow: 0 10px 25px rgba(245, 158, 11, 0.55);
+        }
+        .floating-sugg-badge {
+            background: #ef4444;
+            color: #fff;
+            font-size: 11px;
+            font-weight: 800;
+            padding: 1px 6px;
+            border-radius: 9999px;
+            margin-left: 2px;
+        }
+        
+        /* Effort Level Badges */
+        .badge-effort {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 2.5px 8px;
+            border-radius: 6px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            letter-spacing: 0.2px;
+        }
+        .badge-effort.easy {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.35);
+        }
+        .badge-effort.standard {
+            background: rgba(59, 130, 246, 0.15);
+            color: #60a5fa;
+            border: 1px solid rgba(59, 130, 246, 0.35);
+        }
+        .badge-effort.involved {
+            background: rgba(168, 85, 247, 0.18);
+            color: #d8b4fe;
+            border: 1px solid rgba(168, 85, 247, 0.4);
+        }
+
+        /* Macro Pills Row */
+        .meal-macros-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin: 8px 0 12px 0;
+            align-items: center;
+        }
+        .macro-pill {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 2.5px 7px;
+            border-radius: 5px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .macro-pill.cals {
+            background: rgba(245, 158, 11, 0.15);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+        .macro-pill.protein {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        .macro-pill.carbs {
+            background: rgba(234, 179, 8, 0.15);
+            color: #facc15;
+            border: 1px solid rgba(234, 179, 8, 0.3);
+        }
+        .macro-pill.fat {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        .macro-pill.fiber {
+            background: rgba(168, 85, 247, 0.15);
+            color: #c084fc;
+            border: 1px solid rgba(168, 85, 247, 0.3);
+        }
+        
+        /* Bulk Buy Reuse Box */
+        .meal-bulk-box {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(6, 182, 212, 0.1) 100%);
+            border: 1px solid rgba(16, 185, 129, 0.35);
+            border-radius: var(--radius-sm);
+            padding: 8px 12px;
+            margin-bottom: 12px;
+            font-size: 12px;
+            color: #a7f3d0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .bulk-save-pill {
+            background: rgba(16, 185, 129, 0.25);
+            color: #34d399;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 9999px;
+            font-size: 11px;
+            white-space: nowrap;
+        }
+
+        /* Family Servings & Portion Guidance */
+        .meal-family-guide {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: var(--radius-sm);
+            padding: 7px 10px;
+            font-size: 12px;
+            color: #cbd5e1;
+            margin-bottom: 12px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 6px;
+        }
+        .meal-batch-cals {
+            color: #94a3b8;
+            font-size: 11.5px;
+        }
+        
+        /* Suggestion Tab styling */
+        .sugg-tab-btn {
+            background: transparent;
+            border: none;
+            color: #94a3b8;
+            padding: 8px 14px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .sugg-tab-btn.active {
+            color: #f59e0b;
+            border-bottom-color: #f59e0b;
+        }
+        .sugg-card {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 14px 16px;
+            margin-bottom: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .sugg-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .sugg-page-tag {
+            background: rgba(59, 130, 246, 0.15);
+            color: #60a5fa;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            font-size: 11px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+        .sugg-author-tag {
+            background: rgba(236, 72, 153, 0.15);
+            color: #f472b6;
+            border: 1px solid rgba(236, 72, 153, 0.3);
+            font-size: 11px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+        .sugg-priority-tag {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 4px;
+        }
+        .sugg-priority-tag.high {
+            background: rgba(239, 68, 68, 0.2);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.4);
+        }
+        .sugg-priority-tag.improvement {
+            background: rgba(245, 158, 11, 0.2);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.4);
+        }
+        .sugg-priority-tag.idea {
+            background: rgba(168, 85, 247, 0.2);
+            color: #d8b4fe;
+            border: 1px solid rgba(168, 85, 247, 0.4);
+        }
+        .sugg-priority-tag.fix {
+            background: rgba(239, 68, 68, 0.15);
+            color: #fca5a5;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
     </style>
 </head>
 <body>
@@ -1657,6 +1881,7 @@
                 </div>
             </div>
             <div style="display: flex; align-items: center; gap: 8px;">
+                <button class="mobile-menu-btn" onclick="openSuggestionModal()" title="Suggest Edit" style="color: #fbbf24; border-color: rgba(245, 158, 11, 0.4); padding: 4px 8px; font-size: 14px;">💡</button>
                 <button class="mobile-fetch-btn" onclick="fetchEmails()" title="Fetch New Emails">📥 Fetch</button>
                 <div class="user-avatar-mini" id="mobile-user-avatar" onclick="toggleMobileSidebar()">U</div>
             </div>
@@ -1707,6 +1932,11 @@
                     <button class="tab-link nav-tree-item" onclick="openTab('meals', event)">
                         <span class="nav-item-icon">🍲</span>
                         <span>Meal Planner</span>
+                    </button>
+                    <button class="tab-link nav-tree-item" id="nav-sugg-btn" onclick="openSuggestionModal()">
+                        <span class="nav-item-icon">💡</span>
+                        <span>Site Suggestions</span>
+                        <span id="sidebar-sugg-badge" class="brand-badge-mini" style="display: none; margin-left: auto; background: #f59e0b; color: #000; font-weight: 800;">0</span>
                     </button>
 
                     <!-- Administration Paths (Admin Only) -->
@@ -2250,6 +2480,156 @@
                 </div>
             </div>
 
+            <!-- Site Suggestions Modal (Accessible from ALL pages) -->
+            <div id="site-suggestion-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 10000; justify-content: center; align-items: center; padding: 20px;">
+                <div class="account-box" style="width: 95%; max-width: 680px; max-height: 90vh; display: flex; flex-direction: column; background: #161b22; border: 1px solid #f59e0b; border-radius: var(--radius-md); padding: 24px; box-shadow: 0 12px 35px rgba(245, 158, 11, 0.35); overflow-y: auto;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
+                        <div>
+                            <h2 style="margin: 0 0 4px 0; color: #fff; display: flex; align-items: center; gap: 8px; font-size: 18px;">
+                                <span>💡</span> Site Suggestions &amp; Edit Requests
+                            </h2>
+                            <p style="margin: 0; color: #94a3b8; font-size: 13px;">
+                                Suggest edits, tweaks, or new features for the site. Suggestions stay stored here and are removed once the update is made.
+                            </p>
+                        </div>
+                        <button onclick="closeSuggestionModal()" style="background: none; border: none; color: #94a3b8; font-size: 20px; cursor: pointer;">✕</button>
+                    </div>
+
+                    <!-- Tabs Header -->
+                    <div style="display: flex; gap: 4px; border-bottom: 1px solid #30363d; margin-bottom: 16px;">
+                        <button class="sugg-tab-btn active" id="sugg-tab-btn-new" onclick="switchSuggestionTab('new')">✍️ New Suggestion</button>
+                        <button class="sugg-tab-btn" id="sugg-tab-btn-open" onclick="switchSuggestionTab('open')">
+                            📋 Open Suggestions (<span id="sugg-open-badge-count">0</span>)
+                        </button>
+                        <button class="sugg-tab-btn" id="sugg-tab-btn-completed" onclick="switchSuggestionTab('completed')">✓ Resolved Archive</button>
+                    </div>
+
+                    <div id="sugg-modal-msg" style="margin-bottom: 10px;"></div>
+
+                    <!-- Tab 1: New Suggestion Form -->
+                    <div id="sugg-pane-new">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+                            <div class="form-group" style="margin: 0;">
+                                <label style="font-size: 12.5px; font-weight: 600; color: #cbd5e1;">Who is making this suggestion?</label>
+                                <input type="text" id="sugg-author-input" value="Wife" placeholder="e.g. Wife, Dom..." style="width: 100%; box-sizing: border-box; background: #0d1117; border: 1px solid #334155; border-radius: 6px; color: #fff; padding: 8px 10px;">
+                            </div>
+                            <div class="form-group" style="margin: 0;">
+                                <label style="font-size: 12.5px; font-weight: 600; color: #cbd5e1;">Page / Area</label>
+                                <select id="sugg-page-select" style="width: 100%; box-sizing: border-box; background: #0d1117; border: 1px solid #334155; border-radius: 6px; color: #fff; padding: 8px 10px;">
+                                    <option value="Dashboard">📅 Dashboard (Calendar Events)</option>
+                                    <option value="Email History">📬 Email History</option>
+                                    <option value="Deals & Groceries">🛒 Deals &amp; Groceries</option>
+                                    <option value="Meal Planner">🍲 Meal Planner</option>
+                                    <option value="Routine & Skip Days">⚙️ Routine &amp; Skip Days</option>
+                                    <option value="Family Profile">👨‍👩‍👧‍👦 Family Profile &amp; Portions</option>
+                                    <option value="Settings">⚙️ System Settings</option>
+                                    <option value="General">🌐 Entire Site / General</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 14px;">
+                            <label style="font-size: 12.5px; font-weight: 600; color: #cbd5e1;">Title / Brief Summary</label>
+                            <input type="text" id="sugg-title-input" placeholder="e.g. Add kid-friendly tag to dinner recipes, make mobile buttons larger..." style="width: 100%; box-sizing: border-box; background: #0d1117; border: 1px solid #334155; border-radius: 6px; color: #fff; padding: 8px 10px;">
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 14px;">
+                            <label style="font-size: 12.5px; font-weight: 600; color: #cbd5e1;">Edit Details &amp; Thoughts</label>
+                            <textarea id="sugg-desc-input" rows="4" placeholder="Describe exactly what should be changed, added, or improved on this page..." style="width: 100%; box-sizing: border-box; background: #0d1117; border: 1px solid #334155; border-radius: 6px; color: #fff; padding: 8px 10px;"></textarea>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 18px;">
+                            <label style="font-size: 12.5px; font-weight: 600; color: #cbd5e1;">Priority / Type</label>
+                            <select id="sugg-priority-select" style="width: 100%; box-sizing: border-box; background: #0d1117; border: 1px solid #334155; border-radius: 6px; color: #fff; padding: 8px 10px;">
+                                <option value="improvement" selected>✨ Improvement (Nice to have / Looks good)</option>
+                                <option value="idea">💡 Idea / New Feature</option>
+                                <option value="fix">🐛 Bug / Fix needed</option>
+                                <option value="high">⭐ High Priority (Needs attention)</option>
+                            </select>
+                        </div>
+
+                        <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border-color); padding-top: 14px;">
+                            <button class="remove-btn" onclick="closeSuggestionModal()" style="margin: 0; background: #374151; color: #e5e7eb;">Cancel</button>
+                            <button class="save-btn" id="sugg-submit-btn" onclick="submitSiteSuggestion()" style="margin: 0; background: #f59e0b; color: #000; font-weight: 700;">💡 Submit Suggestion</button>
+                        </div>
+                    </div>
+
+                    <!-- Tab 2: Open Suggestions List -->
+                    <div id="sugg-pane-open" style="display: none;">
+                        <div id="sugg-open-list-container">
+                            <p style="color: #94a3b8; font-size: 13px;">Loading suggestions...</p>
+                        </div>
+                    </div>
+
+                    <!-- Tab 3: Completed Archive -->
+                    <div id="sugg-pane-completed" style="display: none;">
+                        <div id="sugg-completed-list-container">
+                            <p style="color: #94a3b8; font-size: 13px;">Loading completed suggestions...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Family Profile & Portion Calculation Modal -->
+            <div id="family-profile-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 10000; justify-content: center; align-items: center; padding: 20px;">
+                <div class="account-box" style="width: 95%; max-width: 780px; max-height: 90vh; display: flex; flex-direction: column; background: #161b22; border: 1px solid #38bdf8; border-radius: var(--radius-md); padding: 24px; box-shadow: 0 12px 35px rgba(56, 189, 248, 0.3); overflow-y: auto;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
+                        <div>
+                            <h2 style="margin: 0 0 4px 0; color: #fff; display: flex; align-items: center; gap: 8px; font-size: 18px;">
+                                <span>👨‍👩‍👧‍👦</span> Family Profile &amp; Scientific Portion Sizing
+                            </h2>
+                            <p style="margin: 0; color: #94a3b8; font-size: 13px;">
+                                Set ages and gender for all 5 (or more) family members so the AI meal planner knows exactly how much food (proteins, produce, and sides) to prepare.
+                            </p>
+                        </div>
+                        <button onclick="closeFamilyProfileModal()" style="background: none; border: none; color: #94a3b8; font-size: 20px; cursor: pointer;">✕</button>
+                    </div>
+
+                    <!-- Calculated Nutrition & Portion Banner -->
+                    <div id="family-nutrition-card" style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 8px; padding: 14px 16px; margin-bottom: 18px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
+                            <strong style="color: #38bdf8; font-size: 14px;" id="family-profile-summary-label">5 Family Members (2 Adults, 1 Teen, 2 Kids)</strong>
+                            <span class="badge-blue" id="family-multiplier-badge">5.28x Standard Portions</span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; font-size: 12.5px; color: #cbd5e1;">
+                            <div style="background: rgba(0,0,0,0.25); padding: 8px; border-radius: 6px;">
+                                <div style="color: #94a3b8; font-size: 11px;">Recommended Raw Meat</div>
+                                <strong style="color: #f87171; font-size: 14px;" id="calc-rec-protein">~2.5 lbs</strong>
+                            </div>
+                            <div style="background: rgba(0,0,0,0.25); padding: 8px; border-radius: 6px;">
+                                <div style="color: #94a3b8; font-size: 11px;">Recommended Produce</div>
+                                <strong style="color: #34d399; font-size: 14px;" id="calc-rec-produce">~1.8 lbs</strong>
+                            </div>
+                            <div style="background: rgba(0,0,0,0.25); padding: 8px; border-radius: 6px;">
+                                <div style="color: #94a3b8; font-size: 11px;">Recommended Starches</div>
+                                <strong style="color: #fbbf24; font-size: 14px;" id="calc-rec-starches">~1.5 lbs</strong>
+                            </div>
+                            <div style="background: rgba(0,0,0,0.25); padding: 8px; border-radius: 6px;">
+                                <div style="color: #94a3b8; font-size: 11px;">Batch Dinner Calories</div>
+                                <strong style="color: #a78bfa; font-size: 14px;" id="calc-batch-cals">~3,100 kcal</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="family-profile-msg" style="margin-bottom: 10px;"></div>
+
+                    <!-- Family Members List -->
+                    <div style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+                        <strong style="color: #f8fafc; font-size: 13.5px;">Family Members Roster:</strong>
+                        <button type="button" class="add-btn" onclick="addFamilyMemberRow()" style="margin: 0; padding: 4px 10px; font-size: 12px; background: #0284c7;">+ Add Family Member</button>
+                    </div>
+
+                    <div id="family-members-table-container" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;">
+                        <!-- Injected by renderFamilyProfile() -->
+                    </div>
+
+                    <div style="display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border-color); padding-top: 14px;">
+                        <button class="remove-btn" onclick="closeFamilyProfileModal()" style="margin: 0; background: #374151; color: #e5e7eb;">Cancel</button>
+                        <button class="save-btn" id="save-family-profile-btn" onclick="saveFamilyProfile()" style="margin: 0; background: #0284c7; color: #fff; font-weight: 700;">💾 Save Family Profile</button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Day Rules & Routine Modal -->
             <div id="day-rules-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center; padding: 20px;">
                 <div class="account-box" style="width: 95%; max-width: 780px; max-height: 90vh; display: flex; flex-direction: column; background: #161b22; border: 1px solid #30363d; border-radius: var(--radius-md); padding: 24px; box-shadow: 0 12px 35px rgba(0,0,0,0.7); overflow-y: auto;">
@@ -2330,10 +2710,16 @@
                     <div class="meals-control-group">
                         <span style="font-size: 13px; color: #94a3b8; font-weight: 600;">Servings:</span>
                         <select id="meals-servings-select" class="meals-select">
+                            <option value="1">1 Person</option>
                             <option value="2">2 People</option>
-                            <option value="4" selected>4 People (Family)</option>
+                            <option value="3">3 People</option>
+                            <option value="4">4 People</option>
+                            <option value="5" selected>5 People (Our Family)</option>
                             <option value="6">6 People</option>
+                            <option value="7">7 People</option>
                             <option value="8">8 People</option>
+                            <option value="9">9 People</option>
+                            <option value="10">10 People</option>
                         </select>
                     </div>
 
@@ -2347,6 +2733,9 @@
                     </button>
                     <button class="btn-meal-action" onclick="openDayRulesModal()" style="padding: 10px 16px; font-size: 13px; background: rgba(51, 65, 85, 0.8); border: 1px solid #475569; border-radius: 8px; cursor: pointer; color: #f8fafc; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s ease;">
                         ⚙️ Routine &amp; Skip Days
+                    </button>
+                    <button class="btn-meal-action" onclick="openFamilyProfileModal()" style="padding: 10px 16px; font-size: 13px; background: rgba(51, 65, 85, 0.8); border: 1px solid #475569; border-radius: 8px; cursor: pointer; color: #f8fafc; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s ease;">
+                        👨‍👩‍👧‍👦 Family Profile &amp; Portions
                     </button>
                 </div>
 
@@ -2744,6 +3133,7 @@
         }
 
         function initializeApp() {
+            loadSiteSuggestions();
             loadSettings().then(() => {
                 const initialTab = getCurrentTabFromUrl();
                 openTab(initialTab, null, true);
@@ -6110,19 +6500,21 @@
         const DEFAULT_CLIENT_DAY_RULES = {
             "Sunday": {
                 "mode": "no_meal",
+                "effort": "easy",
                 "name": "Sunday Dinner with Family",
                 "notes": "Weekly dinner with extended family — no home cooking or meal prep needed."
             },
+            "Monday": {"mode": "cook", "effort": "easy", "name": "", "notes": "Quick weeknight dinner (< 25 min)"},
+            "Tuesday": {"mode": "cook", "effort": "easy", "name": "", "notes": "Busy weeknight — quick skillet or sheet pan"},
+            "Wednesday": {"mode": "cook", "effort": "standard", "name": "", "notes": "Midweek standard cooking (30-40 min)"},
+            "Thursday": {"mode": "cook", "effort": "easy", "name": "", "notes": "Almost Friday — quick prep dinner"},
             "Friday": {
                 "mode": "themed",
+                "effort": "easy",
                 "name": "Friday Family Pizza Night",
                 "notes": "Pick up favorite frozen pizzas and extra toppings to bake together at home."
             },
-            "Monday": {"mode": "cook", "name": "", "notes": ""},
-            "Tuesday": {"mode": "cook", "name": "", "notes": ""},
-            "Wednesday": {"mode": "cook", "name": "", "notes": ""},
-            "Thursday": {"mode": "cook", "name": "", "notes": ""},
-            "Saturday": {"mode": "cook", "name": "", "notes": ""}
+            "Saturday": {"mode": "cook", "effort": "involved", "name": "", "notes": "Weekend cooking — more time for gourmet or slow simmer"}
         };
 
         async function openDayRulesModal() {
@@ -6157,8 +6549,9 @@
             const daysOrder = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
             
             container.innerHTML = daysOrder.map(day => {
-                const rule = (userDayRules && userDayRules[day]) ? userDayRules[day] : {mode: "cook", name: "", notes: ""};
+                const rule = (userDayRules && userDayRules[day]) ? userDayRules[day] : {mode: "cook", effort: "standard", name: "", notes: ""};
                 const mode = rule.mode || "cook";
+                const effort = rule.effort || "standard";
                 const isNoMeal = mode === "no_meal";
                 const isThemed = mode === "themed";
                 
@@ -6168,19 +6561,34 @@
                 } else if (isThemed) {
                     badgeHtml = '<span style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); font-size: 11px; padding: 2px 8px; border-radius: 9999px; font-weight: 600;">🍕 Themed Routine</span>';
                 }
+                
+                let effortBadge = '';
+                if (!isNoMeal) {
+                    const effCls = effort === 'easy' ? 'easy' : (effort === 'involved' ? 'involved' : 'standard');
+                    const effText = effort === 'easy' ? '⚡ Quick & Easy' : (effort === 'involved' ? '👨‍🍳 More Involved' : '🍳 Standard');
+                    effortBadge = `<span class="badge-effort ${effCls}">${effText}</span>`;
+                }
 
                 return `
                     <div style="background: #0d1117; border: 1px solid ${isNoMeal ? '#9333ea' : (isThemed ? '#d97706' : '#30363d')}; border-radius: 8px; padding: 12px 16px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <strong style="font-size: 14px; color: #f8fafc;">${day}</strong>
                                 ${badgeHtml}
+                                ${effortBadge}
                             </div>
-                            <div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <div style="display: ${isNoMeal ? 'none' : 'block'};">
+                                    <select id="rule-effort-${day}" onchange="onDayRuleEffortChange('${day}')" style="background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; padding: 4px 8px; font-size: 12px;">
+                                        <option value="easy" ${effort === 'easy' ? 'selected' : ''}>⚡ Quick &amp; Easy (&lt; 25 min)</option>
+                                        <option value="standard" ${effort === 'standard' ? 'selected' : ''}>🍳 Standard (30-45 min)</option>
+                                        <option value="involved" ${effort === 'involved' ? 'selected' : ''}>👨‍🍳 More Involved / Gourmet (45-75 min)</option>
+                                    </select>
+                                </div>
                                 <select id="rule-mode-${day}" onchange="onDayRuleModeChange('${day}')" style="background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; padding: 4px 8px; font-size: 12px;">
-                                    <option value="cook" ${mode === 'cook' ? 'selected' : ''}>🍳 Cook at Home (Standard Recipe)</option>
-                                    <option value="no_meal" ${mode === 'no_meal' ? 'selected' : ''}>👨‍👩‍👧 No Meal Needed (Family Dinner / Skip)</option>
-                                    <option value="themed" ${mode === 'themed' ? 'selected' : ''}>🍕 Themed Routine (Pizza Night / Favorites)</option>
+                                    <option value="cook" ${mode === 'cook' ? 'selected' : ''}>🍳 Cook at Home</option>
+                                    <option value="no_meal" ${mode === 'no_meal' ? 'selected' : ''}>👨‍👩‍👧 No Meal Needed (Skip)</option>
+                                    <option value="themed" ${mode === 'themed' ? 'selected' : ''}>🍕 Themed Routine</option>
                                 </select>
                             </div>
                         </div>
@@ -6199,10 +6607,20 @@
             }).join('');
         }
 
+        function onDayRuleEffortChange(day) {
+            const effortSelect = document.getElementById(`rule-effort-${day}`);
+            if (!effortSelect) return;
+            if (!userDayRules) userDayRules = JSON.parse(JSON.stringify(DEFAULT_CLIENT_DAY_RULES));
+            if (!userDayRules[day]) userDayRules[day] = {mode: "cook", effort: "standard", name: "", notes: ""};
+            userDayRules[day].effort = effortSelect.value;
+            renderDayRules();
+        }
+
         function onDayRuleModeChange(day) {
             const modeSelect = document.getElementById(`rule-mode-${day}`);
             const nameInput = document.getElementById(`rule-name-${day}`);
             const notesInput = document.getElementById(`rule-notes-${day}`);
+            const effortSelect = document.getElementById(`rule-effort-${day}`);
             if (!modeSelect || !nameInput || !notesInput) return;
             
             const mode = modeSelect.value;
@@ -6221,18 +6639,20 @@
                     notesInput.value = 'Special routine dinner.';
                 }
             }
-            if (userDayRules && userDayRules[day]) {
-                userDayRules[day].mode = mode;
-                userDayRules[day].name = nameInput.value;
-                userDayRules[day].notes = notesInput.value;
-            }
+            if (!userDayRules) userDayRules = JSON.parse(JSON.stringify(DEFAULT_CLIENT_DAY_RULES));
+            if (!userDayRules[day]) userDayRules[day] = {mode: "cook", effort: "standard", name: "", notes: ""};
+            userDayRules[day].mode = mode;
+            userDayRules[day].name = nameInput.value;
+            userDayRules[day].notes = notesInput.value;
+            if (effortSelect) userDayRules[day].effort = effortSelect.value;
             renderDayRules();
         }
 
-        function applyDayRulePreset(day, mode, name, notes) {
+        function applyDayRulePreset(day, mode, name, notes, effort = "standard") {
             if (!userDayRules) userDayRules = JSON.parse(JSON.stringify(DEFAULT_CLIENT_DAY_RULES));
             userDayRules[day] = {
                 mode: mode,
+                effort: effort,
                 name: name,
                 notes: notes
             };
@@ -6241,6 +6661,25 @@
             if (msg) {
                 msg.innerHTML = `<span style="color: #34d399; font-size: 13px;">✓ Applied ${name} for ${day}. Remember to click Save!</span>`;
                 setTimeout(() => { if (msg) msg.innerHTML = ''; }, 3000);
+            }
+        }
+
+        function applyDayRulePresetBatch(presetType) {
+            if (presetType === 'fast_week_gourmet_weekend') {
+                if (!userDayRules) userDayRules = JSON.parse(JSON.stringify(DEFAULT_CLIENT_DAY_RULES));
+                userDayRules["Monday"] = {mode: "cook", effort: "easy", name: "Quick Weeknight Start", notes: "Simple skillet or sheet pan dinner (< 25 min)"};
+                userDayRules["Tuesday"] = {mode: "cook", effort: "easy", name: "Quick Skillet Tuesday", notes: "Busy evening — minimal dishes"};
+                userDayRules["Wednesday"] = {mode: "cook", effort: "standard", name: "Midweek Balanced Dinner", notes: "Comforting standard weeknight dinner"};
+                userDayRules["Thursday"] = {mode: "cook", effort: "easy", name: "Almost Friday Easy Prep", notes: "Quick dinner with simple cleanup"};
+                userDayRules["Friday"] = {mode: "themed", effort: "easy", name: "Friday Family Pizza Night", notes: "Pick up favorite frozen pizzas and extra toppings to bake together at home."};
+                userDayRules["Saturday"] = {mode: "cook", effort: "involved", name: "Weekend Gourmet Cooking", notes: "Weekend time for multi-step recipes, braises, or roasts"};
+                userDayRules["Sunday"] = {mode: "no_meal", effort: "easy", name: "Sunday Dinner with Family", notes: "Weekly dinner with extended family — no home cooking or meal prep needed."};
+                renderDayRules();
+                const msg = document.getElementById('day-rules-msg');
+                if (msg) {
+                    msg.innerHTML = '<span style="color: #38bdf8; font-size: 13px;">✓ Applied Easy Weeknights &amp; Weekend Gourmet Preset. Click Save Routine Rules below!</span>';
+                    setTimeout(() => { if (msg) msg.innerHTML = ''; }, 3500);
+                }
             }
         }
 
@@ -6264,11 +6703,13 @@
             
             daysOrder.forEach(day => {
                 const modeSelect = document.getElementById(`rule-mode-${day}`);
+                const effortSelect = document.getElementById(`rule-effort-${day}`);
                 const nameInput = document.getElementById(`rule-name-${day}`);
                 const notesInput = document.getElementById(`rule-notes-${day}`);
                 
                 rulesToSave[day] = {
                     mode: modeSelect ? modeSelect.value : "cook",
+                    effort: effortSelect ? effortSelect.value : "standard",
                     name: nameInput ? nameInput.value.trim() : "",
                     notes: notesInput ? notesInput.value.trim() : ""
                 };
@@ -6308,6 +6749,17 @@
                 const isLiked = m.feedback === 'like';
                 const isDisliked = m.feedback === 'dislike';
                 const isSynced = m.calendar_synced;
+
+                // Effort badge rendering
+                let effortBadgeHtml = '';
+                const eff = m.effort_level || 'standard';
+                if (eff === 'easy') {
+                    effortBadgeHtml = `<span class="effort-badge effort-easy" title="Quick & Easy dinner (< 25 min)">⚡ Quick &amp; Easy (&lt; 25m)</span>`;
+                } else if (eff === 'involved') {
+                    effortBadgeHtml = `<span class="effort-badge effort-involved" title="More involved / gourmet dinner (45-75 min)">👨‍🍳 More Involved (45-75m)</span>`;
+                } else {
+                    effortBadgeHtml = `<span class="effort-badge effort-standard" title="Standard dinner (30-40 min)">⏱️ Standard (30-40m)</span>`;
+                }
 
                 if (m.is_no_meal_needed) {
                     return `
@@ -6399,7 +6851,29 @@
                         </div>
                     `;
                 }
-                
+
+                let bulkSynergyHtml = '';
+                if (m.bulk_reuse && m.bulk_reuse.note) {
+                    bulkSynergyHtml = `
+                        <div class="bulk-synergy-box">
+                            <strong>📦 Bulk Buy Synergy:</strong> ${escapeHtml(m.bulk_reuse.note)}
+                        </div>
+                    `;
+                }
+
+                let familyGuidanceHtml = '';
+                if (m.family_guidance) {
+                    const fg = m.family_guidance;
+                    familyGuidanceHtml = `
+                        <div class="family-guidance-bar">
+                            <strong>👨‍👩‍👧‍👦 Family Batch (${fg.family_size || m.servings || 5} people):</strong>
+                            <span>🥩 Meat: <strong>${escapeHtml(fg.recommended_raw_meat || '~2.5 lbs')}</strong></span>
+                            <span>🥗 Veg: <strong>${escapeHtml(fg.recommended_produce || '~1.8 lbs')}</strong></span>
+                            <span>🥔 Sides: <strong>${escapeHtml(fg.recommended_starches || '~1.5 lbs')}</strong></span>
+                        </div>
+                    `;
+                }
+
                 const ingHtml = (m.ingredients || []).map(ing => `
                     <div class="meal-ing-item">
                         <span>${ing.on_sale ? '🟢' : '⚪'} ${escapeHtml(ing.name)}</span>
@@ -6420,7 +6894,10 @@
                                 <div class="meal-date-badge">
                                     <span>📅</span> ${escapeHtml(m.day)} • ${escapeHtml(m.date)}
                                 </div>
-                                <span class="meal-cuisine-pill" style="${m.is_themed_routine ? 'background: rgba(245, 158, 11, 0.25); color: #fde68a; border-color: rgba(245, 158, 11, 0.4);' : ''}">${m.is_themed_routine ? '🍕 ' : ''}${escapeHtml(m.cuisine)}</span>
+                                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                    ${effortBadgeHtml}
+                                    <span class="meal-cuisine-pill" style="${m.is_themed_routine ? 'background: rgba(245, 158, 11, 0.25); color: #fde68a; border-color: rgba(245, 158, 11, 0.4);' : ''}">${m.is_themed_routine ? '🍕 ' : ''}${escapeHtml(m.cuisine)}</span>
+                                </div>
                             </div>
 
                             <h3 class="meal-title">${escapeHtml(m.title)}</h3>
@@ -6428,10 +6905,20 @@
 
                             <div class="meal-meta-row">
                                 <span>⏱️ ${escapeHtml(m.prep_time)} prep • ${escapeHtml(m.cook_time)} cook</span>
-                                <span>🔥 ${m.calories} cal</span>
+                                <span>👥 ${m.servings || 5} Servings</span>
                                 <span class="meal-cost-badge">${escapeHtml(m.estimated_cost)} (${escapeHtml(m.estimated_cost_per_serving)}/serv)</span>
                             </div>
 
+                            <div class="macro-pills-bar">
+                                <span class="macro-pill macro-cal" title="Calories per serving">🔥 ${m.calories || 0} cal</span>
+                                <span class="macro-pill macro-pro" title="Protein per serving">🥩 ${m.protein_g || 0}g pro</span>
+                                <span class="macro-pill macro-carb" title="Carbohydrates per serving">🌾 ${m.carbs_g || 0}g carb</span>
+                                <span class="macro-pill macro-fat" title="Healthy fats per serving">🥑 ${m.fat_g || 0}g fat</span>
+                                <span class="macro-pill macro-fiber" title="Dietary fiber per serving">🥬 ${m.fiber_g || 0}g fib</span>
+                            </div>
+
+                            ${familyGuidanceHtml}
+                            ${bulkSynergyHtml}
                             ${salesHtml}
 
                             <button class="meal-details-toggle" id="btn-toggle-details-${mealId}" onclick="toggleMealDetails('${mealId}')">
@@ -6467,8 +6954,449 @@
             }).join('');
         }
 
-        // Kick off auth check on load
+        // --- FAMILY PROFILE & SCIENTIFIC PORTIONS LOGIC ---
+        let familyProfileData = null;
+
+        async function openFamilyProfileModal() {
+            const modal = document.getElementById('family-profile-modal');
+            if (modal) modal.style.display = 'flex';
+            const msgEl = document.getElementById('family-profile-msg');
+            if (msgEl) msgEl.innerHTML = '';
+            
+            try {
+                const res = await fetch('/api/meals/family_profile');
+                if (res.ok) {
+                    familyProfileData = await res.json();
+                } else {
+                    familyProfileData = {
+                        members: [
+                            {"id": "mem_1", "name": "Dad", "relation": "Father", "age": 40, "gender": "M", "appetite": "large"},
+                            {"id": "mem_2", "name": "Mom", "relation": "Mother", "age": 38, "gender": "F", "appetite": "normal"},
+                            {"id": "mem_3", "name": "Teen Son", "relation": "Teen Son", "age": 14, "gender": "M", "appetite": "large"},
+                            {"id": "mem_4", "name": "Daughter", "relation": "Daughter", "age": 10, "gender": "F", "appetite": "normal"},
+                            {"id": "mem_5", "name": "Youngest", "relation": "Son", "age": 6, "gender": "M", "appetite": "light"}
+                        ],
+                        notes: ""
+                    };
+                }
+                renderFamilyProfile();
+            } catch(e) {
+                console.error("Failed to load family profile", e);
+            }
+        }
+
+        function closeFamilyProfileModal() {
+            const modal = document.getElementById('family-profile-modal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        function renderFamilyProfile() {
+            if (!familyProfileData || !familyProfileData.members) return;
+            const container = document.getElementById('family-members-table-container');
+            if (!container) return;
+
+            container.innerHTML = familyProfileData.members.map((m, idx) => `
+                <div class="family-member-row" style="display: grid; grid-template-columns: 2fr 1.5fr 1fr 1.2fr 1.5fr auto; gap: 8px; align-items: center; background: #0d1117; padding: 8px 12px; border: 1px solid #30363d; border-radius: 6px;">
+                    <div>
+                        <input type="text" class="family-mem-name" data-idx="${idx}" value="${escapeHtml(m.name || '')}" placeholder="Name" onchange="updateLiveFamilyMember(${idx}, 'name', this.value)" style="width: 100%; box-sizing: border-box; background: #161b22; border: 1px solid #334155; border-radius: 4px; color: #fff; padding: 6px 8px; font-size: 13px;">
+                    </div>
+                    <div>
+                        <select class="family-mem-rel" data-idx="${idx}" onchange="updateLiveFamilyMember(${idx}, 'relation', this.value)" style="width: 100%; box-sizing: border-box; background: #161b22; border: 1px solid #334155; border-radius: 4px; color: #fff; padding: 6px 8px; font-size: 12.5px;">
+                            <option value="Father" ${m.relation === 'Father' ? 'selected' : ''}>👨 Father</option>
+                            <option value="Mother" ${m.relation === 'Mother' ? 'selected' : ''}>👩 Mother</option>
+                            <option value="Teen Son" ${m.relation === 'Teen Son' ? 'selected' : ''}>👦 Teen Son</option>
+                            <option value="Teen Daughter" ${m.relation === 'Teen Daughter' ? 'selected' : ''}>👧 Teen Daughter</option>
+                            <option value="Son" ${m.relation === 'Son' ? 'selected' : ''}>👦 Son</option>
+                            <option value="Daughter" ${m.relation === 'Daughter' ? 'selected' : ''}>👧 Daughter</option>
+                            <option value="Toddler" ${m.relation === 'Toddler' ? 'selected' : ''}>👶 Toddler</option>
+                            <option value="Relative" ${m.relation === 'Relative' ? 'selected' : ''}>👤 Relative</option>
+                        </select>
+                    </div>
+                    <div>
+                        <input type="number" min="1" max="120" class="family-mem-age" data-idx="${idx}" value="${m.age || 10}" placeholder="Age" oninput="updateLiveFamilyMember(${idx}, 'age', parseInt(this.value)||10)" style="width: 100%; box-sizing: border-box; background: #161b22; border: 1px solid #334155; border-radius: 4px; color: #fff; padding: 6px 8px; font-size: 13px;">
+                    </div>
+                    <div>
+                        <select class="family-mem-gender" data-idx="${idx}" onchange="updateLiveFamilyMember(${idx}, 'gender', this.value)" style="width: 100%; box-sizing: border-box; background: #161b22; border: 1px solid #334155; border-radius: 4px; color: #fff; padding: 6px 8px; font-size: 12.5px;">
+                            <option value="M" ${m.gender === 'M' ? 'selected' : ''}>Male</option>
+                            <option value="F" ${m.gender === 'F' ? 'selected' : ''}>Female</option>
+                        </select>
+                    </div>
+                    <div>
+                        <select class="family-mem-appetite" data-idx="${idx}" onchange="updateLiveFamilyMember(${idx}, 'appetite', this.value)" style="width: 100%; box-sizing: border-box; background: #161b22; border: 1px solid #334155; border-radius: 4px; color: #fff; padding: 6px 8px; font-size: 12.5px;">
+                            <option value="light" ${m.appetite === 'light' ? 'selected' : ''}>🥗 Light</option>
+                            <option value="normal" ${m.appetite === 'normal' ? 'selected' : ''}>🍽️ Normal</option>
+                            <option value="large" ${m.appetite === 'large' ? 'selected' : ''}>🍖 Hearty / Large</option>
+                        </select>
+                    </div>
+                    <div>
+                        <button type="button" onclick="removeFamilyMemberRow(${idx})" title="Remove member" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #f87171; border-radius: 4px; padding: 6px 10px; cursor: pointer; font-size: 13px;">✕</button>
+                    </div>
+                </div>
+            `).join('');
+
+            updateLiveFamilyCalc();
+        }
+
+        function updateLiveFamilyMember(idx, field, value) {
+            if (!familyProfileData || !familyProfileData.members || !familyProfileData.members[idx]) return;
+            familyProfileData.members[idx][field] = value;
+            updateLiveFamilyCalc();
+        }
+
+        function addFamilyMemberRow() {
+            if (!familyProfileData) familyProfileData = { members: [] };
+            if (!familyProfileData.members) familyProfileData.members = [];
+            const count = familyProfileData.members.length + 1;
+            familyProfileData.members.push({
+                id: 'mem_' + Date.now(),
+                name: 'Member ' + count,
+                relation: 'Child',
+                age: 10,
+                gender: 'M',
+                appetite: 'normal'
+            });
+            renderFamilyProfile();
+        }
+
+        function removeFamilyMemberRow(idx) {
+            if (!familyProfileData || !familyProfileData.members) return;
+            if (familyProfileData.members.length <= 1) {
+                alert("Family profile must have at least 1 member.");
+                return;
+            }
+            familyProfileData.members.splice(idx, 1);
+            renderFamilyProfile();
+        }
+
+        function updateLiveFamilyCalc() {
+            if (!familyProfileData || !familyProfileData.members) return;
+            const members = familyProfileData.members;
+            let totalRatio = 0.0;
+            let adults = 0, teens = 0, kids = 0;
+
+            members.forEach(m => {
+                const age = parseInt(m.age) || 10;
+                const gender = (m.gender || 'M').toUpperCase();
+                const appetite = m.appetite || 'normal';
+
+                let base = 1.0;
+                if (age >= 18) {
+                    adults++;
+                    base = gender === 'M' ? 1.05 : 0.95;
+                } else if (age >= 13) {
+                    teens++;
+                    base = gender === 'M' ? 1.15 : 0.95;
+                } else if (age >= 8) {
+                    kids++;
+                    base = 0.75;
+                } else if (age >= 4) {
+                    kids++;
+                    base = 0.55;
+                } else {
+                    kids++;
+                    base = 0.35;
+                }
+
+                if (appetite === 'large') base *= 1.15;
+                else if (appetite === 'light') base *= 0.85;
+
+                totalRatio += base;
+            });
+
+            const ratioRounded = Math.round(totalRatio * 100) / 100;
+            const recMeat = Math.round(ratioRounded * 0.48 * 10) / 10;
+            const recProduce = Math.round(ratioRounded * 0.35 * 10) / 10;
+            const recSides = Math.round(ratioRounded * 0.30 * 10) / 10;
+            const batchCals = Math.round(ratioRounded * 580);
+
+            const labelEl = document.getElementById('family-profile-summary-label');
+            if (labelEl) labelEl.innerText = `${members.length} Family Members (${adults} Adults, ${teens} Teens, ${kids} Kids)`;
+
+            const multEl = document.getElementById('family-multiplier-badge');
+            if (multEl) multEl.innerText = `${ratioRounded}x Standard Portions`;
+
+            const proteinEl = document.getElementById('calc-rec-protein');
+            if (proteinEl) proteinEl.innerText = `~${recMeat} lbs`;
+
+            const produceEl = document.getElementById('calc-rec-produce');
+            if (produceEl) produceEl.innerText = `~${recProduce} lbs`;
+
+            const starchEl = document.getElementById('calc-rec-starches');
+            if (starchEl) starchEl.innerText = `~${recSides} lbs`;
+
+            const calsEl = document.getElementById('calc-batch-cals');
+            if (calsEl) calsEl.innerText = `~${batchCals.toLocaleString()} kcal`;
+        }
+
+        async function saveFamilyProfile() {
+            if (!familyProfileData) return;
+            const saveBtn = document.getElementById('save-family-profile-btn');
+            const msgEl = document.getElementById('family-profile-msg');
+            if (saveBtn) { saveBtn.disabled = true; saveBtn.innerText = 'Saving...'; }
+            if (msgEl) msgEl.innerHTML = '';
+
+            try {
+                const res = await fetch('/api/meals/family_profile', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(familyProfileData)
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    if (msgEl) msgEl.innerHTML = `<span style="color: #4ade80; font-size: 13px;">✓ Family profile saved! Meal planning will now calculate portions for your family of ${familyProfileData.members.length}.</span>`;
+                    setTimeout(() => { closeFamilyProfileModal(); }, 1200);
+                } else {
+                    if (msgEl) msgEl.innerHTML = `<span style="color: #f87171; font-size: 13px;">Error: ${escapeHtml(data.detail || 'Failed to save')}</span>`;
+                }
+            } catch(e) {
+                if (msgEl) msgEl.innerHTML = `<span style="color: #f87171; font-size: 13px;">Network error saving profile.</span>`;
+            } finally {
+                if (saveBtn) { saveBtn.disabled = false; saveBtn.innerText = '💾 Save Family Profile'; }
+            }
+        }
+
+        // --- SITE SUGGESTIONS & WIFE EDIT REQUESTS LOGIC ---
+        let siteSuggestionsList = [];
+        let currentSuggTab = 'new';
+
+        function openSuggestionModal(pageContext) {
+            const modal = document.getElementById('site-suggestion-modal');
+            if (modal) modal.style.display = 'flex';
+            
+            const pageSelect = document.getElementById('sugg-page-select');
+            if (pageSelect) {
+                if (pageContext) {
+                    pageSelect.value = pageContext;
+                } else {
+                    // Detect active tab
+                    const activeTabBtn = document.querySelector('.sidebar-item.active, .mobile-drawer-link.active');
+                    if (activeTabBtn) {
+                        const txt = activeTabBtn.innerText.trim();
+                        if (txt.includes('Meal Planner')) pageSelect.value = 'Meal Planner';
+                        else if (txt.includes('Deals')) pageSelect.value = 'Deals & Groceries';
+                        else if (txt.includes('Email History')) pageSelect.value = 'Email History';
+                        else if (txt.includes('Dashboard')) pageSelect.value = 'Dashboard';
+                        else if (txt.includes('Settings')) pageSelect.value = 'Settings';
+                        else pageSelect.value = 'General';
+                    }
+                }
+            }
+
+            switchSuggestionTab('new');
+            loadSiteSuggestions();
+        }
+
+        function closeSuggestionModal() {
+            const modal = document.getElementById('site-suggestion-modal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        function switchSuggestionTab(tab) {
+            currentSuggTab = tab;
+            ['new', 'open', 'completed'].forEach(t => {
+                const btn = document.getElementById(`sugg-tab-btn-${t}`);
+                const pane = document.getElementById(`sugg-pane-${t}`);
+                if (btn) btn.classList.toggle('active', t === tab);
+                if (pane) pane.style.display = (t === tab) ? 'block' : 'none';
+            });
+            const msg = document.getElementById('sugg-modal-msg');
+            if (msg) msg.innerHTML = '';
+            if (tab === 'open' || tab === 'completed') {
+                renderSiteSuggestions();
+            }
+        }
+
+        async function loadSiteSuggestions() {
+            try {
+                const res = await fetch('/api/suggestions');
+                if (res.ok) {
+                    siteSuggestionsList = await res.json();
+                } else {
+                    siteSuggestionsList = [];
+                }
+                updateSuggestionBadges();
+                renderSiteSuggestions();
+            } catch(e) {
+                console.error("Failed to load site suggestions", e);
+            }
+        }
+
+        function updateSuggestionBadges() {
+            const openCount = siteSuggestionsList.filter(s => s.status === 'open').length;
+            
+            const modalBadge = document.getElementById('sugg-open-badge-count');
+            if (modalBadge) modalBadge.innerText = openCount;
+
+            const floatBadge = document.getElementById('floating-sugg-badge');
+            if (floatBadge) {
+                if (openCount > 0) {
+                    floatBadge.style.display = 'inline-flex';
+                    floatBadge.innerText = openCount;
+                } else {
+                    floatBadge.style.display = 'none';
+                }
+            }
+        }
+
+        function renderSiteSuggestions() {
+            updateSuggestionBadges();
+            
+            // Render Open list
+            const openContainer = document.getElementById('sugg-open-list-container');
+            if (openContainer) {
+                const openItems = siteSuggestionsList.filter(s => s.status === 'open');
+                if (openItems.length === 0) {
+                    openContainer.innerHTML = `
+                        <div style="text-align: center; padding: 30px; color: #94a3b8;">
+                            <span style="font-size: 32px; display: block; margin-bottom: 8px;">✨</span>
+                            <strong>No open suggestions right now!</strong>
+                            <p style="margin: 4px 0 0; font-size: 13px;">All requested changes and tweaks have been completed.</p>
+                        </div>
+                    `;
+                } else {
+                    openContainer.innerHTML = openItems.map(item => `
+                        <div class="suggestion-item-card" id="sugg-card-${item.id}">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 8px;">
+                                <div>
+                                    <h4 style="margin: 0 0 4px 0; color: #fff; font-size: 15px;">${escapeHtml(item.title)}</h4>
+                                    <div class="sugg-meta-row">
+                                        <span class="sugg-author-badge">👤 ${escapeHtml(item.author || 'User')}</span>
+                                        <span class="sugg-page-tag">📍 ${escapeHtml(item.page || 'General')}</span>
+                                        <span class="badge-blue" style="font-size: 11px;">${escapeHtml(item.priority || 'improvement')}</span>
+                                        <span style="color: #64748b;">${escapeHtml(item.created_at ? item.created_at.substring(0, 10) : '')}</span>
+                                    </div>
+                                </div>
+                                <div style="display: flex; gap: 6px;">
+                                    <button class="sugg-resolve-btn" onclick="completeSuggestion('${item.id}')" title="Mark this update as completed and remove from open view">
+                                        ✓ Mark Done &amp; Remove
+                                    </button>
+                                    <button onclick="deleteSuggestion('${item.id}')" title="Delete suggestion" style="background: none; border: 1px solid #334155; color: #94a3b8; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 12px;">🗑️</button>
+                                </div>
+                            </div>
+                            <p style="margin: 0; color: #cbd5e1; font-size: 13px; line-height: 1.45; white-space: pre-wrap;">${escapeHtml(item.description)}</p>
+                        </div>
+                    `).join('');
+                }
+            }
+
+            // Render Completed list
+            const completedContainer = document.getElementById('sugg-completed-list-container');
+            if (completedContainer) {
+                const completedItems = siteSuggestionsList.filter(s => s.status === 'completed');
+                if (completedItems.length === 0) {
+                    completedContainer.innerHTML = `
+                        <div style="text-align: center; padding: 30px; color: #94a3b8;">
+                            <p style="margin: 0; font-size: 13px;">No completed suggestions in archive yet.</p>
+                        </div>
+                    `;
+                } else {
+                    completedContainer.innerHTML = completedItems.map(item => `
+                        <div class="suggestion-item-card" style="border-color: #1e3a5f; opacity: 0.85;" id="sugg-card-${item.id}">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 6px;">
+                                <div>
+                                    <h4 style="margin: 0 0 4px 0; color: #93c5fd; font-size: 14.5px; text-decoration: line-through;">${escapeHtml(item.title)}</h4>
+                                    <div class="sugg-meta-row">
+                                        <span class="sugg-author-badge">👤 ${escapeHtml(item.author || 'User')}</span>
+                                        <span class="sugg-page-tag">📍 ${escapeHtml(item.page || 'General')}</span>
+                                        <span style="background: rgba(34, 197, 94, 0.2); color: #86efac; border: 1px solid rgba(34, 197, 94, 0.4); border-radius: 4px; padding: 2px 6px; font-size: 11px;">✓ Completed</span>
+                                    </div>
+                                </div>
+                                <button onclick="deleteSuggestion('${item.id}')" title="Delete from archive" style="background: none; border: 1px solid #334155; color: #94a3b8; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 12px;">🗑️</button>
+                            </div>
+                            <p style="margin: 0; color: #94a3b8; font-size: 12.5px; line-height: 1.4;">${escapeHtml(item.description)}</p>
+                        </div>
+                    `).join('');
+                }
+            }
+        }
+
+        async function submitSiteSuggestion() {
+            const author = (document.getElementById('sugg-author-input').value || 'Wife').trim();
+            const page = document.getElementById('sugg-page-select').value;
+            const title = (document.getElementById('sugg-title-input').value || '').trim();
+            const desc = (document.getElementById('sugg-desc-input').value || '').trim();
+            const priority = document.getElementById('sugg-priority-select').value;
+            const msgEl = document.getElementById('sugg-modal-msg');
+            const submitBtn = document.getElementById('sugg-submit-btn');
+
+            if (!title) {
+                if (msgEl) msgEl.innerHTML = `<span style="color: #f87171; font-size: 13px;">Please provide a title or brief summary.</span>`;
+                return;
+            }
+            if (!desc) {
+                if (msgEl) msgEl.innerHTML = `<span style="color: #f87171; font-size: 13px;">Please describe the edit details so we know what to change.</span>`;
+                return;
+            }
+
+            if (submitBtn) { submitBtn.disabled = true; submitBtn.innerText = 'Submitting...'; }
+            if (msgEl) msgEl.innerHTML = '';
+
+            try {
+                const res = await fetch('/api/suggestions', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        author: author,
+                        page: page,
+                        title: title,
+                        description: desc,
+                        priority: priority
+                    })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    document.getElementById('sugg-title-input').value = '';
+                    document.getElementById('sugg-desc-input').value = '';
+                    await loadSiteSuggestions();
+                    switchSuggestionTab('open');
+                    if (msgEl) msgEl.innerHTML = `<span style="color: #4ade80; font-size: 13px;">✓ Suggestion submitted! It is now stored in Open Suggestions.</span>`;
+                } else {
+                    if (msgEl) msgEl.innerHTML = `<span style="color: #f87171; font-size: 13px;">Error: ${escapeHtml(data.detail || 'Failed to submit')}</span>`;
+                }
+            } catch(e) {
+                if (msgEl) msgEl.innerHTML = `<span style="color: #f87171; font-size: 13px;">Network error submitting suggestion.</span>`;
+            } finally {
+                if (submitBtn) { submitBtn.disabled = false; submitBtn.innerText = '💡 Submit Suggestion'; }
+            }
+        }
+
+        async function completeSuggestion(id) {
+            try {
+                const res = await fetch(`/api/suggestions/${id}`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ status: 'completed' })
+                });
+                if (res.ok) {
+                    await loadSiteSuggestions();
+                }
+            } catch(e) {
+                console.error("Failed to complete suggestion", e);
+            }
+        }
+
+        async function deleteSuggestion(id) {
+            if (!confirm("Are you sure you want to permanently delete this suggestion?")) return;
+            try {
+                const res = await fetch(`/api/suggestions/${id}`, { method: 'DELETE' });
+                if (res.ok) {
+                    await loadSiteSuggestions();
+                }
+            } catch(e) {
+                console.error("Failed to delete suggestion", e);
+            }
+        }
+
+// Kick off auth check on load
         checkAuth();
     </script>
+<!-- Floating Suggest Edit Action Button (Available on ALL pages) -->
+        <div id="floating-suggest-container" style="position: fixed; bottom: 22px; right: 22px; z-index: 9999;">
+            <button class="floating-suggest-btn" id="floating-suggest-btn" onclick="openSuggestionModal()" title="Suggest an edit or improvement for this page">
+                <span style="font-size: 16px;">💡</span>
+                <span>Suggest Edit</span>
+                <span id="floating-sugg-badge" class="floating-sugg-badge" style="display: none;">0</span>
+            </button>
+        </div>
 </body>
 </html>

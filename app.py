@@ -232,6 +232,19 @@ def init_db():
                     notes TEXT
                  )''')
     c.execute("CREATE INDEX IF NOT EXISTS idx_mp_user_date ON meal_plans(user_id, start_date DESC);")
+    c.execute('''CREATE TABLE IF NOT EXISTS site_suggestions (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT,
+                    page TEXT,
+                    title TEXT,
+                    description TEXT,
+                    author TEXT DEFAULT 'Wife',
+                    priority TEXT DEFAULT 'improvement',
+                    status TEXT DEFAULT 'open',
+                    created_at TEXT,
+                    completed_at TEXT
+                 )''')
+    c.execute("CREATE INDEX IF NOT EXISTS idx_sug_user_status ON site_suggestions(user_id, status, created_at DESC);")
     
     try:
         c.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user';")
@@ -4035,6 +4048,104 @@ def find_best_store_for_ingredient(item_name: str, category: str, all_stores: li
         "savings": f"Sale at {best['store']}"
     }
 
+DEFAULT_FAMILY_PROFILE = {
+    "family_name": "Our Family",
+    "total_members": 5,
+    "members": [
+        {"id": "m1", "name": "Adult 1", "age": 40, "gender": "male", "appetite": "hearty"},
+        {"id": "m2", "name": "Adult 2", "age": 38, "gender": "female", "appetite": "moderate"},
+        {"id": "m3", "name": "Child 1", "age": 14, "gender": "male", "appetite": "hearty"},
+        {"id": "m4", "name": "Child 2", "age": 10, "gender": "female", "appetite": "moderate"},
+        {"id": "m5", "name": "Child 3", "age": 6, "gender": "male", "appetite": "light"}
+    ],
+    "notes": "5 family members (2 adults, 3 kids)"
+}
+
+def calculate_family_nutrition_needs(family_profile: dict) -> dict:
+    """
+    Computes portion multiplier, recommended batch food weight (protein, carbs, veggies),
+    and target dinner calories/macros for the family based on member ages, genders, and appetites.
+    """
+    members = family_profile.get("members", []) if family_profile else []
+    if not members:
+        members = DEFAULT_FAMILY_PROFILE["members"]
+        
+    total_portion_ratio = 0.0
+    adults = 0
+    teens = 0
+    kids = 0
+    total_dinner_cals = 0
+    
+    for m in members:
+        try:
+            age = int(m.get("age", 25))
+        except Exception:
+            age = 25
+        gender = str(m.get("gender", "male")).lower()
+        appetite = str(m.get("appetite", "moderate")).lower()
+        
+        # Portion ratio based on age & gender (USDA Dietary Reference Guidelines)
+        if age >= 19:
+            adults += 1
+            base_ratio = 1.15 if gender == "male" else 1.0
+            base_cals = 700 if gender == "male" else 550
+        elif age >= 13:
+            teens += 1
+            base_ratio = 1.25 if gender == "male" else 1.05
+            base_cals = 750 if gender == "male" else 600
+        elif age >= 9:
+            kids += 1
+            base_ratio = 0.85
+            base_cals = 500
+        elif age >= 4:
+            kids += 1
+            base_ratio = 0.65
+            base_cals = 400
+        else:
+            kids += 1
+            base_ratio = 0.45
+            base_cals = 300
+            
+        if appetite == "hearty":
+            base_ratio *= 1.2
+            base_cals = int(base_cals * 1.2)
+        elif appetite == "light":
+            base_ratio *= 0.85
+            base_cals = int(base_cals * 0.85)
+            
+        total_portion_ratio += base_ratio
+        total_dinner_cals += base_cals
+        
+    portion_multiplier = round(total_portion_ratio, 2)
+    rec_protein_lbs = round(portion_multiplier * 0.48, 2)
+    rec_produce_lbs = round(portion_multiplier * 0.35, 2)
+    rec_starches_lbs = round(portion_multiplier * 0.28, 2)
+    
+    dinner_protein_g = int(rec_protein_lbs * 90)
+    dinner_carbs_g = int(total_dinner_cals * 0.40 / 4)
+    dinner_fat_g = int(total_dinner_cals * 0.30 / 9)
+    dinner_fiber_g = int(total_dinner_cals * 0.014)
+    
+    label_parts = []
+    if adults: label_parts.append(f"{adults} Adult{'s' if adults > 1 else ''}")
+    if teens: label_parts.append(f"{teens} Teen{'s' if teens > 1 else ''}")
+    if kids: label_parts.append(f"{kids} Kid{'s' if kids > 1 else ''}")
+    summary_label = f"{len(members)} Family Members ({', '.join(label_parts)})"
+    
+    return {
+        "total_members": len(members),
+        "portion_multiplier": portion_multiplier,
+        "recommended_protein_lbs": rec_protein_lbs,
+        "recommended_produce_lbs": rec_produce_lbs,
+        "recommended_starches_lbs": rec_starches_lbs,
+        "target_dinner_calories": total_dinner_cals,
+        "target_dinner_protein_g": dinner_protein_g,
+        "target_dinner_carbs_g": dinner_carbs_g,
+        "target_dinner_fat_g": dinner_fat_g,
+        "target_dinner_fiber_g": dinner_fiber_g,
+        "summary_label": summary_label
+    }
+
 MEAL_RECIPES_CATALOG = [
     {
         "id": "recipe-ny-strip",
@@ -4044,6 +4155,12 @@ MEAL_RECIPES_CATALOG = [
         "prep_time": "10 mins",
         "cook_time": "15 mins",
         "calories": 590,
+        "protein_g": 48,
+        "carbs_g": 12,
+        "fat_g": 38,
+        "fiber_g": 4,
+        "effort_level": "standard",
+        "bulk_category": "beef",
         "key_protein_keywords": ["strip", "steak", "beef", "ny strip"],
         "produce_keywords": ["asparagus", "garlic", "rosemary"],
         "dietary_tags": ["High Protein", "Low Carb", "All"],
@@ -4071,6 +4188,12 @@ MEAL_RECIPES_CATALOG = [
         "prep_time": "20 mins",
         "cook_time": "12 mins",
         "calories": 520,
+        "protein_g": 42,
+        "carbs_g": 45,
+        "fat_g": 22,
+        "fiber_g": 8,
+        "effort_level": "standard",
+        "bulk_category": "beef",
         "key_protein_keywords": ["sirloin", "steak", "beef", "skirt", "fajita"],
         "produce_keywords": ["avocado", "lime", "cilantro", "onion"],
         "dietary_tags": ["Family Favorites", "High Protein", "All"],
@@ -4099,6 +4222,12 @@ MEAL_RECIPES_CATALOG = [
         "prep_time": "15 mins",
         "cook_time": "20 mins",
         "calories": 540,
+        "protein_g": 44,
+        "carbs_g": 52,
+        "fat_g": 16,
+        "fiber_g": 3,
+        "effort_level": "easy",
+        "bulk_category": "chicken",
         "key_protein_keywords": ["chicken breast", "chicken", "poultry"],
         "produce_keywords": ["lemon", "garlic", "parsley"],
         "dietary_tags": ["Family Favorites", "Quick & Easy", "All"],
@@ -4127,6 +4256,12 @@ MEAL_RECIPES_CATALOG = [
         "prep_time": "10 mins",
         "cook_time": "15 mins",
         "calories": 560,
+        "protein_g": 46,
+        "carbs_g": 38,
+        "fat_g": 24,
+        "fiber_g": 5,
+        "effort_level": "standard",
+        "bulk_category": "seafood",
         "key_protein_keywords": ["salmon", "fish", "seafood"],
         "produce_keywords": ["broccoli", "ginger", "garlic", "green onion"],
         "dietary_tags": ["High Protein", "Mediterranean & Fresh", "All"],
@@ -4154,6 +4289,12 @@ MEAL_RECIPES_CATALOG = [
         "prep_time": "15 mins",
         "cook_time": "30 mins",
         "calories": 610,
+        "protein_g": 38,
+        "carbs_g": 68,
+        "fat_g": 22,
+        "fiber_g": 5,
+        "effort_level": "involved",
+        "bulk_category": "ground_beef",
         "key_protein_keywords": ["ground beef", "beef", "meatball"],
         "produce_keywords": ["onion", "garlic", "basil", "parsley"],
         "dietary_tags": ["Family Favorites", "Budget Saver", "All"],
@@ -4182,6 +4323,12 @@ MEAL_RECIPES_CATALOG = [
         "prep_time": "10 mins",
         "cook_time": "18 mins",
         "calories": 480,
+        "protein_g": 44,
+        "carbs_g": 14,
+        "fat_g": 28,
+        "fiber_g": 4,
+        "effort_level": "easy",
+        "bulk_category": "pork",
         "key_protein_keywords": ["pork chop", "pork", "chops"],
         "produce_keywords": ["spinach", "garlic", "rosemary"],
         "dietary_tags": ["High Protein", "Low Carb", "Budget Saver", "All"],
@@ -4209,6 +4356,12 @@ MEAL_RECIPES_CATALOG = [
         "prep_time": "15 mins",
         "cook_time": "20 mins",
         "calories": 490,
+        "protein_g": 42,
+        "carbs_g": 48,
+        "fat_g": 15,
+        "fiber_g": 7,
+        "effort_level": "easy",
+        "bulk_category": "chicken",
         "key_protein_keywords": ["chicken breast", "chicken", "fajita"],
         "produce_keywords": ["bell pepper", "onion", "lime", "cilantro"],
         "dietary_tags": ["Family Favorites", "Quick & Easy", "All"],
@@ -4237,6 +4390,12 @@ MEAL_RECIPES_CATALOG = [
         "prep_time": "10 mins",
         "cook_time": "25 mins",
         "calories": 440,
+        "protein_g": 45,
+        "carbs_g": 22,
+        "fat_g": 18,
+        "fiber_g": 5,
+        "effort_level": "standard",
+        "bulk_category": "pork",
         "key_protein_keywords": ["pork tenderloin", "pork"],
         "produce_keywords": ["green beans", "garlic", "shallot"],
         "dietary_tags": ["High Protein", "Budget Saver", "All"],
@@ -4264,6 +4423,12 @@ MEAL_RECIPES_CATALOG = [
         "prep_time": "20 mins",
         "cook_time": "3 hrs",
         "calories": 620,
+        "protein_g": 52,
+        "carbs_g": 32,
+        "fat_g": 31,
+        "fiber_g": 6,
+        "effort_level": "involved",
+        "bulk_category": "beef",
         "key_protein_keywords": ["chuck roast", "beef", "pot roast"],
         "produce_keywords": ["carrots", "potatoes", "onion", "celery"],
         "dietary_tags": ["Family Favorites", "Comfort Food", "All"],
@@ -4292,6 +4457,12 @@ MEAL_RECIPES_CATALOG = [
         "prep_time": "10 mins",
         "cook_time": "12 mins",
         "calories": 510,
+        "protein_g": 36,
+        "carbs_g": 54,
+        "fat_g": 17,
+        "fiber_g": 3,
+        "effort_level": "easy",
+        "bulk_category": "seafood",
         "key_protein_keywords": ["shrimp", "seafood"],
         "produce_keywords": ["garlic", "lemon", "parsley"],
         "dietary_tags": ["Quick & Easy", "Mediterranean & Fresh", "All"],
@@ -4319,6 +4490,12 @@ MEAL_RECIPES_CATALOG = [
         "prep_time": "15 mins",
         "cook_time": "15 mins",
         "calories": 460,
+        "protein_g": 46,
+        "carbs_g": 24,
+        "fat_g": 20,
+        "fiber_g": 6,
+        "effort_level": "easy",
+        "bulk_category": "chicken",
         "key_protein_keywords": ["chicken breast", "chicken"],
         "produce_keywords": ["cucumber", "tomato", "lemon", "feta", "olive"],
         "dietary_tags": ["Low Carb", "Mediterranean & Fresh", "All"],
@@ -4347,6 +4524,12 @@ MEAL_RECIPES_CATALOG = [
         "prep_time": "15 mins",
         "cook_time": "15 mins",
         "calories": 680,
+        "protein_g": 44,
+        "carbs_g": 56,
+        "fat_g": 32,
+        "fiber_g": 5,
+        "effort_level": "easy",
+        "bulk_category": "ground_beef",
         "key_protein_keywords": ["ground beef", "beef", "patty"],
         "produce_keywords": ["sweet potato", "onion", "lettuce", "pickle"],
         "dietary_tags": ["Family Favorites", "Budget Saver", "All"],
@@ -4372,11 +4555,37 @@ MEAL_RECIPES_CATALOG = [
 DEFAULT_DAY_RULES = {
     "Sunday": {
         "mode": "no_meal",
+        "effort": "easy",
         "name": "Sunday Dinner with Family",
         "notes": "Weekly dinner with extended family — no home cooking or meal prep needed."
     },
+    "Monday": {
+        "mode": "cook",
+        "effort": "easy",
+        "name": "",
+        "notes": "Quick & easy dinner (< 25 min)."
+    },
+    "Tuesday": {
+        "mode": "cook",
+        "effort": "easy",
+        "name": "",
+        "notes": "Busy weeknight — quick skillet or sheet pan."
+    },
+    "Wednesday": {
+        "mode": "cook",
+        "effort": "standard",
+        "name": "",
+        "notes": "Midweek standard cooking (30-40 min)."
+    },
+    "Thursday": {
+        "mode": "cook",
+        "effort": "easy",
+        "name": "",
+        "notes": "Almost Friday — quick prep dinner."
+    },
     "Friday": {
         "mode": "themed",
+        "effort": "easy",
         "name": "Friday Family Pizza Night",
         "notes": "Pick up favorite frozen pizzas and extra toppings to bake together at home.",
         "recipe_title": "Friday Family Pizza Night (Frozen Pizzas & Extra Toppings)",
@@ -4384,6 +4593,12 @@ DEFAULT_DAY_RULES = {
         "prep_time": "5 mins",
         "cook_time": "18 mins",
         "calories": 650,
+        "protein_g": 32,
+        "carbs_g": 72,
+        "fat_g": 26,
+        "fiber_g": 4,
+        "effort_level": "easy",
+        "bulk_category": "frozen_pizza",
         "base_cost": 12.00,
         "ingredients": [
             {"name": "Frozen Pizzas (DiGiorno, Freschetta, or Red Baron - 2 ct)", "category": "Frozen"},
@@ -4399,11 +4614,40 @@ DEFAULT_DAY_RULES = {
             "Let rest 3 minutes, slice into wedges, and enjoy family pizza night!"
         ]
     },
-    "Monday": {"mode": "cook", "name": "", "notes": ""},
-    "Tuesday": {"mode": "cook", "name": "", "notes": ""},
-    "Wednesday": {"mode": "cook", "name": "", "notes": ""},
-    "Thursday": {"mode": "cook", "name": "", "notes": ""},
-    "Saturday": {"mode": "cook", "name": "", "notes": ""}
+    "Saturday": {
+        "mode": "cook",
+        "effort": "involved",
+        "name": "",
+        "notes": "Weekend cooking — more time for gourmet or slow simmer."
+    }
+}
+
+BULK_INGREDIENT_SYNERGY = {
+    "chicken": {
+        "title": "5 lb Family Pack Chicken Breasts",
+        "savings": "~$6.00",
+        "note": "Shared with {other_day} ({other_title}) — buy in bulk to keep costs down"
+    },
+    "ground_beef": {
+        "title": "5 lb Value Pack Ground Beef (80/20 or 85/15)",
+        "savings": "~$5.50",
+        "note": "Shared with {other_day} ({other_title}) — buy in bulk to keep costs down"
+    },
+    "pork": {
+        "title": "Family Pack Pork Cuts",
+        "savings": "~$4.50",
+        "note": "Shared with {other_day} ({other_title}) — buy in bulk to keep costs down"
+    },
+    "beef": {
+        "title": "USDA Beef Value Pack",
+        "savings": "~$5.00",
+        "note": "Shared with {other_day} ({other_title}) — buy in bulk to keep costs down"
+    },
+    "potatoes": {
+        "title": "5 lb Value Sack Potatoes",
+        "savings": "~$2.50",
+        "note": "Shared with {other_day} ({other_title}) — buy in bulk to keep costs down"
+    }
 }
 
 def build_themed_pizza_night_meal(date_str: str, day_name: str, week_num: int, servings: int, rule: dict, all_stores: list) -> dict:
@@ -4433,9 +4677,11 @@ def build_themed_pizza_night_meal(date_str: str, day_name: str, week_num: int, s
     meal_cost = 0.0
     meal_savings = 0.0
     
+    servings_factor = max(servings, 1) / 4.0
+    
     for item in target_items:
         best_match = find_best_store_for_ingredient(item["search_term"], item["category"], all_stores)
-        ing_cost = item["base_cost"]
+        ing_cost = round(item["base_cost"] * (servings_factor if "pizza" in item["search_term"] or "pepperoni" in item["search_term"] else 1.0), 2)
         if best_match["on_sale"]:
             sale_saving = round(ing_cost * 0.30, 2)
             meal_savings += sale_saving
@@ -4474,6 +4720,28 @@ def build_themed_pizza_night_meal(date_str: str, day_name: str, week_num: int, s
         "cook_time": cook_time,
         "servings": servings,
         "calories": calories,
+        "protein_g": 32,
+        "carbs_g": 72,
+        "fat_g": 26,
+        "fiber_g": 4,
+        "effort_level": "easy",
+        "effort_label": "⚡ Quick & Easy (18 min)",
+        "macros": {
+            "calories": calories,
+            "protein_g": 32,
+            "carbs_g": 72,
+            "fat_g": 26,
+            "fiber_g": 4
+        },
+        "family_macros": {
+            "calories": calories * servings,
+            "protein_g": 32 * servings,
+            "carbs_g": 72 * servings,
+            "fat_g": 26 * servings,
+            "fiber_g": 4 * servings
+        },
+        "family_portion_guide": f"Family Pizza Night for {servings}: 2-3 pizzas with extra mozzarella & toppings",
+        "bulk_reuse": {"is_bulk": False},
         "key_protein": "pepperoni / cheese",
         "estimated_cost": f"${meal_cost:.2f}",
         "estimated_cost_per_serving": f"${meal_cost_serv:.2f}",
@@ -4508,6 +4776,28 @@ def build_no_meal_needed_day(date_str: str, day_name: str, week_num: int, servin
         "cook_time": "0 min",
         "servings": servings,
         "calories": 0,
+        "protein_g": 0,
+        "carbs_g": 0,
+        "fat_g": 0,
+        "fiber_g": 0,
+        "effort_level": "easy",
+        "effort_label": "👨‍👩‍👧 Family Gathering",
+        "macros": {
+            "calories": 0,
+            "protein_g": 0,
+            "carbs_g": 0,
+            "fat_g": 0,
+            "fiber_g": 0
+        },
+        "family_macros": {
+            "calories": 0,
+            "protein_g": 0,
+            "carbs_g": 0,
+            "fat_g": 0,
+            "fiber_g": 0
+        },
+        "family_portion_guide": "Weekly family gathering — no home cooking required",
+        "bulk_reuse": {"is_bulk": False},
         "key_protein": "none",
         "estimated_cost": "$0.00",
         "estimated_cost_per_serving": "$0.00",
@@ -4539,6 +4829,28 @@ def build_calendar_reserved_meal(date_str: str, day_name: str, week_num: int, se
         "cook_time": "0 min",
         "servings": servings,
         "calories": 0,
+        "protein_g": 0,
+        "carbs_g": 0,
+        "fat_g": 0,
+        "fiber_g": 0,
+        "effort_level": "easy",
+        "effort_label": "📅 Pre-Scheduled",
+        "macros": {
+            "calories": 0,
+            "protein_g": 0,
+            "carbs_g": 0,
+            "fat_g": 0,
+            "fiber_g": 0
+        },
+        "family_macros": {
+            "calories": 0,
+            "protein_g": 0,
+            "carbs_g": 0,
+            "fat_g": 0,
+            "fiber_g": 0
+        },
+        "family_portion_guide": f"Pre-scheduled event: '{existing_title}'",
+        "bulk_reuse": {"is_bulk": False},
         "key_protein": "calendar",
         "estimated_cost": "$0.00",
         "estimated_cost_per_serving": "$0.00",
@@ -4554,11 +4866,12 @@ def build_calendar_reserved_meal(date_str: str, day_name: str, week_num: int, se
         "_cost_num": 0.0,
         "_savings_num": 0.0
     }
+
 def generate_smart_meal_plan(
     user_id: str,
     plan_type: str = "week",
     dietary_pref: str = "All",
-    servings: int = 4,
+    servings: int = 5,
     start_date_str: str = None,
     custom_notes: str = "",
     all_stores: list = None,
@@ -4615,7 +4928,7 @@ def generate_smart_meal_plan(
     liked_i = set(i.lower() for i in user_prefs.get("liked_ingredients", []))
     disliked_m = set(m.lower() for m in user_prefs.get("disliked_meals", []))
     
-    scored_recipes = []
+    base_scored_recipes = []
     for r in MEAL_RECIPES_CATALOG:
         title_low = r["title"].lower()
         if any(dm in title_low for dm in disliked_m):
@@ -4648,11 +4961,8 @@ def generate_smart_meal_plan(
             if any(pref_low in t or t in pref_low for t in tags):
                 score += 25
                 
-        scored_recipes.append((score, r))
+        base_scored_recipes.append((score, r))
         
-    scored_recipes.sort(key=lambda x: x[0], reverse=True)
-    candidate_recipes = [x[1] for x in scored_recipes] if scored_recipes else MEAL_RECIPES_CATALOG
-    
     meals = []
     total_cost = 0.0
     total_savings = 0.0
@@ -4660,6 +4970,14 @@ def generate_smart_meal_plan(
     day_rules = user_prefs.get("day_rules", DEFAULT_DAY_RULES) if user_prefs else DEFAULT_DAY_RULES
     if not isinstance(day_rules, dict):
         day_rules = DEFAULT_DAY_RULES
+        
+    # Bulk ingredient reuse tracker: category -> (meal_idx, day_name, meal_title)
+    bulk_first_meal = {}
+    bulk_category_counts = {}
+    
+    servings_factor = max(servings, 1) / 4.0
+    rec_protein_lbs = round(servings * 0.48, 1)
+    rec_sides_lbs = round(servings * 0.32, 1)
     
     for i in range(days_count):
         cur_date = start_dt + timedelta(days=i)
@@ -4679,8 +4997,9 @@ def generate_smart_meal_plan(
             continue
             
         # 2. Check Day-of-Week Routine Rules
-        rule = day_rules.get(day_name, {"mode": "cook"})
+        rule = day_rules.get(day_name, {"mode": "cook", "effort": "standard"})
         rule_mode = rule.get("mode", "cook")
+        rule_effort = rule.get("effort", "standard")
         
         if rule_mode == "no_meal":
             logger.info(f"Meal plan generator: Day rule for {day_name} is no_meal ({rule.get('name')}).")
@@ -4697,6 +5016,28 @@ def generate_smart_meal_plan(
             total_savings += m_obj.pop("_savings_num", 0.0)
             meals.append(m_obj)
             continue
+        
+        # Score recipes specifically for this day taking into account requested effort and bulk synergy
+        day_candidates = []
+        for b_score, r in base_scored_recipes:
+            cur_score = b_score
+            r_effort = r.get("effort_level", "standard")
+            if r_effort == rule_effort:
+                cur_score += 35
+            elif rule_effort == "easy" and r_effort == "involved":
+                cur_score -= 40
+            elif rule_effort == "involved" and r_effort == "easy":
+                cur_score -= 15
+                
+            # Bulk synergy boost: if a recipe shares a bulk category used in the week, promote it!
+            b_cat = r.get("bulk_category")
+            if b_cat and b_cat in bulk_category_counts and bulk_category_counts[b_cat] == 1:
+                cur_score += 25
+                
+            day_candidates.append((cur_score, r))
+            
+        day_candidates.sort(key=lambda x: x[0], reverse=True)
+        candidate_recipes = [x[1] for x in day_candidates] if day_candidates else MEAL_RECIPES_CATALOG
         
         prev_protein = meals[-1]["key_protein"] if meals else None
         selected_recipe = None
@@ -4721,20 +5062,33 @@ def generate_smart_meal_plan(
         for base_ing in selected_recipe["ingredients"]:
             ing_name = base_ing["name"]
             ing_cat = base_ing["category"]
+            
+            # Scale quantity label for 5+ family members
+            if servings >= 5:
+                if "(2 lbs)" in ing_name:
+                    ing_name = ing_name.replace("(2 lbs)", f"({round(2.0 * servings_factor, 1)} lbs)")
+                elif "(1.5 lbs)" in ing_name:
+                    ing_name = ing_name.replace("(1.5 lbs)", f"({round(1.5 * servings_factor, 1)} lbs)")
+                elif "(3 lbs)" in ing_name:
+                    ing_name = ing_name.replace("(3 lbs)", f"({round(3.0 * servings_factor, 1)} lbs)")
+                elif "(1 lb)" in ing_name:
+                    ing_name = ing_name.replace("(1 lb)", f"({round(1.0 * servings_factor, 1)} lbs)")
+                    
             best_match = find_best_store_for_ingredient(ing_name, ing_cat, all_stores)
             
-            ing_cost = 3.50
+            base_cost = 3.50
             if "strip" in ing_name.lower() or "steak" in ing_name.lower() or "salmon" in ing_name.lower() or "shrimp" in ing_name.lower():
-                ing_cost = 8.50
+                base_cost = 8.50
             elif "chicken" in ing_name.lower() or "beef" in ing_name.lower() or "pork" in ing_name.lower():
-                ing_cost = 5.50
+                base_cost = 5.50
             elif "produce" in ing_cat.lower():
-                ing_cost = 2.00
+                base_cost = 2.00
             elif "dairy" in ing_cat.lower():
-                ing_cost = 2.50
+                base_cost = 2.50
             else:
-                ing_cost = 1.75
+                base_cost = 1.75
                 
+            ing_cost = round(base_cost * servings_factor, 2)
             if best_match["on_sale"]:
                 sale_saving = round(ing_cost * 0.35, 2)
                 meal_savings += sale_saving
@@ -4761,6 +5115,50 @@ def generate_smart_meal_plan(
         total_cost += meal_cost
         total_savings += meal_savings
         
+        # Check bulk ingredient reuse synergy
+        r_bulk = selected_recipe.get("bulk_category")
+        meal_bulk_info = {"is_bulk": False}
+        
+        if r_bulk and r_bulk in bulk_first_meal:
+            prev_info = bulk_first_meal[r_bulk]
+            spec = BULK_INGREDIENT_SYNERGY.get(r_bulk, {})
+            if spec:
+                meal_bulk_info = {
+                    "is_bulk": True,
+                    "bulk_title": spec["title"],
+                    "bulk_savings": spec["savings"],
+                    "paired_day": prev_info["day"],
+                    "paired_meal": prev_info["title"],
+                    "bulk_note": spec["note"].format(other_day=prev_info["day"], other_title=prev_info["title"])
+                }
+                # Also cross-link earlier meal
+                prev_idx = prev_info["index"]
+                if prev_idx < len(meals):
+                    meals[prev_idx]["bulk_reuse"] = {
+                        "is_bulk": True,
+                        "bulk_title": spec["title"],
+                        "bulk_savings": spec["savings"],
+                        "paired_day": day_name,
+                        "paired_meal": selected_recipe["title"],
+                        "bulk_note": spec["note"].format(other_day=day_name, other_title=selected_recipe["title"])
+                    }
+            bulk_category_counts[r_bulk] = bulk_category_counts.get(r_bulk, 0) + 1
+        elif r_bulk:
+            bulk_first_meal[r_bulk] = {
+                "index": len(meals),
+                "day": day_name,
+                "title": selected_recipe["title"]
+            }
+            bulk_category_counts[r_bulk] = 1
+        
+        cals = selected_recipe.get("calories", 550)
+        prot = selected_recipe.get("protein_g", 42)
+        crbs = selected_recipe.get("carbs_g", 45)
+        fat = selected_recipe.get("fat_g", 20)
+        fib = selected_recipe.get("fiber_g", 5)
+        r_effort = selected_recipe.get("effort_level", "standard")
+        effort_lbl = "⚡ Quick & Easy" if r_effort == "easy" else ("👨‍🍳 More Involved" if r_effort == "involved" else "🍳 Standard")
+        
         meal_obj = {
             "id": str(uuid.uuid4()),
             "recipe_id": selected_recipe["id"],
@@ -4774,7 +5172,29 @@ def generate_smart_meal_plan(
             "prep_time": selected_recipe["prep_time"],
             "cook_time": selected_recipe["cook_time"],
             "servings": servings,
-            "calories": selected_recipe["calories"],
+            "calories": cals,
+            "protein_g": prot,
+            "carbs_g": crbs,
+            "fat_g": fat,
+            "fiber_g": fib,
+            "effort_level": r_effort,
+            "effort_label": f"{effort_lbl} ({selected_recipe['prep_time']} prep)",
+            "macros": {
+                "calories": cals,
+                "protein_g": prot,
+                "carbs_g": crbs,
+                "fat_g": fat,
+                "fiber_g": fib
+            },
+            "family_macros": {
+                "calories": cals * servings,
+                "protein_g": prot * servings,
+                "carbs_g": crbs * servings,
+                "fat_g": fat * servings,
+                "fiber_g": fib * servings
+            },
+            "family_portion_guide": f"Scaled for your family of {servings}: ~{rec_protein_lbs} lbs protein, ~{rec_sides_lbs} lbs produce/sides",
+            "bulk_reuse": meal_bulk_info,
             "key_protein": selected_recipe["key_protein_keywords"][0] if selected_recipe["key_protein_keywords"] else "",
             "estimated_cost": f"${meal_cost:.2f}",
             "estimated_cost_per_serving": f"${meal_cost_serv:.2f}",
@@ -4841,6 +5261,148 @@ def save_meal_day_rules(req: DayRulesSaveRequest, user_id: str = Depends(verify_
     conn.commit()
     conn.close()
     return {"status": "success", "rules": req.rules}
+
+class FamilyProfileSaveRequest(BaseModel):
+    family_name: str = "Our Family"
+    members: list
+
+class SiteSuggestionCreateRequest(BaseModel):
+    page: str = "General"
+    title: str
+    description: str
+    author: str = "Wife"
+    priority: str = "improvement"
+
+@app.get("/api/meals/family_profile")
+def get_family_profile_api(user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
+    c = conn.cursor()
+    c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
+    row = c.fetchone()
+    conn.close()
+    settings = json.loads(row['settings']) if row and row['settings'] else {}
+    family_profile = settings.get("family_profile", DEFAULT_FAMILY_PROFILE)
+    nutrition_calc = calculate_family_nutrition_needs(family_profile)
+    return {"status": "success", "family_profile": family_profile, "nutrition": nutrition_calc}
+
+@app.post("/api/meals/family_profile")
+def save_family_profile_api(req: FamilyProfileSaveRequest, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
+    c = conn.cursor()
+    c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
+    row = c.fetchone()
+    settings = json.loads(row['settings']) if row and row['settings'] else {}
+    
+    profile_data = {
+        "family_name": req.family_name or "Our Family",
+        "total_members": len(req.members),
+        "members": req.members,
+        "notes": f"{len(req.members)} family members"
+    }
+    settings["family_profile"] = profile_data
+    
+    # Also default user servings in meal_preferences
+    if "meal_preferences" not in settings:
+        settings["meal_preferences"] = {}
+    settings["meal_preferences"]["default_servings"] = len(req.members)
+    
+    c.execute("UPDATE users SET settings=? WHERE id=?", (json.dumps(settings), user_id))
+    conn.commit()
+    conn.close()
+    
+    nutrition_calc = calculate_family_nutrition_needs(profile_data)
+    return {"status": "success", "family_profile": profile_data, "nutrition": nutrition_calc}
+
+# --- Site Suggestions & Wife Feedback Routes ---
+
+@app.get("/api/suggestions")
+def get_site_suggestions_api(status: str = None, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
+    c = conn.cursor()
+    if status and status != "all":
+        c.execute("SELECT id, user_id, page, title, description, author, priority, status, created_at, completed_at FROM site_suggestions WHERE user_id=? AND status=? ORDER BY created_at DESC", (user_id, status))
+    else:
+        c.execute("SELECT id, user_id, page, title, description, author, priority, status, created_at, completed_at FROM site_suggestions WHERE user_id=? ORDER BY created_at DESC", (user_id,))
+    rows = c.fetchall()
+    
+    c.execute("SELECT COUNT(*) FROM site_suggestions WHERE user_id=? AND status='open'", (user_id,))
+    open_count = c.fetchone()[0]
+    conn.close()
+    
+    suggestions = []
+    for r in rows:
+        suggestions.append({
+            "id": r["id"],
+            "page": r["page"],
+            "title": r["title"],
+            "description": r["description"],
+            "author": r["author"] or "Wife",
+            "priority": r["priority"] or "improvement",
+            "status": r["status"] or "open",
+            "created_at": r["created_at"],
+            "completed_at": r["completed_at"]
+        })
+    return {"status": "success", "suggestions": suggestions, "open_count": open_count}
+
+@app.post("/api/suggestions")
+def create_site_suggestion_api(req: SiteSuggestionCreateRequest, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
+    c = conn.cursor()
+    sugg_id = str(uuid.uuid4())
+    now = datetime.now().isoformat()
+    author = req.author.strip() if req.author and req.author.strip() else "Wife"
+    page = req.page.strip() if req.page and req.page.strip() else "General"
+    title = req.title.strip() if req.title and req.title.strip() else "Suggestion"
+    desc = req.description.strip() if req.description else ""
+    priority = req.priority or "improvement"
+    
+    c.execute("""INSERT INTO site_suggestions 
+                 (id, user_id, page, title, description, author, priority, status, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?)""",
+              (sugg_id, user_id, page, title, desc, author, priority, now))
+    conn.commit()
+    
+    c.execute("SELECT COUNT(*) FROM site_suggestions WHERE user_id=? AND status='open'", (user_id,))
+    open_count = c.fetchone()[0]
+    conn.close()
+    
+    return {
+        "status": "success",
+        "suggestion": {
+            "id": sugg_id,
+            "page": page,
+            "title": title,
+            "description": desc,
+            "author": author,
+            "priority": priority,
+            "status": "open",
+            "created_at": now
+        },
+        "open_count": open_count
+    }
+
+@app.put("/api/suggestions/{sugg_id}/complete")
+def complete_site_suggestion_api(sugg_id: str, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
+    c = conn.cursor()
+    now = datetime.now().isoformat()
+    c.execute("UPDATE site_suggestions SET status='completed', completed_at=? WHERE id=? AND user_id=?", (now, sugg_id, user_id))
+    conn.commit()
+    c.execute("SELECT COUNT(*) FROM site_suggestions WHERE user_id=? AND status='open'", (user_id,))
+    open_count = c.fetchone()[0]
+    conn.close()
+    return {"status": "success", "id": sugg_id, "status": "completed", "open_count": open_count}
+
+@app.delete("/api/suggestions/{sugg_id}")
+def delete_site_suggestion_api(sugg_id: str, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
+    c = conn.cursor()
+    c.execute("DELETE FROM site_suggestions WHERE id=? AND user_id=?", (sugg_id, user_id))
+    conn.commit()
+    c.execute("SELECT COUNT(*) FROM site_suggestions WHERE user_id=? AND status='open'", (user_id,))
+    open_count = c.fetchone()[0]
+    conn.close()
+    return {"status": "success", "id": sugg_id, "open_count": open_count}
 
 @app.get("/api/meals/current")
 def get_current_meal_plan(user_id: str = Depends(verify_auth)):
@@ -5189,6 +5751,40 @@ def swap_meal_recipe(plan_id: str, meal_id: str, user_id: str = Depends(verify_a
     conn.close()
     return {"status": "success", "meal": new_meal}
 
+def format_meal_calendar_desc(m: dict) -> str:
+    ing_lines = [f"- {ing['name']} ({ing['store']} • {ing['price']})" for ing in m.get("ingredients", [])]
+    step_lines = [f"{idx+1}. {s}" for idx, s in enumerate(m.get("instructions", []))]
+    
+    macros = m.get("macros", {})
+    prot = macros.get("protein_g", m.get("protein_g", "N/A"))
+    crbs = macros.get("carbs_g", m.get("carbs_g", "N/A"))
+    fat = macros.get("fat_g", m.get("fat_g", "N/A"))
+    fib = macros.get("fiber_g", m.get("fiber_g", "N/A"))
+    
+    fam_mac = m.get("family_macros", {})
+    fam_mac_str = ""
+    if fam_mac:
+        fam_mac_str = f"👨‍👩‍👧‍👦 Family Batch Macros (servings: {m.get('servings', 5)}): {fam_mac.get('calories', 'N/A')} kcal | {fam_mac.get('protein_g', 'N/A')}g Protein | {fam_mac.get('carbs_g', 'N/A')}g Carbs | {fam_mac.get('fat_g', 'N/A')}g Fat\n"
+        
+    bulk_line = ""
+    if m.get("bulk_reuse", {}).get("is_bulk"):
+        bulk_line = f"🔁 Bulk Buy Synergy: {m['bulk_reuse']['bulk_title']} ({m['bulk_reuse']['bulk_note']})\n"
+        
+    guide_line = f"🥗 Family Portion Guide: {m.get('family_portion_guide', '')}\n" if m.get('family_portion_guide') else ""
+    effort_txt = m.get("effort_label", m.get("effort_level", "Standard Weeknight"))
+    
+    return f"""🍽️ {m['title']} ({m.get('cuisine', 'Family Dinner')})
+⏱️ {effort_txt} | Prep: {m.get('prep_time', '15m')} | Cook: {m.get('cook_time', '20m')} | Servings: {m.get('servings', 5)}
+💵 Est. Cost: {m.get('estimated_cost', '$0.00')} ({m.get('estimated_cost_per_serving', '$0.00')}/serving)
+📊 Macros (per serving): 🔥 {m.get('calories', 0)} kcal | 🥩 {prot}g Protein | 🍞 {crbs}g Carbs | 🥑 {fat}g Fat | 🌾 {fib}g Fiber
+{fam_mac_str}{guide_line}{bulk_line}
+🛒 Recommended Store Ingredients:
+{chr(10).join(ing_lines)}
+
+👩‍🍳 Cooking Directions:
+{chr(10).join(step_lines)}
+"""
+
 @app.post("/api/meals/{plan_id}/meal/{meal_id}/calendar")
 def sync_meal_to_calendar(plan_id: str, meal_id: str, user_id: str = Depends(verify_auth)):
     conn = get_db_conn()
@@ -5253,16 +5849,7 @@ def sync_meal_to_calendar(plan_id: str, meal_id: str, user_id: str = Depends(ver
     for idx, s in enumerate(target_meal.get("instructions", [])):
         step_lines.append(f"{idx+1}. {s}")
         
-    event_desc = f"""🍽️ {target_meal['title']} ({target_meal['cuisine']})
-⏱️ Prep: {target_meal['prep_time']} | Cook: {target_meal['cook_time']} | Servings: {target_meal['servings']}
-🔥 Calories: {target_meal['calories']} kcal | Cost: {target_meal['estimated_cost']}
-
-🛒 Recommended Store Ingredients:
-{chr(10).join(ing_lines)}
-
-👩‍🍳 Cooking Directions:
-{chr(10).join(step_lines)}
-"""
+    event_desc = format_meal_calendar_desc(target_meal)
     first_store = target_meal["ingredients"][0]["store"] if target_meal.get("ingredients") else "Local Store"
     
     # Check if Google Calendar is authorized for user
@@ -5336,16 +5923,7 @@ def sync_all_meals_to_calendar(plan_id: str, user_id: str = Depends(verify_auth)
         ing_lines = [f"- {ing['name']} ({ing['store']} • {ing['price']})" for ing in target_meal.get("ingredients", [])]
         step_lines = [f"{idx+1}. {s}" for idx, s in enumerate(target_meal.get("instructions", []))]
         
-        event_desc = f"""🍽️ {target_meal['title']} ({target_meal['cuisine']})
-⏱️ Prep: {target_meal['prep_time']} | Cook: {target_meal['cook_time']} | Servings: {target_meal['servings']}
-🔥 Calories: {target_meal['calories']} kcal | Cost: {target_meal['estimated_cost']}
-
-🛒 Recommended Store Ingredients:
-{chr(10).join(ing_lines)}
-
-👩‍🍳 Cooking Directions:
-{chr(10).join(step_lines)}
-"""
+        event_desc = format_meal_calendar_desc(target_meal)
         first_store = target_meal["ingredients"][0]["store"] if target_meal.get("ingredients") else "Local Store"
         status = "pending"
         if service:
@@ -5414,6 +5992,8 @@ def export_meal_plan_to_grocery_list(plan_id: str, req: MealExportGroceryRequest
             cat = ing.get("category", "General")
             img = ing.get("image_url", "")
             notes = f"{price} ({m_title})" if price else m_title
+            if m.get("bulk_reuse", {}).get("is_bulk"):
+                notes += f" • Bulk Synergy: {m['bulk_reuse']['bulk_title']}"
             
             c.execute("INSERT INTO grocery_list_items (id, list_id, user_id, item_name, store_name, price_notes, category, is_checked, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)",
                       (item_id, target_list_id, user_id, name, store, notes, cat, img))
