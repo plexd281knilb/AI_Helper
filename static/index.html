@@ -4514,6 +4514,8 @@
                         document.getElementById('auth-title').innerText = 'Create First Admin Account';
                     } else {
                         setAuthMode('login');
+                        const toggleBtn = document.getElementById('auth-toggle-btn');
+                        if (toggleBtn) toggleBtn.style.display = data.allow_registration ? 'block' : 'none';
                     }
                 }
             } catch(e) {

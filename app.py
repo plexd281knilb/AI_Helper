@@ -964,6 +964,7 @@ def auth_status(request: Request):
     conn.close()
     return {
         "setup_required": count == 0,
+        "allow_registration": count == 0,
         "logged_in": logged_in,
         "user_id": user_id,
         "username": username,
@@ -975,18 +976,21 @@ def auth_status(request: Request):
 def auth_register(req: AuthRequest):
     if len(req.password) < 4:
         return {"error": "Password must be at least 4 characters."}
-    pwd_hash = hash_password(req.password)
-    user_id = str(uuid.uuid4())
-    default_settings = json.dumps({"ai_provider": "gemini", "ai_model": "gemini-1.5-flash", "public_url": ""})
     conn = get_db_conn()
     c = conn.cursor()
     try:
         c.execute("SELECT COUNT(*) FROM users")
         count = c.fetchone()[0]
-        assigned_role = "admin" if count == 0 else "user"
-        c.execute("INSERT INTO users (id, username, password_hash, settings, role) VALUES (?, ?, ?, ?, ?)", (user_id, req.username, pwd_hash, default_settings, assigned_role))
+        # Seal registration: only allow initial admin setup; all subsequent users must be created by an authenticated admin
+        if count > 0:
+            return {"error": "Public registration is disabled. Please contact the administrator for an account."}
+        
+        pwd_hash = hash_password(req.password)
+        user_id = str(uuid.uuid4())
+        default_settings = json.dumps({"ai_provider": "gemini", "ai_model": "gemini-1.5-flash", "public_url": ""})
+        c.execute("INSERT INTO users (id, username, password_hash, settings, role) VALUES (?, ?, ?, ?, 'admin')", (user_id, req.username, pwd_hash, default_settings))
         conn.commit()
-        logger.info(f"New user registered: {req.username} (role: {assigned_role})")
+        logger.info(f"Initial administrator account created: {req.username}")
     except sqlite3.IntegrityError:
         return {"error": "Username already exists."}
     finally:
