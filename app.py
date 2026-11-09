@@ -2865,17 +2865,229 @@ async def favicon():
     svg_icon = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">⚡</text></svg>'
     return Response(content=svg_icon, media_type="image/svg+xml")
 
+@app.get("/google{verification_code}.html")
+async def google_verification_file(verification_code: str):
+    """Dynamically serves Google Search Console HTML verification files."""
+    return Response(
+        content=f"google-site-verification: google{verification_code}.html",
+        media_type="text/html"
+    )
+
 @app.get("/privacy")
 async def privacy_policy():
     return Response(
         content="""<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Privacy Policy - AI Helper</title>
-<style>body{font-family:sans-serif;max-width:700px;margin:40px auto;padding:0 20px;line-height:1.6;color:#333;}</style>
-</head><body>
-<h1>Privacy Policy</h1>
-<p>AI Helper is a self-hosted personal application for scanning emails and syncing calendar events.</p>
-<p>All data is processed locally on your own private server and is not shared with or sold to third parties.</p>
-</body></html>""",
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy — AI Helper</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --border-color: #334155;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --success: #10b981;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 0;
+            line-height: 1.7;
+        }
+        .container {
+            max-width: 860px;
+            margin: 0 auto;
+            padding: 40px 24px 80px 24px;
+        }
+        .header {
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 24px;
+            margin-bottom: 32px;
+        }
+        .header h1 {
+            font-size: 32px;
+            font-weight: 800;
+            color: #ffffff;
+            margin: 0 0 10px 0;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .effective-date {
+            color: var(--text-muted);
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .nav-links {
+            margin-top: 16px;
+            display: flex;
+            gap: 16px;
+            font-size: 14px;
+        }
+        .nav-links a {
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .nav-links a:hover {
+            text-decoration: underline;
+        }
+        h2 {
+            font-size: 20px;
+            font-weight: 700;
+            color: #60a5fa;
+            margin-top: 36px;
+            margin-bottom: 12px;
+            border-left: 3px solid var(--accent);
+            padding-left: 12px;
+        }
+        h3 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #e2e8f0;
+            margin-top: 20px;
+            margin-bottom: 8px;
+        }
+        p, li {
+            color: #cbd5e1;
+            font-size: 15px;
+        }
+        ul {
+            padding-left: 24px;
+            margin: 10px 0;
+        }
+        li {
+            margin-bottom: 8px;
+        }
+        .callout-box {
+            background: rgba(59, 130, 246, 0.08);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 8px;
+            padding: 20px;
+            margin: 24px 0;
+        }
+        .callout-box strong {
+            color: #93c5fd;
+            display: block;
+            margin-bottom: 8px;
+            font-size: 16px;
+        }
+        .badge {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--success);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            padding: 4px 10px;
+            border-radius: 9999px;
+            font-size: 12px;
+            font-weight: 700;
+            display: inline-block;
+            margin-bottom: 12px;
+        }
+        .footer {
+            border-top: 1px solid var(--border-color);
+            margin-top: 48px;
+            padding-top: 24px;
+            text-align: center;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <span class="badge">Official Policy</span>
+            <h1>⚡ Privacy Policy</h1>
+            <div class="effective-date">Application: <strong>AI Helper</strong> (https://aihelper.domshomelab.com/) | Effective Date: November 9, 2026</div>
+            <div class="nav-links">
+                <a href="/">← Return to Home / Application</a>
+                <a href="/terms">Terms of Service</a>
+            </div>
+        </div>
+
+        <div class="callout-box">
+            <strong>Google API Services User Data Policy Compliance</strong>
+            <p style="margin: 0;">AI Helper's use and transfer of information received from Google APIs to any other app will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" style="color: #60a5fa; font-weight: 600;">Google API Services User Data Policy</a>, including the <strong>Limited Use</strong> requirements.</p>
+        </div>
+
+        <h2>1. Overview & Purpose of the Application</h2>
+        <p><strong>AI Helper</strong> is a self-hosted personal productivity web application designed to scan personal email accounts via standard IMAP protocols, extract calendar appointments, school announcements, sports schedules, and payment deadlines using artificial intelligence, and synchronize approved events directly with Google Calendar.</p>
+        <p>AI Helper is operated as a private, self-hosted service on the user's personal infrastructure. All database storage, email processing, and authorization credentials remain under the user's direct custody.</p>
+
+        <h2>2. Information We Collect and Process</h2>
+        <h3>A. Google Account & Calendar Data</h3>
+        <p>When you connect your Google account to enable Google Calendar synchronization, AI Helper requests authorization via Google OAuth 2.0. We collect and process the following Google user data:</p>
+        <ul>
+            <li><strong>Google Profile Identifier & Email Address:</strong> Used strictly to identify the authenticated account and display the connected calendar email.</li>
+            <li><strong>OAuth 2.0 Access & Refresh Tokens:</strong> Cryptographically stored locally on your server to interact with the Google Calendar API on your behalf.</li>
+            <li><strong>Google Calendar Events:</strong> Primary calendar event details (event summary, start/end date and time, location, description, and event ID) in order to push extracted events and detect existing calendar entries to avoid duplicate scheduling.</li>
+        </ul>
+
+        <h3>B. Email Data via IMAP</h3>
+        <p>With user-provided IMAP credentials, AI Helper fetches messages from designated inboxes. Email metadata (sender, date, subject) and message text are processed to identify personal calendar events. Messages are fetched using non-destructive read-only flags (<code>BODY.PEEK</code> per RFC 3501) preserving unread inbox statuses.</p>
+
+        <h3>C. User Profile & Settings</h3>
+        <p>Configured family member names, school grade filters, notification endpoints (e.g. Discord webhooks), and supermarket deal preferences stored locally in your private SQLite database.</p>
+
+        <h2>3. How We Use Google User Data</h2>
+        <p>We access and use Google user data exclusively to provide core calendar management functionality:</p>
+        <ul>
+            <li><strong>Creating Calendar Events:</strong> Creating confirmed calendar entries for school assemblies, sporting events, appointments, and deadlines extracted from your incoming emails.</li>
+            <li><strong>Intelligent Duplicate Prevention:</strong> Reading a +/- 14-hour window on your primary calendar prior to event creation to ensure identical events are not duplicated on your calendar.</li>
+            <li><strong>User-Initiated Event Removal:</strong> Deleting synced events from your Google Calendar when you explicitly dismiss or remove an event from the AI Helper Dashboard.</li>
+        </ul>
+
+        <div class="callout-box" style="border-left: 4px solid #10b981;">
+            <strong style="color: #34d399;">Our Strict Data Commitments:</strong>
+            <ul style="margin: 8px 0 0 0; color: #cbd5e1;">
+                <li><strong>No Advertising:</strong> We never use Google user data to serve advertisements, build marketing profiles, or track browsing habits.</li>
+                <li><strong>No Third-Party Sale or Transfer:</strong> We never sell, rent, lease, or transfer Google user data to data brokers, ad networks, or external commercial entities.</li>
+                <li><strong>No AI Model Training on Private Data:</strong> Your Google Calendar contents are never used to train generalized Large Language Models.</li>
+                <li><strong>Human Access Restrictions:</strong> No human has access to your Google Calendar data or OAuth tokens unless you explicitly request technical support on your self-hosted instance.</li>
+            </ul>
+        </div>
+
+        <h2>4. Data Storage, Security & Retention</h2>
+        <p>All data is maintained locally in the application's persistent SQLite database (<code>data/app.db</code>) and encrypted credential files (<code>data/token_*.json</code>) on your own secure server behind your private network.</p>
+        <ul>
+            <li>All communication with Google APIs occurs over secure, encrypted HTTPS/TLS 1.3 connections.</li>
+            <li>OAuth tokens are restricted to the local file system with strict container volume boundaries.</li>
+            <li>Session tokens are cryptographically generated using 64-character hex strings with constant-time verification.</li>
+        </ul>
+
+        <h2>5. User Control & Data Deletion</h2>
+        <p>You have complete control over your Google Calendar authorization and all stored data:</p>
+        <ul>
+            <li><strong>Disconnect Google Calendar Anytime:</strong> You can revoke AI Helper's access at any time by clicking <em>"Disconnect Calendar"</em> in the System Settings tab. This immediately purges the OAuth token file from disk.</li>
+            <li><strong>Revoke via Google Account:</strong> You can also revoke access directly through your Google Account Security Dashboard at <a href="https://myaccount.google.com/permissions" target="_blank" style="color: #60a5fa;">https://myaccount.google.com/permissions</a>.</li>
+            <li><strong>Full Data Erasure:</strong> Deleting an event, email history item, or user account permanently deletes the corresponding records from the SQLite database.</li>
+        </ul>
+
+        <h2>6. Changes to this Privacy Policy</h2>
+        <p>If our data handling practices or Google API scopes change, this policy will be updated with a revised effective date. Continued use of AI Helper after revisions constitutes acceptance of the updated terms.</p>
+
+        <h2>7. Contact Information</h2>
+        <p>If you have any questions, concerns, or requests regarding this Privacy Policy or your data privacy, please contact the application owner and maintainer:</p>
+        <p>
+            <strong>Dominic Juliano</strong><br>
+            Email: <a href="mailto:dominicmjuliano@gmail.com" style="color: #60a5fa;">dominicmjuliano@gmail.com</a><br>
+            Application URL: <a href="https://aihelper.domshomelab.com/" style="color: #60a5fa;">https://aihelper.domshomelab.com/</a>
+        </p>
+
+        <div class="footer">
+            &copy; 2026 AI Helper. Self-Hosted Personal & Family Assistant. All rights reserved.
+        </div>
+    </div>
+</body>
+</html>""",
         media_type="text/html"
     )
 
@@ -2883,12 +3095,162 @@ async def privacy_policy():
 async def terms_of_service():
     return Response(
         content="""<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Terms of Service - AI Helper</title>
-<style>body{font-family:sans-serif;max-width:700px;margin:40px auto;padding:0 20px;line-height:1.6;color:#333;}</style>
-</head><body>
-<h1>Terms of Service</h1>
-<p>AI Helper is a private, personal utility provided for individual productivity and calendar management.</p>
-</body></html>""",
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terms of Service — AI Helper</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --border-color: #334155;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --success: #10b981;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 0;
+            line-height: 1.7;
+        }
+        .container {
+            max-width: 860px;
+            margin: 0 auto;
+            padding: 40px 24px 80px 24px;
+        }
+        .header {
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 24px;
+            margin-bottom: 32px;
+        }
+        .header h1 {
+            font-size: 32px;
+            font-weight: 800;
+            color: #ffffff;
+            margin: 0 0 10px 0;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .effective-date {
+            color: var(--text-muted);
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .nav-links {
+            margin-top: 16px;
+            display: flex;
+            gap: 16px;
+            font-size: 14px;
+        }
+        .nav-links a {
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .nav-links a:hover {
+            text-decoration: underline;
+        }
+        h2 {
+            font-size: 20px;
+            font-weight: 700;
+            color: #60a5fa;
+            margin-top: 36px;
+            margin-bottom: 12px;
+            border-left: 3px solid var(--accent);
+            padding-left: 12px;
+        }
+        p, li {
+            color: #cbd5e1;
+            font-size: 15px;
+        }
+        ul {
+            padding-left: 24px;
+            margin: 10px 0;
+        }
+        li {
+            margin-bottom: 8px;
+        }
+        .callout-box {
+            background: rgba(59, 130, 246, 0.08);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 8px;
+            padding: 20px;
+            margin: 24px 0;
+        }
+        .footer {
+            border-top: 1px solid var(--border-color);
+            margin-top: 48px;
+            padding-top: 24px;
+            text-align: center;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚖️ Terms of Service</h1>
+            <div class="effective-date">Application: <strong>AI Helper</strong> (https://aihelper.domshomelab.com/) | Effective Date: November 9, 2026</div>
+            <div class="nav-links">
+                <a href="/">← Return to Home / Application</a>
+                <a href="/privacy">Privacy Policy</a>
+            </div>
+        </div>
+
+        <h2>1. Acceptance of Terms</h2>
+        <p>By accessing or using <strong>AI Helper</strong> (accessible at <a href="https://aihelper.domshomelab.com/" style="color: #60a5fa;">https://aihelper.domshomelab.com/</a> or hosted privately on your own hardware), you agree to be bound by these Terms of Service. If you do not agree to these terms, you should not access or use this application.</p>
+
+        <h2>2. Description of the Service</h2>
+        <p>AI Helper is a self-hosted personal productivity platform designed to assist individuals and families with automated email parsing, calendar synchronization, and grocery deal tracking. Core features include:</p>
+        <ul>
+            <li>Connecting to user-specified email inboxes via secure IMAP protocols to detect upcoming appointments, school activities, sports schedules, and deadlines.</li>
+            <li>Synchronizing approved events with the user's Google Calendar via OAuth 2.0 authorization.</li>
+            <li>Aggregating local supermarket deals to assist with meal planning and grocery management.</li>
+        </ul>
+
+        <h2>3. Google API Services & Calendar Integration</h2>
+        <p>AI Helper integrates with Google APIs using OAuth 2.0 to access Google Calendar services. In accordance with the <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" style="color: #60a5fa;">Google API Services User Data Policy</a>, AI Helper uses calendar scopes exclusively to manage events you configure or approve. You may disconnect or revoke calendar access at any time through the application settings or your Google account security settings.</p>
+
+        <h2>4. User Responsibilities & Account Security</h2>
+        <p>As a self-hosted platform, you are responsible for:</p>
+        <ul>
+            <li>Maintaining the security and confidentiality of your administrative credentials and IMAP app passwords.</li>
+            <li>Ensuring that the network and server hosting AI Helper comply with appropriate security safeguards (such as HTTPS/TLS encryption).</li>
+            <li>Reviewing and confirming calendar events before or after synchronization to ensure accuracy.</li>
+        </ul>
+
+        <h2>5. Disclaimer of Warranties</h2>
+        <p>AI Helper is provided on an "AS IS" and "AS AVAILABLE" basis without warranties of any kind, either express or implied, including but not limited to the implied warranties of merchantability, fitness for a particular purpose, or non-infringement. While AI Helper utilizes advanced AI models to parse message context, we do not warrant that all event dates, times, or locations will be extracted without error.</p>
+
+        <h2>6. Limitation of Liability</h2>
+        <p>In no event shall the author or copyright holders of AI Helper be liable for any direct, indirect, incidental, special, exemplary, or consequential damages (including loss of data, missed appointments, or scheduling conflicts) arising out of the use or inability to use this software.</p>
+
+        <h2>7. Modifications to Terms</h2>
+        <p>We reserve the right to revise these Terms of Service at any time. Updates will be published directly on this page with a revised effective date.</p>
+
+        <h2>8. Contact Information</h2>
+        <p>For questions or inquiries regarding these Terms of Service, please contact:</p>
+        <p>
+            <strong>Dominic Juliano</strong><br>
+            Email: <a href="mailto:dominicmjuliano@gmail.com" style="color: #60a5fa;">dominicmjuliano@gmail.com</a><br>
+            Website: <a href="https://aihelper.domshomelab.com/" style="color: #60a5fa;">https://aihelper.domshomelab.com/</a>
+        </p>
+
+        <div class="footer">
+            &copy; 2026 AI Helper. Self-Hosted Personal & Family Assistant. All rights reserved.
+        </div>
+    </div>
+</body>
+</html>""",
         media_type="text/html"
     )
 

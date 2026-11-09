@@ -27,7 +27,7 @@
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; background-color: var(--bg-color); color: var(--text-color); line-height: 1.5; }
         
         /* Auth Overlay Styles */
-        #auth-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 17, 21, 0.9); backdrop-filter: blur(5px); z-index: 9999; display: flex; align-items: center; justify-content: center; flex-direction: column; padding: 20px; box-sizing: border-box; }
+        #auth-overlay { position: fixed; inset: 0; width: 100%; height: 100%; background: #0b0f19; z-index: 9999; overflow-y: auto; display: none; box-sizing: border-box; }
         .auth-box { background: var(--card-bg); padding: 40px 30px; border-radius: var(--radius-lg); border: 1px solid var(--border-color); box-shadow: var(--shadow-md); width: 100%; max-width: 400px; text-align: center; box-sizing: border-box; }
         .auth-box h2 { margin-top: 0; margin-bottom: 25px; }
         .auth-box input { width: 100%; padding: 14px; margin: 10px 0; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--input-bg); color: #fff; box-sizing: border-box; font-size: 16px; transition: border 0.2s; }
@@ -2170,15 +2170,164 @@
 </head>
 <body>
 
-    <!-- Auth Overlay -->
-    <div id="auth-overlay">
-        <div class="auth-box" id="auth-container" style="display: none;">
-            <h2 id="auth-title">Login</h2>
-            <div id="auth-msg" class="auth-msg"></div>
-            <input type="text" id="auth-user" placeholder="Username" onkeypress="if(event.key === 'Enter') submitAuth()">
-            <input type="password" id="auth-pass" placeholder="Password" onkeypress="if(event.key === 'Enter') submitAuth()">
-            <button id="auth-btn" onclick="submitAuth()">Login</button>
-            <button class="auth-toggle" id="auth-toggle-btn" onclick="toggleAuthMode()">Need an account? Register</button>
+<!-- Public Home Page & Auth Portal (Displayed to Unauthenticated Visitors & Reviewers) -->
+    <div id="auth-overlay" style="display: none;">
+        <!-- Top Public Navbar -->
+        <header style="background: rgba(13, 17, 23, 0.95); border-bottom: 1px solid #30363d; backdrop-filter: blur(8px); position: sticky; top: 0; z-index: 100; padding: 14px 24px;">
+            <div style="max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 24px;">⚡</span>
+                    <div>
+                        <span style="font-size: 19px; font-weight: 800; color: #fff; letter-spacing: -0.5px;">AI Helper</span>
+                        <span style="font-size: 11px; font-weight: 700; background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.4); padding: 2px 7px; border-radius: 9999px; margin-left: 6px;">v2.5</span>
+                    </div>
+                </div>
+                <nav style="display: flex; align-items: center; gap: 20px; font-size: 14px; flex-wrap: wrap;">
+                    <a href="#lp-overview" style="color: #cbd5e1; text-decoration: none; font-weight: 500;">Overview</a>
+                    <a href="#lp-calendar" style="color: #cbd5e1; text-decoration: none; font-weight: 500;">Google Calendar Sync</a>
+                    <a href="#lp-features" style="color: #cbd5e1; text-decoration: none; font-weight: 500;">Features</a>
+                    <a href="/privacy" target="_blank" style="color: #60a5fa; text-decoration: none; font-weight: 600;">Privacy Policy</a>
+                    <a href="/terms" target="_blank" style="color: #60a5fa; text-decoration: none; font-weight: 600;">Terms</a>
+                    <button type="button" onclick="scrollToSignIn()" style="background: #2563eb; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13.5px; transition: background 0.2s;">Sign In</button>
+                </nav>
+            </div>
+        </header>
+
+        <!-- Main Landing Body -->
+        <div style="max-width: 1200px; margin: 0 auto; padding: 40px 24px 80px 24px;">
+            
+            <!-- Hero Grid -->
+            <div id="lp-overview" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 40px; align-items: center; margin-bottom: 60px;">
+                <div>
+                    <div style="display: inline-flex; align-items: center; gap: 6px; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.3); color: #34d399; font-size: 12.5px; font-weight: 700; padding: 4px 12px; border-radius: 9999px; margin-bottom: 16px;">
+                        <span>🛡️</span> Google Calendar OAuth 2.0 Integration & Privacy-First Personal Assistant
+                    </div>
+                    <h1 style="font-size: 38px; font-weight: 800; color: #fff; line-height: 1.2; margin: 0 0 16px 0; letter-spacing: -0.5px;">
+                        Intelligent Email Scheduling & Calendar Assistant
+                    </h1>
+                    <p style="font-size: 16px; color: #94a3b8; line-height: 1.6; margin: 0 0 24px 0;">
+                        AI Helper is a self-hosted web application that monitors incoming emails via IMAP, automatically extracts calendar events (school assemblies, athletic games, doctor appointments, and payment deadlines) using AI, and synchronizes them directly with <strong>Google Calendar</strong>.
+                    </p>
+                    <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                        <button type="button" onclick="scrollToSignIn()" style="background: #2563eb; color: #fff; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 700; font-size: 15px; cursor: pointer;">
+                            Access Dashboard
+                        </button>
+                        <a href="/privacy" target="_blank" style="display: inline-flex; align-items: center; background: rgba(255, 255, 255, 0.06); border: 1px solid #30363d; color: #cbd5e1; text-decoration: none; padding: 12px 20px; border-radius: 8px; font-weight: 600; font-size: 15px;">
+                            Read Privacy Policy →
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Sign In Card Container -->
+                <div style="display: flex; justify-content: center;">
+                    <div class="auth-box" id="auth-container" style="background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 32px 28px; width: 100%; max-width: 420px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.04);">
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px;">
+                            <span style="font-size: 22px;">⚡</span>
+                            <span style="font-size: 18px; font-weight: 700; color: #fff;">AI Helper Portal</span>
+                        </div>
+                        <h2 id="auth-title" style="margin: 0 0 18px 0; font-size: 20px; color: #e2e8f0; font-weight: 700;">Account Sign In</h2>
+                        <div id="auth-msg" class="auth-msg" style="color: #f87171; font-size: 13.5px; margin-bottom: 12px; min-height: 18px;"></div>
+                        <div style="text-align: left; margin-bottom: 6px;">
+                            <label style="font-size: 12.5px; font-weight: 600; color: #94a3b8;">Username</label>
+                            <input type="text" id="auth-user" placeholder="Enter username" onkeypress="if(event.key === 'Enter') submitAuth()" style="width: 100%; padding: 11px 13px; margin: 4px 0 14px 0; border: 1px solid #30363d; border-radius: 6px; background: #0d1117; color: #fff; box-sizing: border-box; font-size: 14.5px;">
+                        </div>
+                        <div style="text-align: left; margin-bottom: 12px;">
+                            <label style="font-size: 12.5px; font-weight: 600; color: #94a3b8;">Password</label>
+                            <input type="password" id="auth-pass" placeholder="Enter password" onkeypress="if(event.key === 'Enter') submitAuth()" style="width: 100%; padding: 11px 13px; margin: 4px 0 14px 0; border: 1px solid #30363d; border-radius: 6px; background: #0d1117; color: #fff; box-sizing: border-box; font-size: 14.5px;">
+                        </div>
+                        <button id="auth-btn" onclick="submitAuth()" style="width: 100%; padding: 12px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 15px; font-weight: 700; transition: background 0.2s;">Login</button>
+                        <button class="auth-toggle" id="auth-toggle-btn" onclick="toggleAuthMode()" style="background: none; border: none; color: #60a5fa; font-size: 13.5px; margin-top: 16px; cursor: pointer;">Need an account? Register</button>
+                        <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(255, 255, 255, 0.08); font-size: 12px; color: #64748b;">
+                            🔒 Private self-hosted instance at <code>aihelper.domshomelab.com</code>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dedicated Google Calendar Integration Section -->
+            <div id="lp-calendar" style="background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 36px 32px; margin-bottom: 50px;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                    <span style="font-size: 26px;">📅</span>
+                    <h2 style="font-size: 24px; font-weight: 800; color: #fff; margin: 0;">Google Calendar Integration & Permissions</h2>
+                </div>
+                <p style="color: #94a3b8; font-size: 15.5px; line-height: 1.6; margin: 0 0 28px 0; max-width: 900px;">
+                    AI Helper integrates with Google Calendar via secure OAuth 2.0 authentication to streamline family and personal schedules. Here is how our integration operates in full compliance with the <strong>Google API Services User Data Policy</strong>:
+                </p>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px;">
+                    <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
+                        <div style="font-size: 24px; margin-bottom: 10px;">⚡</div>
+                        <h3 style="font-size: 16px; font-weight: 700; color: #60a5fa; margin: 0 0 8px 0;">Automated Synchronization</h3>
+                        <p style="color: #cbd5e1; font-size: 13.5px; line-height: 1.5; margin: 0;">
+                            Pushes confirmed events directly to your primary Google Calendar with verified start times, durations, room/campus locations, and full context summaries.
+                        </p>
+                    </div>
+                    <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
+                        <div style="font-size: 24px; margin-bottom: 10px;">🛡️</div>
+                        <h3 style="font-size: 16px; font-weight: 700; color: #34d399; margin: 0 0 8px 0;">Duplicate Prevention Engine</h3>
+                        <p style="color: #cbd5e1; font-size: 13.5px; line-height: 1.5; margin: 0;">
+                            Inspects existing Google Calendar entries in a +/- 14-hour window before creating any event to ensure identical school activities or meetings are not duplicated.
+                        </p>
+                    </div>
+                    <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
+                        <div style="font-size: 24px; margin-bottom: 10px;">🔒</div>
+                        <h3 style="font-size: 16px; font-weight: 700; color: #f59e0b; margin: 0 0 8px 0;">Limited Use Compliance</h3>
+                        <p style="color: #cbd5e1; font-size: 13.5px; line-height: 1.5; margin: 0;">
+                            Adheres strictly to the Google API Services User Data Policy Limited Use requirements. Calendar access is used strictly to sync user-requested events.
+                        </p>
+                    </div>
+                    <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
+                        <div style="font-size: 24px; margin-bottom: 10px;">🚫</div>
+                        <h3 style="font-size: 16px; font-weight: 700; color: #ec4899; margin: 0 0 8px 0;">Zero Third-Party Sharing</h3>
+                        <p style="color: #cbd5e1; font-size: 13.5px; line-height: 1.5; margin: 0;">
+                            Your Google user data is NEVER sold, shared with advertisers, or used for training AI models. All tokens remain stored locally on your private server.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Features Grid -->
+            <div id="lp-features" style="margin-bottom: 60px;">
+                <h2 style="font-size: 24px; font-weight: 800; color: #fff; margin: 0 0 8px 0; text-align: center;">Comprehensive Assistant Capabilities</h2>
+                <p style="color: #94a3b8; font-size: 15px; text-align: center; margin: 0 0 32px 0;">Designed from the ground up for modern family scheduling and everyday productivity.</p>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
+                    <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 22px;">
+                        <h3 style="font-size: 16px; font-weight: 700; color: #fff; margin: 0 0 8px 0;">📬 Inbox Safety & IMAP Peek</h3>
+                        <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0;">
+                            Analyzes emails using non-destructive <code>BODY.PEEK</code> per RFC 3501, keeping your incoming messages unread and untouched in your inbox.
+                        </p>
+                    </div>
+                    <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 22px;">
+                        <h3 style="font-size: 16px; font-weight: 700; color: #fff; margin: 0 0 8px 0;">👨‍👩‍👧 Family Member Attribution</h3>
+                        <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0;">
+                            Intelligently matches extracted events to specific family members based on grade level (2nd, 6th, 9th) and sports context (Cross Country, Softball, Track).
+                        </p>
+                    </div>
+                    <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 22px;">
+                        <h3 style="font-size: 16px; font-weight: 700; color: #fff; margin: 0 0 8px 0;">🛒 Local Deals & Smart Groceries</h3>
+                        <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0;">
+                            Aggregates weekly circulars from local supermarkets (H-E-B, Tom Thumb, Costco) to compare prices and plan cohesive family dinners.
+                        </p>
+                    </div>
+                    <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 22px;">
+                        <h3 style="font-size: 16px; font-weight: 700; color: #fff; margin: 0 0 8px 0;">⚡ 1-Click Calendar Controls</h3>
+                        <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0;">
+                            Instant manual sync, bulk push, or 1-click dismissal with automatic calendar deletion so your schedule remains synchronized and accurate.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Public Footer -->
+            <footer style="border-top: 1px solid #30363d; padding-top: 30px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; font-size: 13.5px; color: #64748b;">
+                <div>
+                    &copy; 2026 AI Helper. Operated by Dominic Juliano. All rights reserved.
+                </div>
+                <div style="display: flex; gap: 20px;">
+                    <a href="/privacy" target="_blank" style="color: #60a5fa; text-decoration: none;">Privacy Policy</a>
+                    <a href="/terms" target="_blank" style="color: #60a5fa; text-decoration: none;">Terms of Service</a>
+                    <a href="mailto:dominicmjuliano@gmail.com" style="color: #94a3b8; text-decoration: none;">Contact Support</a>
+                </div>
+            </footer>
         </div>
     </div>
 
@@ -4356,7 +4505,7 @@
                     initializeApp();
                     checkOnboardingTrigger();
                 } else {
-                    overlay.style.display = 'flex';
+                    overlay.style.display = 'block';
                     container.style.display = 'block';
                     appContent.style.display = 'none';
                     if (data.setup_required) {
@@ -4417,6 +4566,16 @@
             });
         }
         
+        
+        function scrollToSignIn() {
+            const el = document.getElementById('auth-container');
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                const userInp = document.getElementById('auth-user');
+                if (userInp) userInp.focus();
+            }
+        }
+
         function setAuthMode(mode) {
             authMode = mode;
             document.getElementById('auth-title').innerText = mode === 'login' ? 'Login' : 'Register Account';
