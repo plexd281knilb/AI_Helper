@@ -420,6 +420,21 @@ For fast sub-millisecond query performance on multi-user and large datasets, the
 | `POST` | `/api/onboarding/complete` | Mark onboarding wizard as completed | Yes |
 | `POST` | `/api/onboarding/reset` | Reset onboarding status to trigger wizard again | Yes |
 | `POST` | `/api/accounts/test` | Test IMAP credentials with auto space stripping and helpful hints | Yes |
+| `GET` | `/api/command_center/briefing` | Unified Morning Briefing across family events, tonight's dinner, groceries, and FB Sniper | Yes |
+| `POST` | `/api/events/manual` | Quick-add a custom family calendar event with Google Calendar sync | Yes |
+| `GET` | `/api/facebook/overview` | Fetch Facebook Marketplace watchlists, verified local matches, and blocked garbage log | Yes |
+| `POST` | `/api/facebook/watchlists` | Create or update a Facebook Marketplace watchlist with 4-stage anti-garbage rules | Yes |
+| `DELETE` | `/api/facebook/watchlists/{id}` | Delete a Facebook watchlist and its cached listings | Yes |
+| `POST` | `/api/facebook/watchlists/{id}/scan` | Scan a specific Facebook watchlist and dispatch Email/Discord alerts | Yes |
+| `POST` | `/api/facebook/scan_all` | Scan all active Facebook watchlists | Yes |
+| `POST` | `/api/facebook/cookie` | Save authenticated Facebook session cookie (`c_user` + `xs` or Cookie-Editor JSON) | Yes |
+| `POST` | `/api/facebook/test_cookie` | Validate saved Facebook session cookie tokens | Yes |
+| `POST` | `/api/facebook/listings/{id}/action` | Star, dismiss, or dispatch immediate Email + Discord alert for a listing | Yes |
+| `POST` | `/api/facebook/inspect_listing` | Live test any listing title, price, and location against active anti-garbage rules | Yes |
+| `GET` | `/api/notifications/settings` | Get Discord webhook & SMTP email alert settings and notification history log | Yes |
+| `POST` | `/api/notifications/settings` | Save Discord webhook & email notification settings | Yes |
+| `POST` | `/api/notifications/test` | Send an immediate test Discord embed or HTML email alert | Yes |
+| `DELETE` | `/api/notifications/logs` | Clear sent notification history logs | Yes |
 
 ---
 

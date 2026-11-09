@@ -4,6 +4,12 @@ This document outlines the evolutionary roadmap for **AI Helper**, cataloging re
 
 ---
 
+### ✨ What's New in v3.0 (Life OS Overhaul & Facebook Marketplace Sniper)
+
+- **🏠 Family Life Command Center ("Morning Briefing" Dashboard):** Unified 4-card Bento Command Center displaying upcoming family events (with 1-click filters for **Dominic**, **Wife**, **Gia**, **Ellie**, and **Leo**), Tonight's Planned Dinner, Active Grocery List with inline Quick-Add, and Facebook Marketplace Sniper status, plus a global **`Ctrl+K` Command Palette** and inline **Quick-Add Family Event** creator.
+- **🎯 Facebook Marketplace Sniper & 4-Stage Anti-Garbage Engine:** Built to fix Facebook Marketplace's broken search (e.g., searching `liv xxs bike` and getting Large Treks in Arkansas). Features an authenticated **Session Cookie Vault (`c_user` + `xs`)**, **DFW / Argyle 65-City Geofence (`76226` <= 45 mi)**, **Out-of-State Blocker** (blocks Arkansas, Oklahoma, Louisiana, Missouri, and "Ships to you"), **Strict Brand & Frame Size Enforcement**, **Blocked Garbage Diagnostic Log**, and a pre-seeded **"🚲 Wife's Liv XXS / XS Bike (DFW Local Only)"** watchlist.
+- **🔔 Multi-Channel Instant Alerts (Discord Rich Webhooks + Zero-Config SMTP Email):** Dispatches rich Discord embeds and dark-mode HTML email alerts (automatically sent through your connected Gmail, iCloud, or Outlook account) when a verified local Facebook deal or family event is detected.
+
 ### ✨ What's New in v2.5
 
 - **🏰 Portalarr-Inspired Responsive Navigation Shell:** Modern responsive navigation architecture with role-aware separation between **Main Workspace** (`Dashboard`, `Email History`, `Deals & Groceries`) and **Administration** (`Access Control & Users`, `System Settings`, `Live Diagnostic Logs`), featuring glowing badge indicators, slide-out mobile drawer, and quick-action fetch controls.
