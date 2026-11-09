@@ -147,6 +147,8 @@ DEFAULT_PARSING_RULES = {
     "filter_package_deliveries": True,
     "filter_corporate_webinars": True,
     "filter_public_festivals_and_events": True,
+    "filter_class_actions_and_legal": True,
+    "filter_loyalty_and_rewards_deadlines": True,
     "invite_reminders": True,
     "keep_emails_unread": True,
     "custom_instructions": ""
@@ -229,6 +231,10 @@ def build_parsing_prompt_instructions(settings: dict) -> str:
 
     # 7. Promotions, Deliveries & Marketing Filter
     filter_items = []
+    if rules.get("filter_class_actions_and_legal", True):
+        filter_items.append("  * STRICTLY REJECT class action settlement notices, claim form deadlines, and court hearings (e.g. 'CVS Class Action Settlement Claim Form Deadline', 'Final Approval Hearing', 'Settlement Administrator notice'). These are legal notices, NOT personal calendar appointments.")
+    if rules.get("filter_loyalty_and_rewards_deadlines", True):
+        filter_items.append("  * STRICTLY REJECT rewards, points, or loyalty program partnership deadlines (e.g. 'Link World of Hyatt and American Airlines accounts deadline', 'Points expiration warning', 'Transfer bonus ending'). These are marketing program announcements, NOT calendar appointments.")
     if rules.get("filter_public_festivals_and_events", True):
         filter_items.append("  * STRICTLY REJECT public social events, festivals, tastings, expos, concerts, sporting event ticket solicitations, and community fairs (e.g. '11th Annual Whiskey Social', 'Beer Fest', 'Wine Walk', 'Food & Wine Festival', 'Concert Tour', 'Tickets On Sale Now') UNLESS the email is an EXPLICIT ticket purchase receipt, order confirmation, ticket barcode, or calendar invite (ICS) showing the user has ACTUALLY purchased tickets or registered. If it is merely an announcement, newsletter, or invitation to buy tickets, return empty events [] with reason 'Promotional event/festival solicitation without confirmed ticket purchase or registration'.")
         filter_items.append("  * Midnight / All-Day default notice: Do NOT fabricate midnight (12:00:00 AM) events from general marketing date mentions.")
@@ -292,6 +298,42 @@ def post_process_extracted_event(e: dict, settings: dict, subject: str, body: st
             if any(kw in full_context for kw in ["camp", "clinic", "enrichment", "workshop", "tryout", "sign up", "signup"]):
                 logger.info(f"Filtered unregistered camp solicitation: '{title}'")
                 return None
+
+    # Filter class action settlements, claim forms & court hearings
+    if rules.get("filter_class_actions_and_legal", True):
+        class_action_patterns = [
+            r'class\s+action',
+            r'settlement\s+claim',
+            r'claim\s+form\s+deadline',
+            r'final\s+approval\s+hearing',
+            r'fairness\s+hearing',
+            r'settlement\s+administrator',
+            r'notice\s+of\s+(?:proposed\s+)?settlement',
+            r'proposed\s+class\s+action',
+            r'court\s+will\s+hold\s+the\s+final\s+approval',
+            r'submit\s+a\s+(?:timely\s+and\s+complete\s+)?claim\s+form',
+            r'cash\s+payment\s+from\s+a\s+class\s+action'
+        ]
+        if any(re.search(pat, full_context) for pat in class_action_patterns):
+            logger.info(f"Filtered class action / legal settlement notice: '{title}'")
+            return None
+
+    # Filter loyalty / rewards program / account linking promotions
+    if rules.get("filter_loyalty_and_rewards_deadlines", True):
+        loyalty_patterns = [
+            r'link\s+(?:your\s+)?.*accounts\s+deadline',
+            r'link\s+world\s+of\s+hyatt',
+            r'partnership\s+winds?\s+down',
+            r'points?\s+expiration',
+            r'miles?\s+expiration',
+            r'status\s+match\s+deadline',
+            r'transfer\s+bonus\s+ends?',
+            r'rewards?\s+partnership',
+            r'loyalty\s+program\s+update'
+        ]
+        if any(re.search(pat, full_context) for pat in loyalty_patterns):
+            logger.info(f"Filtered loyalty / rewards program deadline: '{title}'")
+            return None
 
     # Filter unconfirmed public festivals, socials, tastings & ticket solicitations
     if rules.get("filter_public_festivals_and_events", True):
@@ -755,6 +797,12 @@ def init_db():
                 s["parsing_rules"] = DEFAULT_PARSING_RULES
                 changed = True
             elif isinstance(s["parsing_rules"], dict):
+                if "filter_class_actions_and_legal" not in s["parsing_rules"]:
+                    s["parsing_rules"]["filter_class_actions_and_legal"] = True
+                    changed = True
+                if "filter_loyalty_and_rewards_deadlines" not in s["parsing_rules"]:
+                    s["parsing_rules"]["filter_loyalty_and_rewards_deadlines"] = True
+                    changed = True
                 if "filter_public_festivals_and_events" not in s["parsing_rules"]:
                     s["parsing_rules"]["filter_public_festivals_and_events"] = True
                     changed = True
@@ -1589,7 +1637,8 @@ def extract_event(text: str, date: datetime, subject: str, settings: dict) -> di
     rules_text = build_parsing_prompt_instructions(settings)
     date_str = date.isoformat() if date else "Unknown"
     prompt = f"""
-    Analyze the following email to see if it contains one or more clear calendar events, appointments, meetings, flights, dinners, deadlines, assignment due dates, or scheduled tasks.
+    Analyze the following email to see if it contains legitimate personal or family calendar events (such as doctor/dentist appointments, flights, confirmed dinners, school events, sports games/practices, parent-teacher conferences, personal meetings, child assignment due dates, or personal utility bill due dates).
+    DO NOT extract promotional deadlines, class action lawsuit settlement claims or court hearings, loyalty rewards or account linking notices, marketing sales, or public festivals/event solicitations.
     Email Subject: {subject}
     Email Date: {date_str}
 
