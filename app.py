@@ -272,6 +272,35 @@ def build_parsing_prompt_instructions(settings: dict) -> str:
 
     return "\n\n".join(sections)
 
+def clean_display_event_title(title: str, child_names=None, self_name="Dominic") -> str:
+    """
+    Normalizes child and grade suffixes into clean, standard format ('Event Title - Name').
+    Strips redundant parentheticals like '(Leo - 2nd Grade)', '- Leo (2nd Grade)', '(Leo)', '(2nd Grade)'.
+    """
+    if not title:
+        return ""
+    if child_names is None:
+        child_names = ["Leo", "Ellie", "Gia"]
+    t = title.strip()
+    
+    for name in child_names + [self_name, "Wife"]:
+        # Match (Leo - 2nd Grade), (Leo, 2nd Grade), [Leo - Grade 2]
+        pattern = rf'[\(\[]\s*{name}\s*[\-,].*?(?:grade|school).*?[\)\]]'
+        t = re.sub(pattern, f'- {name}', t, flags=re.IGNORECASE).strip()
+        # Match - Leo (2nd Grade), - Leo (6th Grade Middle School)
+        pattern2 = rf'-\s*{name}\s*[\(\[].*?(?:grade|school).*?[\)\]]'
+        t = re.sub(pattern2, f'- {name}', t, flags=re.IGNORECASE).strip()
+        # Match (Leo) or [Leo] at end of title
+        pattern3 = rf'[\(\[]\s*{name}\s*[\)\]]$'
+        t = re.sub(pattern3, f'- {name}', t, flags=re.IGNORECASE).strip()
+
+    # Strip standalone grade/school tags like (2nd Grade), (6th Grade Middle School)
+    t = re.sub(r'[\(\[]\s*.*?(?:grade|middle school|high school).*?[\)\]]', '', t, flags=re.IGNORECASE).strip()
+    t = re.sub(r'\s*-\s*\d+(?:st|nd|rd|th)?\s+grade\b.*$', '', t, flags=re.IGNORECASE).strip()
+    t = re.sub(r'\s+-\s*-\s+', ' - ', t)
+    t = re.sub(r'\s{2,}', ' ', t).strip()
+    return t
+
 def post_process_extracted_event(e: dict, settings: dict, subject: str, body: str) -> Optional[dict]:
     rules = settings.get("parsing_rules") or DEFAULT_PARSING_RULES
     title = e.get("title", "") or ""
@@ -447,9 +476,8 @@ def post_process_extracted_event(e: dict, settings: dict, subject: str, body: st
         if not child_names:
             child_names = ["Leo", "Ellie", "Gia"]
 
-        # First clean any trailing grade label that AI might have generated
-        title = re.sub(r'\s*-\s*\d+(?:st|nd|rd|th)?\s+grade\b.*$', '', title, flags=re.IGNORECASE).strip()
-        title = re.sub(r'\s*\(?\d+(?:st|nd|rd|th)?\s+grade\)?$', '', title, flags=re.IGNORECASE).strip()
+        # Clean any embedded or trailing parentheticals like (Leo - 2nd Grade), (2nd Grade), etc.
+        title = clean_display_event_title(title, child_names=child_names, self_name=self_name)
 
         # Check if title already ends with any valid name suffix
         all_possible_names = child_names + [self_name, "Wife"]
@@ -1739,18 +1767,43 @@ def extract_event(text: str, date: datetime, subject: str, settings: dict) -> di
 
 # --- Google Calendar Event Pusher & Duplicate Prevention ---
 def parse_flexible_iso_datetime(date_str: str) -> datetime:
-    """Robustly parse ISO dates, date-only strings, and common datetime formats."""
+    """Robustly parse ISO dates, date-only strings, US formats, and common datetime formats into timezone-aware datetimes."""
     if not date_str or not isinstance(date_str, str):
         raise ValueError("Empty or invalid date string")
     clean = date_str.strip().replace("Z", "+00:00")
+    clean = re.sub(r'[\r\n\t]+', ' ', clean).strip()
+    
+    clean = re.sub(r'(\d+/\d+/\d+),\s*', r'\1 ', clean)
+    clean = re.sub(r'(\d{4}-\d{2}-\d{2}),\s*', r'\1 ', clean)
+
     if re.match(r'^\d{4}-\d{2}-\d{2}$', clean):
         clean += "T09:00:00"
-    elif " " in clean and "T" not in clean:
-        clean = clean.replace(" ", "T")
+    elif re.match(r'^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}', clean):
+        clean = clean.replace(" ", "T", 1)
+    elif re.match(r'^\d{1,2}/\d{1,2}/\d{4}$', clean):
+        clean += " 09:00:00"
+
     try:
         dt = datetime.fromisoformat(clean)
     except Exception:
-        for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%m/%d/%Y %H:%M", "%m/%d/%Y"):
+        formats = [
+            "%Y-%m-%dT%H:%M:%S%z",
+            "%Y-%m-%dT%H:%M:%S",
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%d",
+            "%m/%d/%Y %I:%M:%S %p",
+            "%m/%d/%Y %I:%M %p",
+            "%m/%d/%Y %H:%M:%S",
+            "%m/%d/%Y %H:%M",
+            "%m/%d/%Y",
+            "%b %d, %Y %I:%M %p",
+            "%B %d, %Y %I:%M %p",
+            "%b %d, %Y %H:%M:%S",
+            "%b %d, %Y %H:%M",
+            "%b %d, %Y",
+            "%B %d, %Y"
+        ]
+        for fmt in formats:
             try:
                 dt = datetime.strptime(clean, fmt)
                 break
@@ -1758,15 +1811,20 @@ def parse_flexible_iso_datetime(date_str: str) -> datetime:
                 pass
         else:
             raise ValueError(f"Cannot parse datetime from '{date_str}'")
+            
+    local_tz = datetime.now().astimezone().tzinfo
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=datetime.now().astimezone().tzinfo)
+        dt = dt.replace(tzinfo=local_tz)
+    else:
+        dt = dt.astimezone(local_tz)
     return dt
 
 def normalize_event_title(title: str) -> str:
-    """Normalize event title by removing routine prefixes, emojis, and punctuation."""
+    """Normalize event title by removing routine prefixes, grade references, emojis, and punctuation."""
     t = (title or "").lower()
     t = re.sub(r'^(?:fwd|re|reminder|invitation|notice|alert|dinner|meal|lunch|event|meeting)\s*[:\-]\s*', '', t, flags=re.IGNORECASE)
     t = re.sub(r'[\U00010000-\U0010ffff]', '', t) # remove emojis
+    t = re.sub(r'\b(?:\d+(?:st|nd|rd|th)?\s*grade|grade\s*\d+|middle\s*school|high\s*school)\b', '', t, flags=re.IGNORECASE)
     t = re.sub(r'[^a-z0-9\s]', ' ', t)
     return ' '.join(t.split())
 
@@ -1839,28 +1897,28 @@ def is_food_or_meal_title(title: str) -> bool:
 def find_existing_event_in_db(user_id: str, title: str, date_str: str, conn: sqlite3.Connection = None) -> dict:
     """
     Checks if an event with a similar title and time window already exists in the local database.
+    Evaluates all active (pending/added) events using resilient title and date overlap comparison.
     """
     should_close = False
     if conn is None:
         conn = get_db_conn()
         should_close = True
     try:
-        try:
-            dt = parse_flexible_iso_datetime(date_str)
-            day_str = dt.date().isoformat()
-        except Exception:
-            day_str = date_str[:10] if date_str else ""
-        if not day_str:
+        if not title or not date_str:
             return None
         c = conn.cursor()
         c.execute("""
-            SELECT id, user_id, account, email_id, title, date, description, location, status
+            SELECT id, user_id, account, email_id, title, date, description, location, status, gcal_event_id
             FROM events
-            WHERE user_id=? AND date LIKE ? AND status IN ('pending', 'added')
-        """, (user_id, f"{day_str}%"))
-        rows = [dict(r) for r in c.fetchall()]
+            WHERE user_id=? AND status IN ('pending', 'added')
+        """, (user_id,))
+        if getattr(conn, 'row_factory', None) == sqlite3.Row:
+            rows = [dict(r) for r in c.fetchall()]
+        else:
+            col_names = [d[0] for d in c.description] if c.description else []
+            rows = [dict(zip(col_names, r)) for r in c.fetchall()]
         for r in rows:
-            if are_events_duplicate(title, date_str, r['title'], r['date']):
+            if are_events_duplicate(title, date_str, r.get('title', ''), r.get('date', '')):
                 return r
         return None
     finally:
@@ -1892,7 +1950,11 @@ def find_existing_meal_or_food_on_calendar(user_id: str, date_str: str, service=
             FROM events
             WHERE user_id=? AND date LIKE ? AND status IN ('pending', 'added')
         """, (user_id, f"{day_str}%"))
-        rows = [dict(r) for r in c.fetchall()]
+        if getattr(conn, 'row_factory', None) == sqlite3.Row:
+            rows = [dict(r) for r in c.fetchall()]
+        else:
+            col_names = [d[0] for d in c.description] if c.description else []
+            rows = [dict(zip(col_names, r)) for r in c.fetchall()]
         for r in rows:
             if is_food_or_meal_title(r['title']) or r.get('account') == 'Smart Meal Planner':
                 return {"source": "local_db", "title": r['title'], "id": r['id'], "event": r}
@@ -2273,13 +2335,70 @@ async def startup_event():
 @app.get("/api/events")
 def get_events(user_id: str = Depends(verify_auth)):
     conn = get_db_conn()
-    c = conn.cursor()
-    # Use start of current day so events occurring earlier today or all-day events remain visible
-    today_start = datetime.now().date().isoformat()
-    c.execute("SELECT * FROM events WHERE status IN ('pending', 'added') AND user_id=? AND date >= ? ORDER BY date ASC", (user_id, today_start))
-    rows = c.fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
+    try:
+        c = conn.cursor()
+        # Use start of current day so events occurring earlier today or all-day events remain visible
+        today_start = datetime.now().date().isoformat()
+        c.execute("SELECT * FROM events WHERE status IN ('pending', 'added') AND user_id=? AND date >= ? ORDER BY date ASC", (user_id, today_start))
+        raw_rows = [dict(r) for r in c.fetchall()]
+
+        unique_events = []
+        duplicate_ids_to_dismiss = []
+        titles_to_update = []
+
+        for row in raw_rows:
+            # Clean/normalize title for presentation (e.g. strip redundant child/grade parentheticals)
+            clean_t = clean_display_event_title(row.get("title", ""))
+            if clean_t and clean_t != row.get("title"):
+                titles_to_update.append((clean_t, row["id"]))
+                row["title"] = clean_t
+
+            # Check if this row is a duplicate of any event we've already kept
+            match_idx = None
+            for idx, kept in enumerate(unique_events):
+                if are_events_duplicate(row.get("title", ""), row.get("date", ""), kept.get("title", ""), kept.get("date", "")):
+                    match_idx = idx
+                    break
+
+            if match_idx is None:
+                unique_events.append(row)
+            else:
+                existing = unique_events[match_idx]
+                # If existing is pending but new row is added (already synced to GCal), replace with the added one!
+                if existing.get("status") != "added" and row.get("status") == "added":
+                    duplicate_ids_to_dismiss.append(existing["id"])
+                    if not row.get("description") and existing.get("description"):
+                        row["description"] = existing["description"]
+                    unique_events[match_idx] = row
+                else:
+                    duplicate_ids_to_dismiss.append(row["id"])
+                    if not existing.get("description") and row.get("description"):
+                        existing["description"] = row["description"]
+                    if not existing.get("location") and row.get("location"):
+                        existing["location"] = row["location"]
+
+        # Clean up database: auto-dismiss redundant duplicate rows so they never linger
+        if duplicate_ids_to_dismiss:
+            try:
+                placeholders = ','.join('?' for _ in duplicate_ids_to_dismiss)
+                c.execute(f"UPDATE events SET status='dismissed' WHERE id IN ({placeholders}) AND user_id=?", (*duplicate_ids_to_dismiss, user_id))
+                logger.info(f"Auto-dismissed {len(duplicate_ids_to_dismiss)} duplicate event rows on Dashboard read for user {user_id}: {duplicate_ids_to_dismiss}")
+            except Exception as e:
+                logger.warning(f"Notice auto-dismissing duplicate event rows: {e}")
+
+        # Update clean normalized titles in the database
+        for clean_t, eid in titles_to_update:
+            try:
+                c.execute("UPDATE events SET title=? WHERE id=?", (clean_t, eid))
+            except Exception:
+                pass
+
+        if duplicate_ids_to_dismiss or titles_to_update:
+            conn.commit()
+
+        return unique_events
+    finally:
+        conn.close()
 
 # --- Google Calendar OAuth & Sync ---
 @app.get("/api/auth/google/url")
