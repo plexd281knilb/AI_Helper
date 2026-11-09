@@ -146,6 +146,7 @@ DEFAULT_PARSING_RULES = {
     "filter_promotions_and_travel": True,
     "filter_package_deliveries": True,
     "filter_corporate_webinars": True,
+    "filter_public_festivals_and_events": True,
     "invite_reminders": True,
     "keep_emails_unread": True,
     "custom_instructions": ""
@@ -228,6 +229,9 @@ def build_parsing_prompt_instructions(settings: dict) -> str:
 
     # 7. Promotions, Deliveries & Marketing Filter
     filter_items = []
+    if rules.get("filter_public_festivals_and_events", True):
+        filter_items.append("  * STRICTLY REJECT public social events, festivals, tastings, expos, concerts, sporting event ticket solicitations, and community fairs (e.g. '11th Annual Whiskey Social', 'Beer Fest', 'Wine Walk', 'Food & Wine Festival', 'Concert Tour', 'Tickets On Sale Now') UNLESS the email is an EXPLICIT ticket purchase receipt, order confirmation, ticket barcode, or calendar invite (ICS) showing the user has ACTUALLY purchased tickets or registered. If it is merely an announcement, newsletter, or invitation to buy tickets, return empty events [] with reason 'Promotional event/festival solicitation without confirmed ticket purchase or registration'.")
+        filter_items.append("  * Midnight / All-Day default notice: Do NOT fabricate midnight (12:00:00 AM) events from general marketing date mentions.")
     if rules.get("filter_promotions_and_travel", True):
         filter_items.append("  * Ignore marketing promotions, rewards deadlines (e.g. 'deadline to book Atmos Rewards Global Getaways by TOMORROW', 'Daily Drop Pro sale ending on Sept 8'). Ignore promotional offers and travel news.")
     if rules.get("filter_package_deliveries", True):
@@ -288,6 +292,39 @@ def post_process_extracted_event(e: dict, settings: dict, subject: str, body: st
             if any(kw in full_context for kw in ["camp", "clinic", "enrichment", "workshop", "tryout", "sign up", "signup"]):
                 logger.info(f"Filtered unregistered camp solicitation: '{title}'")
                 return None
+
+    # Filter unconfirmed public festivals, socials, tastings & ticket solicitations
+    if rules.get("filter_public_festivals_and_events", True):
+        ticket_solicitation_patterns = [
+            r'tickets\s+(?:are\s+)?on\s+sale',
+            r'get\s+(?:your\s+)?tickets',
+            r'buy\s+tickets',
+            r'purchase\s+tickets',
+            r'early\s+bird\s+tickets',
+            r'general\s+admission',
+            r'vip\s+tickets',
+            r'reserve\s+your\s+spot',
+            r'join\s+us\s+for\s+the\s+\d+(?:st|nd|rd|th)?\s+annual',
+            r'save\s+the\s+date\s+for\s+the',
+            r'annual\s+whiskey\s+social',
+            r'whiskey\s+social',
+            r'whiskey\s+tasting',
+            r'beer\s+festival',
+            r'wine\s+festival'
+        ]
+        has_confirmed_ticket = any(kw in full_context for kw in [
+            "order confirmation", "order #", "confirmation #", "ticket receipt", "your tickets are attached",
+            "receipt for your purchase", "you're attending", "you are registered", "ticket confirmation", "barcode",
+            "thank you for your order", "thank you for your purchase", "rsvp: accepted", "accepted invitation"
+        ])
+        
+        is_festival_or_solicitation = any(re.search(pat, full_context) for pat in ticket_solicitation_patterns) or (
+            any(kw in title.lower() for kw in ["annual", "festival", "whiskey", "tasting", "expo", "social"]) and any(kw in full_context for kw in ["tasting", "whiskey", "beer", "wine", "sponsor", "admission", "exceptional whiskeys"])
+        )
+        
+        if is_festival_or_solicitation and not has_confirmed_ticket:
+            logger.info(f"Filtered unconfirmed public festival/event solicitation: '{title}'")
+            return None
 
     # 2. Marketing / Travel / Flash Sales filter
     if rules.get("filter_promotions_and_travel", True):
@@ -505,6 +542,11 @@ def init_db():
     except sqlite3.OperationalError:
         pass # Column already exists
         
+    try:
+        c.execute("ALTER TABLE events ADD COLUMN gcal_event_id TEXT")
+    except sqlite3.OperationalError:
+        pass # Column already exists
+        
     c.execute('''CREATE TABLE IF NOT EXISTS grocery_stores (
                     id TEXT PRIMARY KEY,
                     user_id TEXT,
@@ -712,7 +754,13 @@ def init_db():
             if "parsing_rules" not in s:
                 s["parsing_rules"] = DEFAULT_PARSING_RULES
                 changed = True
-            elif isinstance(s["parsing_rules"], dict) and "keep_emails_unread" not in s["parsing_rules"]:
+            elif isinstance(s["parsing_rules"], dict):
+                if "filter_public_festivals_and_events" not in s["parsing_rules"]:
+                    s["parsing_rules"]["filter_public_festivals_and_events"] = True
+                    changed = True
+                if "keep_emails_unread" not in s["parsing_rules"]:
+                    s["parsing_rules"]["keep_emails_unread"] = True
+                    changed = True
                 s["parsing_rules"]["keep_emails_unread"] = True
                 changed = True
             if changed:
@@ -1874,6 +1922,41 @@ def push_event_to_gcal(service, title: str, description: str, date_str: str, loc
     created = service.events().insert(calendarId='primary', body=gcal_event).execute()
     return {"status": "created", "event_id": created.get("id")}
 
+def remove_event_from_gcal(service, title: str, date_str: str, gcal_event_id: str = None) -> bool:
+    """
+    Deletes an event from Google Calendar when dismissed/deleted by user.
+    Tries gcal_event_id first, then falls back to searching by title & date window.
+    """
+    if gcal_event_id:
+        try:
+            service.events().delete(calendarId='primary', eventId=gcal_event_id).execute()
+            logger.info(f"Deleted event id {gcal_event_id} from Google Calendar.")
+            return True
+        except Exception as e:
+            logger.debug(f"Direct delete by gcal_id {gcal_event_id} notice: {e}")
+            
+    try:
+        start_time = parse_flexible_iso_datetime(date_str)
+        time_min = (start_time - timedelta(hours=36)).isoformat()
+        time_max = (start_time + timedelta(hours=36)).isoformat()
+        res = service.events().list(
+            calendarId='primary',
+            timeMin=time_min,
+            timeMax=time_max,
+            singleEvents=True,
+            maxResults=50
+        ).execute()
+        for item in res.get('items', []):
+            item_summary = (item.get('summary') or '').strip()
+            item_start = item.get('start', {}).get('dateTime') or item.get('start', {}).get('date') or date_str
+            if are_events_duplicate(title, date_str, item_summary, item_start):
+                service.events().delete(calendarId='primary', eventId=item['id']).execute()
+                logger.info(f"Deleted event '{item_summary}' ({item['id']}) from Google Calendar.")
+                return True
+    except Exception as e:
+        logger.warning(f"Error removing event '{title}' from Google Calendar: {e}")
+    return False
+
 def process_user_emails(user_id: str):
     conn = get_db_conn()
     try:
@@ -1979,7 +2062,7 @@ def process_user_emails(user_id: str):
                                                         ev_date,
                                                         ev_loc
                                                     )
-                                                    c.execute("UPDATE events SET status='added' WHERE id=?", (event_id,))
+                                                    c.execute("UPDATE events SET status='added', gcal_event_id=? WHERE id=?", (res.get("event_id"), event_id))
                                                     if res.get("status") == "already_exists":
                                                         logger.info(f"Background: event '{ev_title}' already on Google Calendar for {user_id}")
                                                         sync_details.append(f"Already on Google Calendar '{ev_title}'")
@@ -2267,7 +2350,7 @@ def sync_event(event_id: str, user_id: str = Depends(verify_auth)):
         service = build('calendar', 'v3', credentials=creds)
         res = push_event_to_gcal(service, title, description, date_str, location)
         
-        c.execute("UPDATE events SET status='added' WHERE id=?", (event_id,))
+        c.execute("UPDATE events SET status='added', gcal_event_id=? WHERE id=?", (res.get("event_id"), event_id))
         conn.commit()
         conn.close()
         return {"status": "success", "gcal_status": res["status"]}
@@ -2282,10 +2365,33 @@ def sync_event(event_id: str, user_id: str = Depends(verify_auth)):
 def dismiss_event(event_id: str, user_id: str = Depends(verify_auth)):
     conn = get_db_conn()
     c = conn.cursor()
+    c.execute("SELECT id, title, date, status, gcal_event_id FROM events WHERE id=? AND user_id=?", (event_id, user_id))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Event not found")
+        
+    was_added = (row["status"] == "added")
+    event_title = row["title"]
+    event_date = row["date"]
+    gcal_id = row["gcal_event_id"] if "gcal_event_id" in row.keys() else None
+    
     c.execute("UPDATE events SET status='dismissed' WHERE id=? AND user_id=?", (event_id, user_id))
     conn.commit()
     conn.close()
-    return {"status": "success"}
+    
+    cal_deleted = False
+    if was_added:
+        token_file = os.path.join(DATA_DIR, f"token_{user_id}.json")
+        if os.path.exists(token_file):
+            try:
+                creds = Credentials.from_authorized_user_file(token_file, CALENDAR_SCOPES)
+                service = build('calendar', 'v3', credentials=creds)
+                cal_deleted = remove_event_from_gcal(service, event_title, event_date, gcal_id)
+            except Exception as e:
+                logger.warning(f"Notice deleting dismissed event from Google Calendar: {e}")
+                
+    return {"status": "success", "calendar_deleted": cal_deleted}
 
 class BulkEventAction(BaseModel):
     event_ids: List[str]
@@ -2324,7 +2430,7 @@ def bulk_sync_events(req: BulkEventAction, user_id: str = Depends(verify_auth)):
         location = row['location']
         try:
             res = push_event_to_gcal(service, title, description, date_str, location)
-            c.execute("UPDATE events SET status='added' WHERE id=?", (event_id,))
+            c.execute("UPDATE events SET status='added', gcal_event_id=? WHERE id=?", (res.get("event_id"), event_id))
             synced_count += 1
         except Exception as e:
             err_str = str(e)
@@ -2345,9 +2451,24 @@ def bulk_dismiss_events(req: BulkEventAction, user_id: str = Depends(verify_auth
     conn = get_db_conn()
     c = conn.cursor()
     placeholders = ','.join('?' * len(req.event_ids))
+    c.execute(f"SELECT id, title, date, status, gcal_event_id FROM events WHERE user_id=? AND id IN ({placeholders})", (user_id, *req.event_ids))
+    rows = [dict(r) for r in c.fetchall()]
+    
     c.execute(f"UPDATE events SET status='dismissed' WHERE user_id=? AND id IN ({placeholders})", (user_id, *req.event_ids))
     conn.commit()
     conn.close()
+    
+    token_file = os.path.join(DATA_DIR, f"token_{user_id}.json")
+    if os.path.exists(token_file):
+        try:
+            creds = Credentials.from_authorized_user_file(token_file, CALENDAR_SCOPES)
+            service = build('calendar', 'v3', credentials=creds)
+            for r in rows:
+                if r.get("status") == "added":
+                    remove_event_from_gcal(service, r.get("title", ""), r.get("date", ""), r.get("gcal_event_id"))
+        except Exception as e:
+            logger.warning(f"Notice bulk removing dismissed events from Google Calendar: {e}")
+            
     return {"status": "success"}
 
 class BulkHistorySync(BaseModel):
