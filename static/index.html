@@ -3066,16 +3066,66 @@
 
             <!-- Groceries & Deals View -->
             <div id="groceries" class="view">
-                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 20px;">
-                    <div>
-                        <h1 style="margin: 0 0 5px 0;">🛒 Local Deals &amp; Smart Groceries</h1>
-                        <p style="color: #ccc; margin: 0;">Compare prices across Kroger, HEB, Tom Thumb, Costco, Sprouts, Whole Foods, and Walmart, and build smart grocery lists.</p>
+                <!-- Portalarr v3.0 Grocery & Deals Command Header -->
+                <div style="background: linear-gradient(135deg, rgba(16,185,129,0.14), rgba(37,99,235,0.12), rgba(15,23,42,0.9)); border: 1px solid rgba(16,185,129,0.35); border-radius: 14px; padding: 18px 22px; margin-bottom: 18px; box-shadow: 0 10px 28px rgba(0,0,0,0.35);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; margin-bottom: 16px;">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                                <h1 style="margin: 0; font-size: 23px; font-weight: 800; color: #fff; letter-spacing: -0.3px;">🛒 Local Deals &amp; Smart Groceries</h1>
+                                <span style="background: rgba(16,185,129,0.18); color: #34d399; border: 1px solid rgba(16,185,129,0.4); padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 700;">Live Flipp Circular Engine</span>
+                            </div>
+                            <p style="color: #94a3b8; margin: 4px 0 0 0; font-size: 13px;">
+                                Automated weekly circular ingestion, USDA Beef Grade isolation, cross-store unit price comparison, and multi-store trip optimization.
+                            </p>
+                        </div>
+                        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                            <div style="display: flex; align-items: center; background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 3px 10px;" title="Local Zip Code for Weekly Circulars">
+                                <span style="font-size: 13px; margin-right: 5px;">📍</span>
+                                <input type="text" id="groc-top-zip-input" value="76262" placeholder="Zip" style="width: 68px; border: none; background: transparent; color: #fff; font-size: 13.5px; font-weight: 700; padding: 4px 2px; margin: 0; outline: none;">
+                                <button onclick="syncTopZipDeals(this)" style="background: #2563eb; color: #fff; border: none; border-radius: 6px; padding: 5px 10px; font-size: 11.5px; font-weight: 700; cursor: pointer; margin-left: 4px; white-space: nowrap;">⚡ Sync Ads</button>
+                            </div>
+                            <button class="save-btn" onclick="openDealPreferencesModal()" style="margin: 0; padding: 8px 13px; font-size: 12.5px; background: #1e293b; border: 1px solid #334155; color: #e2e8f0; border-radius: 8px;">⚙️ Preferences</button>
+                        </div>
                     </div>
-                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                        <button class="filter-chip active" id="groc-tab-feed" onclick="switchGrocerySubTab('feed')">🔥 My Deals</button>
-                        <button class="filter-chip" id="groc-tab-lists" onclick="switchGrocerySubTab('lists')">🛒 My Grocery Lists</button>
-                        <button class="filter-chip" id="groc-tab-deals" onclick="switchGrocerySubTab('deals')">🔍 Deal &amp; Price Finder</button>
-                        <button class="filter-chip" id="groc-tab-stores" onclick="switchGrocerySubTab('stores')">🏪 Store Ads &amp; Circulars</button>
+
+                    <!-- Bento KPI Strip -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); gap: 10px; margin-bottom: 14px;">
+                        <div onclick="switchGrocerySubTab('stores')" style="cursor: pointer; background: rgba(13,17,23,0.75); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 11px 14px; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='rgba(255,255,255,0.08)'">
+                            <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: 700; letter-spacing: 0.4px;">🏪 Synced Supermarkets</div>
+                            <div style="display: flex; align-items: baseline; gap: 8px; margin-top: 4px;">
+                                <span id="groc-kpi-stores" style="font-size: 21px; font-weight: 800; color: #60a5fa;">0</span>
+                                <span id="groc-kpi-zip-badge" style="font-size: 11.5px; color: #64748b;">Zip 76262</span>
+                            </div>
+                        </div>
+                        <div onclick="switchGrocerySubTab('feed')" style="cursor: pointer; background: rgba(13,17,23,0.75); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 11px 14px; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#f59e0b'" onmouseout="this.style.borderColor='rgba(255,255,255,0.08)'">
+                            <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: 700; letter-spacing: 0.4px;">🔥 Live Circular Specials</div>
+                            <div style="display: flex; align-items: baseline; gap: 8px; margin-top: 4px;">
+                                <span id="groc-kpi-total-deals" style="font-size: 21px; font-weight: 800; color: #fbbf24;">0</span>
+                                <span id="groc-kpi-matched-deals" style="font-size: 11.5px; color: #94a3b8;">0 matched</span>
+                            </div>
+                        </div>
+                        <div onclick="switchGrocerySubTab('feed'); toggleFeedBestOnly(true);" style="cursor: pointer; background: rgba(13,17,23,0.75); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 11px 14px; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#10b981'" onmouseout="this.style.borderColor='rgba(255,255,255,0.08)'">
+                            <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: 700; letter-spacing: 0.4px;">🏆 Price Leaders &amp; Lows</div>
+                            <div style="display: flex; align-items: baseline; gap: 8px; margin-top: 4px;">
+                                <span id="groc-kpi-best-prices" style="font-size: 21px; font-weight: 800; color: #34d399;">0</span>
+                                <span id="groc-kpi-hist-lows" style="font-size: 11.5px; color: #fca5a5;">0 all-time lows</span>
+                            </div>
+                        </div>
+                        <div onclick="switchGrocerySubTab('lists')" style="cursor: pointer; background: rgba(13,17,23,0.75); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 11px 14px; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#a78bfa'" onmouseout="this.style.borderColor='rgba(255,255,255,0.08)'">
+                            <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: 700; letter-spacing: 0.4px;">🛒 Active Shopping Cart</div>
+                            <div style="display: flex; align-items: baseline; gap: 8px; margin-top: 4px;">
+                                <span id="groc-kpi-cart-items" style="font-size: 21px; font-weight: 800; color: #c4b5fd;">0 items</span>
+                                <span id="groc-kpi-cart-total" style="font-size: 11.5px; color: #34d399; font-weight: 700;">~$0.00 est.</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sub-Navigation Tabs -->
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 12px;">
+                        <button class="filter-chip active" id="groc-tab-feed" onclick="switchGrocerySubTab('feed')" style="padding: 8px 16px; font-size: 13px; font-weight: 700;">🔥 My Deals Feed</button>
+                        <button class="filter-chip" id="groc-tab-lists" onclick="switchGrocerySubTab('lists')" style="padding: 8px 16px; font-size: 13px; font-weight: 700;">🛒 Smart Grocery Lists &amp; Trip Optimizer</button>
+                        <button class="filter-chip" id="groc-tab-deals" onclick="switchGrocerySubTab('deals')" style="padding: 8px 16px; font-size: 13px; font-weight: 700;">🔍 AI Price &amp; Deal Finder</button>
+                        <button class="filter-chip" id="groc-tab-stores" onclick="switchGrocerySubTab('stores')" style="padding: 8px 16px; font-size: 13px; font-weight: 700;">🏪 Store Ads &amp; Circulars</button>
                     </div>
                 </div>
 
@@ -3083,58 +3133,67 @@
 
                 <!-- SUB-SECTION 0: Personalized Deal Feed -->
                 <div id="grocery-section-feed" class="grocery-sub-section">
-                    <div class="account-box" style="margin-bottom: 20px; background: linear-gradient(135deg, rgba(239,68,68,0.12), rgba(245,158,11,0.1)); border: 1px solid rgba(239,68,68,0.3); padding: 18px 22px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
-                            <div>
-                                <h2 style="margin: 0 0 4px 0; color: #fff; display: flex; align-items: center; gap: 8px; font-size: 19px;">
-                                    <span>🔥</span> My Personalized Deals Feed
-                                </h2>
-                                <p style="color: #cbd5e1; font-size: 13.5px; margin: 0; line-height: 1.4;">
-                                    Curated weekly supermarket specials ranked for you. Includes live <strong>cross-store price comparisons</strong> (🟢 Best Local Price vs 🔴 Cheaper Elsewhere).
-                                </p>
+                    <!-- Multi-Row Filter & Search Command Bar -->
+                    <div class="account-box" style="margin-bottom: 16px; padding: 16px 18px; background: #161b22; border: 1px solid #30363d;">
+                        <!-- Row 1: Search + Sort + Smart Toggles + Target List -->
+                        <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                            <div style="flex: 1; min-width: 240px; position: relative;">
+                                <input type="text" id="feed-search-input" placeholder="🔍 Search weekly specials (e.g. ribeye, brisket, chicken breast, eggs, berries, butter)..." oninput="debounceFeedSearch()" style="width: 100%; box-sizing: border-box; margin-bottom: 0; padding: 9px 14px; font-size: 13.5px; border-radius: 8px;">
                             </div>
-                            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                                <button class="filter-chip" id="feed-best-only-btn" onclick="toggleFeedBestOnly()" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border-color: rgba(16, 185, 129, 0.4);">
-                                    🟢 Best Prices Only
+                            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                                <select id="feed-sort-select" onchange="loadPersonalizedDealsFeed()" style="padding: 8px 12px; font-size: 12.5px; font-weight: 600; border-radius: 8px; background: #0d1117; color: #e2e8f0; border: 1px solid #30363d; margin: 0;">
+                                    <option value="score">🔥 Sort: Best Personal Match</option>
+                                    <option value="price_asc">💲 Sort: Lowest Unit Price First</option>
+                                    <option value="history_low">🏆 Sort: All-Time Price Lows</option>
+                                    <option value="store">🏪 Sort: Supermarket (A–Z)</option>
+                                </select>
+                                <button class="filter-chip" id="feed-best-only-btn" onclick="toggleFeedBestOnly()" style="background: rgba(16, 185, 129, 0.12); color: #34d399; border-color: rgba(16, 185, 129, 0.35); padding: 7px 12px; font-size: 12px;">
+                                    🟢 Cross-Store Leaders Only
                                 </button>
-                                <button class="save-btn" onclick="openDealPreferencesModal()" style="margin: 0; padding: 9px 16px; font-size: 13.5px; background: #374151; color: #fff; display: flex; align-items: center; gap: 6px;">
-                                    <span>⚙️</span> Deal Preferences
+                                <button class="filter-chip" id="feed-history-low-btn" onclick="toggleFeedHistoryLowOnly()" style="background: rgba(239, 68, 68, 0.12); color: #fca5a5; border-color: rgba(239, 68, 68, 0.35); padding: 7px 12px; font-size: 12px;">
+                                    🔥 Historical Lows Only
                                 </button>
-                                <button class="save-btn" onclick="loadPersonalizedDealsFeed()" style="margin: 0; padding: 9px 16px; font-size: 13.5px; background: #2563eb; display: flex; align-items: center; gap: 6px;">
-                                    <span>🔄</span> Refresh Feed
-                                </button>
+                                <button class="save-btn" onclick="loadPersonalizedDealsFeed()" style="margin: 0; padding: 7px 12px; font-size: 12px; background: #2563eb; border-radius: 8px;">🔄</button>
+                            </div>
+                        </div>
+
+                        <!-- Row 2: Supermarket Filter Pills (populated dynamically with live counts) -->
+                        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.06);">
+                            <span style="font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 700; margin-right: 4px;">🏪 Store:</span>
+                            <div id="feed-store-chips" style="display: flex; gap: 6px; flex-wrap: wrap;">
+                                <button class="filter-chip active" onclick="setFeedStoreFilter('all', this)">All Stores</button>
+                            </div>
+                        </div>
+
+                        <!-- Row 3: Department / Category Filter Pills -->
+                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
+                            <div id="feed-category-chips" style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
+                                <span style="font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 700; margin-right: 4px;">📂 Dept:</span>
+                                <button class="filter-chip active" onclick="setFeedCategoryFilter('all', this)">🔥 All Depts</button>
+                                <button class="filter-chip" onclick="setFeedCategoryFilter('Meat & Seafood', this)">🥩 Meat &amp; Seafood</button>
+                                <button class="filter-chip" onclick="setFeedCategoryFilter('Produce', this)">🥑 Produce</button>
+                                <button class="filter-chip" onclick="setFeedCategoryFilter('Dairy & Eggs', this)">🧀 Dairy &amp; Eggs</button>
+                                <button class="filter-chip" onclick="setFeedCategoryFilter('Bakery & Deli', this)">🍞 Bakery &amp; Deli</button>
+                                <button class="filter-chip" onclick="setFeedCategoryFilter('Pantry & Dry Goods', this)">🥫 Pantry</button>
+                                <button class="filter-chip" onclick="setFeedCategoryFilter('Frozen', this)">❄️ Frozen</button>
+                                <button class="filter-chip" onclick="setFeedCategoryFilter('Beverages', this)">☕ Beverages</button>
+                                <button class="filter-chip" onclick="setFeedCategoryFilter('Snacks', this)">🍿 Snacks</button>
+                            </div>
+                            <div style="display: flex; gap: 6px; align-items: center; font-size: 12px;">
+                                <span style="color: #94a3b8;">➕ Target List:</span>
+                                <select id="feed-target-list-select" style="padding: 4px 10px; font-size: 12px; border-radius: 6px; background: #0d1117; color: #fff; border: 1px solid #30363d; margin: 0;"></select>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Category Filter Chips & Live Search -->
-                    <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px;">
-                        <div style="flex: 1; min-width: 250px;">
-                            <input type="text" id="feed-search-input" placeholder="🔍 Search deals (e.g. ribeye, brisket, chicken, bacon, salmon, eggs)..." oninput="debounceFeedSearch()" style="width: 100%; box-sizing: border-box; margin-bottom: 0; padding: 10px 14px; font-size: 14px;">
-                        </div>
-                        <div id="feed-category-chips" style="display: flex; gap: 6px; flex-wrap: wrap;">
-                            <button class="filter-chip active" onclick="setFeedCategoryFilter('all', this)">🔥 All Deals</button>
-                            <button class="filter-chip" onclick="setFeedCategoryFilter('Meat & Seafood', this)">🥩 Meat &amp; Seafood</button>
-                            <button class="filter-chip" onclick="setFeedCategoryFilter('Produce', this)">🥑 Produce</button>
-                            <button class="filter-chip" onclick="setFeedCategoryFilter('Dairy & Eggs', this)">🧀 Dairy &amp; Eggs</button>
-                            <button class="filter-chip" onclick="setFeedCategoryFilter('Bakery & Deli', this)">🍞 Bakery &amp; Deli</button>
-                            <button class="filter-chip" onclick="setFeedCategoryFilter('Frozen', this)">❄️ Frozen</button>
-                            <button class="filter-chip" onclick="setFeedCategoryFilter('Beverages', this)">☕ Beverages</button>
-                            <button class="filter-chip" onclick="setFeedCategoryFilter('Snacks', this)">🍿 Snacks</button>
-                        </div>
-                    </div>
-
-                    <!-- Deal Target List Selector Header -->
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; font-size: 13px; color: #aaa; flex-wrap: wrap; gap: 10px;">
+                    <!-- Feed Count & Quick Status Bar -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-size: 12.5px; color: #94a3b8; flex-wrap: wrap; gap: 8px; padding: 0 4px;">
                         <span id="feed-deals-count-label">Loading your personalized deals...</span>
-                        <div style="display: flex; gap: 8px; align-items: center;">
-                            <label for="feed-target-list-select" style="color: #888;">Add to list:</label>
-                            <select id="feed-target-list-select" style="padding: 5px 10px; font-size: 13px; border-radius: 4px; background: var(--input-bg); color: #fff; border: 1px solid var(--border-color);"></select>
-                        </div>
+                        <span style="font-size: 11.5px; color: #64748b;">💡 Tip: Click <strong>📈 History</strong> on any deal card to inspect historical unit price trends across stores.</span>
                     </div>
 
                     <!-- Deal Cards Grid Container -->
-                    <div id="my-deals-feed-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 10px;">
+                    <div id="my-deals-feed-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 12px;">
                         Loading personalized feed...
                     </div>
                 </div>
@@ -3143,10 +3202,10 @@
                 <div id="grocery-section-deals" class="grocery-sub-section" style="display: none;">
                     <div class="account-box" style="margin-bottom: 25px;">
                         <h3 style="margin-top: 0; margin-bottom: 8px; color: #fff; display: flex; align-items: center; gap: 8px;">
-                            <span>✨</span> Ask AI to Find Best Prices &amp; Deals
+                            <span>✨</span> Ask AI to Compare Store Circulars &amp; Build a Strategy
                         </h3>
                         <p style="color: #aaa; font-size: 13.5px; margin-top: 0; margin-bottom: 14px;">
-                            Prompt the AI to search across your configured local weekly ads, compare unit prices, and suggest where to buy.
+                            Prompt the AI to search across your configured local weekly ads, compare unit prices, and suggest where to buy each item for maximum savings.
                         </p>
                         
                         <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 15px;">
@@ -3192,34 +3251,91 @@
                     </div>
                 </div>
 
-                <!-- SUB-SECTION 2: My Grocery Lists -->
+                <!-- SUB-SECTION 2: My Grocery Lists & Smart Trip Optimizer -->
                 <div id="grocery-section-lists" class="grocery-sub-section" style="display: none;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; background: rgba(255,255,255,0.02); padding: 14px 18px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                            <label style="color: #bbb; font-weight: 600; font-size: 14px;">Current List:</label>
-                            <select id="active-grocery-list-select" onchange="onActiveListChange()" style="padding: 8px 14px; font-size: 14px; border-radius: var(--radius-sm); background: var(--input-bg); color: #fff; border: 1px solid var(--border-color); min-width: 180px; font-weight: 600;"></select>
-                            <button class="add-btn" onclick="promptCreateNewList()" style="margin: 0; padding: 8px 14px; font-size: 13px;">+ New List</button>
-                            <button class="remove-btn" onclick="deleteCurrentList()" style="margin: 0; padding: 8px 12px; font-size: 13px;">🗑️ Delete</button>
+                    <!-- List Selector & Smart Action Toolbar -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; background: #161b22; padding: 14px 18px; border-radius: 12px; border: 1px solid #30363d;">
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            <label style="color: #94a3b8; font-weight: 700; font-size: 12.5px; text-transform: uppercase;">Active List:</label>
+                            <select id="active-grocery-list-select" onchange="onActiveListChange()" style="padding: 8px 14px; font-size: 14px; border-radius: 8px; background: #0d1117; color: #fff; border: 1px solid #30363d; min-width: 190px; font-weight: 700; margin: 0;"></select>
+                            <button class="add-btn" onclick="promptCreateNewList()" style="margin: 0; padding: 8px 12px; font-size: 12.5px; border-radius: 8px;">+ New List</button>
+                            <button class="remove-btn" onclick="deleteCurrentList()" style="margin: 0; padding: 8px 10px; font-size: 12.5px; border-radius: 8px;" title="Delete current list">🗑️</button>
                         </div>
                         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                            <button class="add-btn" onclick="openAIGenerateListModal()" style="margin: 0; padding: 8px 14px; font-size: 13px; background: #8b5cf6;">🤖 Generate with AI</button>
-                            <button class="copy-btn" onclick="copyGroceryListToClipboard()" style="padding: 8px 14px; font-size: 13px;">📋 Copy Text List</button>
-                            <button class="remove-btn" onclick="clearCheckedGroceryItems()" style="margin: 0; padding: 8px 14px; font-size: 13px; background: #374151; color: #e5e7eb;">🧹 Clear Checked</button>
+                            <button class="save-btn" id="btn-optimize-grocery-list" onclick="optimizeActiveGroceryList(this)" style="margin: 0; padding: 8px 14px; font-size: 12.5px; background: linear-gradient(135deg, #10b981, #059669); border-radius: 8px; font-weight: 700;" title="Match all items against live store circulars for the lowest price">
+                                ⚡ Auto-Optimize Best Stores
+                            </button>
+                            <button class="add-btn" onclick="importMealPlanToGroceryList(this)" style="margin: 0; padding: 8px 14px; font-size: 12.5px; background: #2563eb; border-radius: 8px; font-weight: 600;" title="Pull all ingredients from your active Smart Meal Plan">
+                                🍲 Import Meal Plan
+                            </button>
+                            <button class="add-btn" onclick="openAIGenerateListModal()" style="margin: 0; padding: 8px 14px; font-size: 12.5px; background: #8b5cf6; border-radius: 8px;">
+                                🤖 AI Builder
+                            </button>
+                            <button class="save-btn" onclick="sendGroceryListToPhone(this)" style="margin: 0; padding: 8px 14px; font-size: 12.5px; background: #0284c7; border-radius: 8px;" title="Push formatted list grouped by store to Discord & Email">
+                                📲 Send to Phone
+                            </button>
+                            <button class="copy-btn" onclick="copyGroceryListToClipboard()" style="margin: 0; padding: 8px 12px; font-size: 12.5px; border-radius: 8px;">📋 Copy</button>
+                            <button class="remove-btn" onclick="clearCheckedGroceryItems()" style="margin: 0; padding: 8px 12px; font-size: 12.5px; background: #374151; color: #e5e7eb; border-radius: 8px;">🧹 Clear Checked</button>
                         </div>
                     </div>
 
-                    <!-- Quick Add Item Form -->
-                    <div class="account-box" style="margin-bottom: 20px; padding: 16px 20px;">
-                        <h4 style="margin: 0 0 12px 0; color: #fff; font-size: 14px;">+ Quick Add Item</h4>
+                    <!-- Smart Store Trip Breakdown & Progress Bar -->
+                    <div id="grocery-trip-breakdown-box" style="margin-bottom: 16px; display: none; background: linear-gradient(135deg, rgba(15,23,42,0.9), rgba(30,41,59,0.75)); border: 1px solid #334155; border-radius: 12px; padding: 14px 18px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 10px;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span style="font-size: 16px;">🗺️</span>
+                                <strong style="color: #fff; font-size: 13.5px;">Smart Store Trip Breakdown &amp; Estimated Cart</strong>
+                                <span id="grocery-trip-savings-pill" style="display: none; background: rgba(16,185,129,0.18); color: #34d399; border: 1px solid rgba(16,185,129,0.4); padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;"></span>
+                            </div>
+                            <div style="font-size: 12.5px; color: #94a3b8;">
+                                Est. Base Cart Total: <strong id="grocery-trip-est-total" style="color: #34d399; font-size: 15px;">~$0.00</strong>
+                            </div>
+                        </div>
+                        <div id="grocery-trip-store-cards" style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;"></div>
+                        <!-- Shopping Checkout Progress Bar -->
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="flex: 1; height: 7px; background: #0d1117; border-radius: 999px; overflow: hidden; border: 1px solid rgba(255,255,255,0.06);">
+                                <div id="grocery-shopping-progress-bar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #10b981, #3b82f6); transition: width 0.3s ease;"></div>
+                            </div>
+                            <span id="grocery-shopping-progress-label" style="font-size: 11.5px; color: #94a3b8; font-weight: 600; min-width: 95px; text-align: right;">0 / 0 checked</span>
+                        </div>
+                    </div>
+
+                    <!-- 1-Click Family Staples Bar (auto-matches live circular sale prices!) -->
+                    <div class="account-box" style="margin-bottom: 16px; padding: 12px 16px; background: rgba(37,99,235,0.06); border: 1px solid rgba(59,130,246,0.22);">
+                        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
+                            <span style="font-size: 12px; font-weight: 700; color: #93c5fd; text-transform: uppercase; letter-spacing: 0.4px;">⚡ 1-Click Household Staples (Auto-Matches Lowest Local Sale Price)</span>
+                            <span style="font-size: 11px; color: #64748b;">Click any staple to find the cheapest store deal &amp; add to cart</span>
+                        </div>
+                        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                            <button class="filter-chip" onclick="quickAddStapleItem('Large Eggs', 'Dairy & Eggs', this)" style="padding: 5px 11px; font-size: 12px;">🥚 Eggs</button>
+                            <button class="filter-chip" onclick="quickAddStapleItem('Whole Milk', 'Dairy & Eggs', this)" style="padding: 5px 11px; font-size: 12px;">🥛 Milk</button>
+                            <button class="filter-chip" onclick="quickAddStapleItem('Ground Beef', 'Meat & Seafood', this)" style="padding: 5px 11px; font-size: 12px;">🥩 Ground Beef</button>
+                            <button class="filter-chip" onclick="quickAddStapleItem('Chicken Breast', 'Meat & Seafood', this)" style="padding: 5px 11px; font-size: 12px;">🍗 Chicken Breast</button>
+                            <button class="filter-chip" onclick="quickAddStapleItem('Ribeye Steak', 'Meat & Seafood', this)" style="padding: 5px 11px; font-size: 12px;">🥩 Ribeye Steak</button>
+                            <button class="filter-chip" onclick="quickAddStapleItem('Sliced Bacon', 'Meat & Seafood', this)" style="padding: 5px 11px; font-size: 12px;">🥓 Bacon</button>
+                            <button class="filter-chip" onclick="quickAddStapleItem('Hass Avocados', 'Produce', this)" style="padding: 5px 11px; font-size: 12px;">🥑 Avocados</button>
+                            <button class="filter-chip" onclick="quickAddStapleItem('Fresh Strawberries Berries', 'Produce', this)" style="padding: 5px 11px; font-size: 12px;">🍓 Berries</button>
+                            <button class="filter-chip" onclick="quickAddStapleItem('Honeycrisp Apples', 'Produce', this)" style="padding: 5px 11px; font-size: 12px;">🍎 Apples</button>
+                            <button class="filter-chip" onclick="quickAddStapleItem('Salted Butter', 'Dairy & Eggs', this)" style="padding: 5px 11px; font-size: 12px;">🧈 Butter</button>
+                            <button class="filter-chip" onclick="quickAddStapleItem('Shredded Cheese', 'Dairy & Eggs', this)" style="padding: 5px 11px; font-size: 12px;">🧀 Cheese</button>
+                            <button class="filter-chip" onclick="quickAddStapleItem('Bread Loaf', 'Bakery & Deli', this)" style="padding: 5px 11px; font-size: 12px;">🍞 Bread</button>
+                            <button class="filter-chip" onclick="quickAddStapleItem('Coffee', 'Beverages', this)" style="padding: 5px 11px; font-size: 12px;">☕ Coffee</button>
+                        </div>
+                    </div>
+
+                    <!-- Quick Add Custom Item Form -->
+                    <div class="account-box" style="margin-bottom: 18px; padding: 14px 18px;">
+                        <h4 style="margin: 0 0 10px 0; color: #fff; font-size: 13.5px;">+ Add Custom Item to List</h4>
                         <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1.2fr auto; gap: 10px; align-items: end;">
                             <div>
-                                <label style="font-size: 12px; color: #888; display: block; margin-bottom: 4px;">Item Name</label>
-                                <input type="text" id="new-item-name" placeholder="e.g. Ribeye Steaks, Eggs, Milk" onkeypress="if(event.key === 'Enter') addSingleGroceryItem()" style="width: 100%; box-sizing: border-box; margin-bottom: 0;">
+                                <label style="font-size: 11.5px; color: #888; display: block; margin-bottom: 4px;">Item &amp; Quantity</label>
+                                <input type="text" id="new-item-name" placeholder="e.g. 2 lbs Prime Sirloin, Almond Milk" onkeypress="if(event.key === 'Enter') addSingleGroceryItem()" style="width: 100%; box-sizing: border-box; margin-bottom: 0;">
                             </div>
                             <div>
-                                <label style="font-size: 12px; color: #888; display: block; margin-bottom: 4px;">Store</label>
+                                <label style="font-size: 11.5px; color: #888; display: block; margin-bottom: 4px;">Store</label>
                                 <select id="new-item-store" style="width: 100%; box-sizing: border-box; margin-bottom: 0;">
-                                    <option value="Any">Any Store</option>
+                                    <option value="Any">Any Store (Auto)</option>
                                     <option value="HEB">HEB</option>
                                     <option value="Kroger">Kroger</option>
                                     <option value="Tom Thumb">Tom Thumb</option>
@@ -3228,15 +3344,14 @@
                                     <option value="Whole Foods">Whole Foods</option>
                                     <option value="Walmart">Walmart</option>
                                     <option value="Aldi">Aldi</option>
-                                    <option value="Trader Joe's">Trader Joe's</option>
                                 </select>
                             </div>
                             <div>
-                                <label style="font-size: 12px; color: #888; display: block; margin-bottom: 4px;">Price / Notes</label>
+                                <label style="font-size: 11.5px; color: #888; display: block; margin-bottom: 4px;">Price / Notes</label>
                                 <input type="text" id="new-item-price" placeholder="e.g. $5.99/lb, BOGO" onkeypress="if(event.key === 'Enter') addSingleGroceryItem()" style="width: 100%; box-sizing: border-box; margin-bottom: 0;">
                             </div>
                             <div>
-                                <label style="font-size: 12px; color: #888; display: block; margin-bottom: 4px;">Category</label>
+                                <label style="font-size: 11.5px; color: #888; display: block; margin-bottom: 4px;">Category</label>
                                 <select id="new-item-category" style="width: 100%; box-sizing: border-box; margin-bottom: 0;">
                                     <option value="Produce">Produce</option>
                                     <option value="Meat & Seafood">Meat &amp; Seafood</option>
@@ -3257,14 +3372,15 @@
                     </div>
 
                     <!-- Items Display View Mode & List Container -->
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
-                        <div style="font-size: 14px; color: #bbb;">
-                            Total Items: <strong id="grocery-total-count" style="color: #fff;">0</strong> &bull; Checked: <strong id="grocery-checked-count" style="color: #10b981;">0</strong>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                        <div style="font-size: 13.5px; color: #bbb; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                            <span>Total Items: <strong id="grocery-total-count" style="color: #fff;">0</strong> &bull; Checked: <strong id="grocery-checked-count" style="color: #10b981;">0</strong></span>
+                            <span id="grocery-active-store-filter-pill" style="display: none; background: rgba(59,130,246,0.2); color: #93c5fd; border: 1px solid rgba(59,130,246,0.4); padding: 2px 10px; border-radius: 999px; font-size: 12px; cursor: pointer;" onclick="filterGroceryListByStore(null)"></span>
                         </div>
                         <div style="display: flex; gap: 8px; align-items: center;">
                             <span style="font-size: 12.5px; color: #888;">Group by:</span>
-                            <button class="filter-chip active" id="group-by-category" onclick="setGroceryGrouping('category')" style="padding: 4px 12px; font-size: 12px;">Category</button>
-                            <button class="filter-chip" id="group-by-store" onclick="setGroceryGrouping('store')" style="padding: 4px 12px; font-size: 12px;">Store</button>
+                            <button class="filter-chip active" id="group-by-category" onclick="setGroceryGrouping('category')" style="padding: 4px 12px; font-size: 12px;">📂 Category</button>
+                            <button class="filter-chip" id="group-by-store" onclick="setGroceryGrouping('store')" style="padding: 4px 12px; font-size: 12px;">🏪 Store Trip</button>
                         </div>
                     </div>
 
@@ -3309,18 +3425,6 @@
                         </div>
                     </div>
 
-                    <!-- Info Banner for Weekly Ads -->
-                    <div style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: var(--radius-md); padding: 14px 18px; margin-bottom: 20px; font-size: 13.5px; color: #cbd5e1; line-height: 1.5;">
-                        <div style="font-weight: 700; color: #93c5fd; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
-                            <span>💡</span> Live Circular Sync &amp; Deal Management
-                        </div>
-                        <ul style="margin: 6px 0 0 18px; padding: 0;">
-                            <li>Click <strong>⚡ Auto-Fetch All Local Deals</strong> above to discover and download all supermarket circulars for your zip code automatically.</li>
-                            <li>Click <strong>👁️ Deals</strong> on any store card to browse and search all items and add them to your grocery list with 1-click.</li>
-                            <li>You can also click <strong>📋 Paste Text</strong> on any store to paste raw circular text from emails or websites!</li>
-                        </ul>
-                    </div>
-
                     <!-- 1-Click Template Bar -->
                     <div class="account-box" style="margin-bottom: 20px; background: rgba(59, 130, 246, 0.05); border-color: rgba(59, 130, 246, 0.2);">
                         <h4 style="margin: 0 0 10px 0; color: #93c5fd; font-size: 13.5px;">⚡ Quick Add Popular Stores</h4>
@@ -3362,6 +3466,22 @@
                     <!-- Stores Grid -->
                     <div id="stores-grid-container">
                         Loading configured stores...
+                    </div>
+                </div>
+            </div>
+
+            <!-- Item Historical Price Trend Modal -->
+            <div id="price-history-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.82); z-index: 1100; justify-content: center; align-items: center; padding: 20px;">
+                <div class="account-box" style="width: 95%; max-width: 620px; max-height: 85vh; display: flex; flex-direction: column; background: #161b22; border: 1px solid #30363d; border-radius: 14px; padding: 22px; box-shadow: 0 14px 40px rgba(0,0,0,0.75); overflow: hidden;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #30363d; padding-bottom: 12px; margin-bottom: 14px;">
+                        <div>
+                            <h3 id="price-history-modal-title" style="margin: 0 0 4px 0; color: #fff; font-size: 17px;">📈 Historical Price Ledger</h3>
+                            <div id="price-history-modal-subtitle" style="font-size: 12.5px; color: #94a3b8;"></div>
+                        </div>
+                        <button class="remove-btn" onclick="closePriceHistoryModal()" style="margin: 0; padding: 5px 10px;">✕</button>
+                    </div>
+                    <div id="price-history-modal-body" style="flex: 1; overflow-y: auto; padding-right: 4px;">
+                        Loading history...
                     </div>
                 </div>
             </div>
@@ -5969,8 +6089,11 @@
         let currentGrocerySubTab = 'feed'; // 'feed', 'lists', 'deals', 'stores'
         let currentGroceryGrouping = 'category'; // 'category' or 'store'
         let currentFeedCategory = 'all';
+        let currentFeedStore = 'all';
         let currentFeedSearch = '';
         let feedBestOnly = false;
+        let feedHistoryLowOnly = false;
+        let activeListStoreFilter = null;
         let feedSearchTimeout = null;
         let currentPreferences = null;
         let activeGroceryListId = null;
@@ -6076,10 +6199,10 @@
             currentGrocerySubTab = tab;
             localStorage.setItem('ai_helper_grocery_subtab', tab);
             document.querySelectorAll('.grocery-sub-section').forEach(el => el.style.display = 'none');
-            document.querySelectorAll('#groceries .filter-chip').forEach(el => el.classList.remove('active'));
-            
-            const btn = document.getElementById(`groc-tab-${tab}`);
-            if (btn) btn.classList.add('active');
+            ['feed', 'lists', 'deals', 'stores'].forEach(t => {
+                const b = document.getElementById(`groc-tab-${t}`);
+                if (b) b.classList.toggle('active', t === tab);
+            });
             
             const section = document.getElementById(`grocery-section-${tab}`);
             if (section) section.style.display = 'block';
@@ -6113,30 +6236,84 @@
             loadPersonalizedDealsFeed();
         }
 
+        function setFeedStoreFilter(storeName, btn) {
+            currentFeedStore = storeName;
+            const container = document.getElementById('feed-store-chips');
+            if (container) {
+                container.querySelectorAll('.filter-chip').forEach(b => b.classList.remove('active'));
+            }
+            if (btn) btn.classList.add('active');
+            loadPersonalizedDealsFeed();
+        }
+
         function debounceFeedSearch() {
             clearTimeout(feedSearchTimeout);
             feedSearchTimeout = setTimeout(() => {
                 const input = document.getElementById('feed-search-input');
                 currentFeedSearch = input ? input.value.trim() : '';
                 loadPersonalizedDealsFeed();
-            }, 300);
+            }, 280);
         }
 
-        function toggleFeedBestOnly() {
-            feedBestOnly = !feedBestOnly;
+        function toggleFeedBestOnly(forceVal) {
+            feedBestOnly = typeof forceVal === 'boolean' ? forceVal : !feedBestOnly;
             const btn = document.getElementById('feed-best-only-btn');
             if (btn) {
                 btn.classList.toggle('active', feedBestOnly);
-                btn.style.background = feedBestOnly ? '#10b981' : 'rgba(16, 185, 129, 0.15)';
+                btn.style.background = feedBestOnly ? '#10b981' : 'rgba(16, 185, 129, 0.12)';
                 btn.style.color = feedBestOnly ? '#fff' : '#34d399';
             }
             loadPersonalizedDealsFeed();
+        }
+
+        function toggleFeedHistoryLowOnly() {
+            feedHistoryLowOnly = !feedHistoryLowOnly;
+            const btn = document.getElementById('feed-history-low-btn');
+            if (btn) {
+                btn.classList.toggle('active', feedHistoryLowOnly);
+                btn.style.background = feedHistoryLowOnly ? '#ef4444' : 'rgba(239, 68, 68, 0.12)';
+                btn.style.color = feedHistoryLowOnly ? '#fff' : '#fca5a5';
+            }
+            loadPersonalizedDealsFeed();
+        }
+
+        async function syncTopZipDeals(btn) {
+            const topInput = document.getElementById('groc-top-zip-input');
+            const storeInput = document.getElementById('postal-code-input');
+            const zip = (topInput && topInput.value.trim()) || (storeInput && storeInput.value.trim()) || '76262';
+            if (storeInput) storeInput.value = zip;
+            const orig = btn ? btn.innerHTML : '⚡ Sync Ads';
+            if (btn) {
+                btn.innerHTML = '⏳ Syncing...';
+                btn.disabled = true;
+            }
+            try {
+                await triggerAutoFetchByZip();
+            } finally {
+                if (btn) {
+                    btn.innerHTML = orig;
+                    btn.disabled = false;
+                }
+            }
         }
 
         function updateFeedTargetListDropdown() {
             const select = document.getElementById('feed-target-list-select');
             if (!select) return;
             select.innerHTML = allGroceryLists.map(l => `<option value="${l.id}" ${l.id === activeGroceryListId ? 'selected' : ''}>${escapeHtml(l.title)}</option>`).join('');
+        }
+
+        function renderFeedStoreChips(storeCounts, totalAvailable) {
+            const box = document.getElementById('feed-store-chips');
+            if (!box || !storeCounts) return;
+            const entries = Object.entries(storeCounts).sort((a, b) => b[1] - a[1]);
+            let html = `<button class="filter-chip ${currentFeedStore === 'all' ? 'active' : ''}" onclick="setFeedStoreFilter('all', this)" style="padding: 4px 10px; font-size: 11.5px;">All Stores (${totalAvailable || 0})</button>`;
+            for (const [sName, cnt] of entries) {
+                const isAct = currentFeedStore.toLowerCase() === sName.toLowerCase();
+                const safeS = escapeHtml(sName).replace(/'/g, "\\'");
+                html += `<button class="filter-chip ${isAct ? 'active' : ''}" onclick="setFeedStoreFilter('${safeS}', this)" style="padding: 4px 10px; font-size: 11.5px;">${escapeHtml(sName)} <span style="opacity:0.75;">(${cnt})</span></button>`;
+            }
+            box.innerHTML = html;
         }
 
         async function loadPersonalizedDealsFeed() {
@@ -6147,15 +6324,19 @@
             container.innerHTML = `
                 <div style="grid-column: 1 / -1; text-align: center; color: #888; padding: 40px;">
                     <div style="font-size: 28px; margin-bottom: 10px;">⏳</div>
-                    <div style="color: #fff; font-weight: 600;">Curating your personalized deals & price comparisons...</div>
+                    <div style="color: #fff; font-weight: 600;">Curating your personalized deals &amp; cross-store unit price comparisons...</div>
                 </div>
             `;
 
             try {
                 const params = new URLSearchParams();
                 if (currentFeedCategory && currentFeedCategory !== 'all') params.append('category', currentFeedCategory);
+                if (currentFeedStore && currentFeedStore !== 'all') params.append('store', currentFeedStore);
                 if (currentFeedSearch) params.append('search', currentFeedSearch);
                 if (feedBestOnly) params.append('best_only', 'true');
+                if (feedHistoryLowOnly) params.append('history_low_only', 'true');
+                const sortSel = document.getElementById('feed-sort-select');
+                if (sortSel && sortSel.value) params.append('sort_by', sortSel.value);
 
                 const response = await fetch(`/api/groceries/feed?${params.toString()}`);
                 await handleApiError(response);
@@ -6164,8 +6345,32 @@
                 currentPreferences = data.preferences || null;
                 const deals = data.deals || [];
 
+                // Update top Bento KPIs
+                const kpiStores = document.getElementById('groc-kpi-stores');
+                const kpiZip = document.getElementById('groc-kpi-zip-badge');
+                const kpiTotalDeals = document.getElementById('groc-kpi-total-deals');
+                const kpiMatchedDeals = document.getElementById('groc-kpi-matched-deals');
+                const kpiBest = document.getElementById('groc-kpi-best-prices');
+                const kpiHistLows = document.getElementById('groc-kpi-hist-lows');
+                const topZipInput = document.getElementById('groc-top-zip-input');
+                const storeZipInput = document.getElementById('postal-code-input');
+
+                if (kpiStores && data.stores_count !== undefined) kpiStores.innerText = data.stores_count;
+                if (kpiZip && data.postal_code) kpiZip.innerText = `Zip ${data.postal_code}`;
+                if (topZipInput && data.postal_code && document.activeElement !== topZipInput) topZipInput.value = data.postal_code;
+                if (storeZipInput && data.postal_code && document.activeElement !== storeZipInput) storeZipInput.value = data.postal_code;
+                if (kpiTotalDeals) kpiTotalDeals.innerText = (data.total_available || 0).toLocaleString();
+                if (kpiMatchedDeals) kpiMatchedDeals.innerText = `${deals.length} shown`;
+                if (kpiBest) kpiBest.innerText = data.best_price_count || 0;
+                if (kpiHistLows) kpiHistLows.innerText = `${data.all_time_low_count || 0} all-time lows`;
+
+                if (data.store_counts) {
+                    renderFeedStoreChips(data.store_counts, data.total_available || 0);
+                }
+
                 if (countLabel) {
-                    countLabel.innerHTML = `Showing <strong style="color:#fff;">${deals.length}</strong> top-matched deals (from ${data.total_available || 0} local circular items)`;
+                    const storeTxt = currentFeedStore !== 'all' ? ` at <strong style="color:#60a5fa;">${escapeHtml(currentFeedStore)}</strong>` : '';
+                    countLabel.innerHTML = `Showing <strong style="color:#fff;">${deals.length}</strong> top-ranked specials${storeTxt} (out of ${(data.total_available || 0).toLocaleString()} live circular items)`;
                 }
 
                 updateFeedTargetListDropdown();
@@ -6176,11 +6381,11 @@
                             <div style="font-size: 32px; margin-bottom: 10px;">🛒</div>
                             <h3 style="color: #fff; margin-top: 0;">No Matching Deals Found</h3>
                             <p style="max-width: 500px; margin: 0 auto 15px auto; font-size: 13.5px; color: #94a3b8;">
-                                ${currentFeedSearch ? `No sales matched "${escapeHtml(currentFeedSearch)}". Try clearing your search.` : 'Click <strong>Store Ads &amp; Circulars</strong> to auto-fetch your local weekly store circulars or click <strong>⚙️ Deal Preferences</strong> to tune your favorites!'}
+                                ${currentFeedSearch || currentFeedStore !== 'all' || feedBestOnly || feedHistoryLowOnly ? `No specials matched your active filters. Try resetting your filters or search query.` : 'Click <strong>⚡ Sync Ads</strong> above to auto-fetch your local weekly store circulars!'}
                             </p>
                             <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
-                                <button class="save-btn" onclick="openDealPreferencesModal()" style="margin:0; padding: 8px 18px; font-size: 13px; background: #374151;">⚙️ Tune Preferences</button>
-                                <button class="save-btn" onclick="switchGrocerySubTab('stores')" style="margin:0; padding: 8px 18px; font-size: 13px; background: #2563eb;">🏪 Sync Store Circulars</button>
+                                <button class="save-btn" onclick="resetAllFeedFilters()" style="margin:0; padding: 8px 18px; font-size: 13px; background: #374151;">🔄 Reset Filters</button>
+                                <button class="save-btn" onclick="syncTopZipDeals()" style="margin:0; padding: 8px 18px; font-size: 13px; background: #2563eb;">⚡ Sync Local Circulars</button>
                             </div>
                         </div>
                     `;
@@ -6196,6 +6401,22 @@
             }
         }
 
+        function resetAllFeedFilters() {
+            currentFeedCategory = 'all';
+            currentFeedStore = 'all';
+            currentFeedSearch = '';
+            feedBestOnly = false;
+            feedHistoryLowOnly = false;
+            const sInput = document.getElementById('feed-search-input');
+            if (sInput) sInput.value = '';
+            const bBtn = document.getElementById('feed-best-only-btn');
+            if (bBtn) { bBtn.classList.remove('active'); bBtn.style.background = 'rgba(16, 185, 129, 0.12)'; bBtn.style.color = '#34d399'; }
+            const hBtn = document.getElementById('feed-history-low-btn');
+            if (hBtn) { hBtn.classList.remove('active'); hBtn.style.background = 'rgba(239, 68, 68, 0.12)'; hBtn.style.color = '#fca5a5'; }
+            document.querySelectorAll('#feed-category-chips .filter-chip').forEach((b, i) => b.classList.toggle('active', i === 0));
+            loadPersonalizedDealsFeed();
+        }
+
         function renderPersonalizedDealsFeed(deals) {
             const container = document.getElementById('my-deals-feed-container');
             if (!container) return;
@@ -6207,7 +6428,7 @@
                 
                 let compPillHtml = '';
                 if (comp.badge_type === 'green') {
-                    compPillHtml = `<div class="comp-pill comp-pill-green" title="${escapeHtml(comp.summary || '')}">🟢 ${escapeHtml(comp.summary || '✓ Best Price Found')}</div>`;
+                    compPillHtml = `<div class="comp-pill comp-pill-green" title="${escapeHtml(comp.summary || '')}">🟢 ${escapeHtml(comp.summary || '✓ Best Local Price')}</div>`;
                 } else if (comp.badge_type === 'red') {
                     compPillHtml = `<div class="comp-pill comp-pill-red" title="${escapeHtml(comp.summary || '')}">🔴 ${escapeHtml(comp.summary || '⚠️ Cheaper at other store')}</div>`;
                 } else if (comp.badge_type === 'neutral' && comp.has_match) {
@@ -6222,6 +6443,14 @@
                 const safeImageUrl = escapeHtml(deal.image_url || '').replace(/'/g, "\\'");
                 const gradePillHtml = getGradePillHtml(deal.beef_grade, deal.item);
                 const historyPillHtml = getHistoryPillHtml(deal.price_history);
+
+                let unitPriceTag = '';
+                if (deal.unit_price !== null && deal.unit_price !== undefined && deal.unit) {
+                    const unitFormatted = `$${Number(deal.unit_price).toFixed(2)}/${deal.unit}`;
+                    if (!cleanedPrice.toLowerCase().includes(`/${deal.unit}`)) {
+                        unitPriceTag = `<span style="font-size: 11px; color: #94a3b8; background: rgba(255,255,255,0.05); padding: 1px 6px; border-radius: 4px; font-weight: 600;">${escapeHtml(unitFormatted)}</span>`;
+                    }
+                }
 
                 let cleanNotes = (deal.notes || '').trim();
                 const itemLower = (deal.item || '').toLowerCase().trim();
@@ -6252,6 +6481,10 @@
                     } catch(e) {}
                 }
 
+                const isOnList = Boolean(deal.on_list);
+                const addBtnClass = isOnList ? 'deal-add-btn-compact added' : 'deal-add-btn-compact';
+                const addBtnText = isOnList ? '✓ On Grocery List' : '➕ Add to List';
+
                 return `
                     <div class="deal-card" id="deal-card-${idx}">
                         <div class="deal-thumb-box">
@@ -6265,9 +6498,10 @@
                             <div class="deal-top-line">
                                 <span class="store-pill ${pillClass}">${escapeHtml(deal.store)}</span>
                                 <span class="deal-price-badge">${escapeHtml(cleanedPrice || 'Sale')}</span>
+                                ${unitPriceTag}
                                 ${gradePillHtml}
                                 ${dealValidityHtml}
-                                <span style="font-size: 10.5px; color: #8b949e; margin-left: auto; text-transform: uppercase; font-weight: 500; letter-spacing: 0.3px;">${escapeHtml(deal.category || '')}</span>
+                                <span style="font-size: 10px; color: #8b949e; margin-left: auto; text-transform: uppercase; font-weight: 600; letter-spacing: 0.3px;">${escapeHtml(deal.category || '')}</span>
                             </div>
 
                             <div class="deal-title-text" title="${escapeHtml(deal.item)}">
@@ -6283,10 +6517,11 @@
                         </div>
 
                         <div class="deal-right-actions">
-                            <button class="deal-add-btn-compact" onclick="addFeedDealToList('${safeItemName}', '${safeStoreName}', '${safePrice}', '${safeCategory}', '${safeImageUrl}', this)">
-                                ➕ Add to Grocery List
+                            <button class="${addBtnClass}" onclick="addFeedDealToList('${safeItemName}', '${safeStoreName}', '${safePrice}', '${safeCategory}', '${safeImageUrl}', this)">
+                                ${addBtnText}
                             </button>
                             <div class="deal-feedback-row">
+                                <button class="deal-feedback-btn-mini" onclick="openPriceHistoryModal('${safeItemName}', '${safeCategory}')" title="View Historical Price Ledger">📈</button>
                                 <button class="deal-feedback-btn-mini" onclick="submitDealFeedback('${safeItemName}', '${safeCategory}', 'more', this, ${idx})" title="More like this">👍</button>
                                 <button class="deal-feedback-btn-mini" onclick="submitDealFeedback('${safeItemName}', '${safeCategory}', 'less', this, ${idx})" title="Less like this">👎</button>
                                 <button class="deal-feedback-btn-mini" onclick="submitDealFeedback('${safeItemName}', '${safeCategory}', 'hide_category', this, ${idx})" title="Hide category">🚫</button>
@@ -6295,6 +6530,89 @@
                     </div>
                 `;
             }).join('');
+        }
+
+        async function openPriceHistoryModal(itemName, category) {
+            const modal = document.getElementById('price-history-modal');
+            const titleEl = document.getElementById('price-history-modal-title');
+            const subEl = document.getElementById('price-history-modal-subtitle');
+            const bodyEl = document.getElementById('price-history-modal-body');
+            if (!modal || !bodyEl) return;
+
+            titleEl.innerText = `📈 Price History: ${itemName}`;
+            subEl.innerText = `Category: ${category || 'General'}`;
+            bodyEl.innerHTML = `<div style="text-align:center; padding: 30px; color:#94a3b8;">⏳ Querying historical circular ledger...</div>`;
+            modal.style.display = 'flex';
+
+            try {
+                const params = new URLSearchParams({item: itemName, category: category || ''});
+                const res = await fetch(`/api/groceries/price_history?${params.toString()}`);
+                await handleApiError(res);
+                const data = await res.json();
+                const rows = data.history || [];
+
+                if (rows.length === 0) {
+                    bodyEl.innerHTML = `<div style="text-align:center; padding: 30px; color:#94a3b8;">No historical circular snapshots recorded yet for this item. Prices are logged automatically each week as circulars sync.</div>`;
+                    return;
+                }
+
+                const prices = rows.map(r => r.unit_price).filter(v => v !== null && v !== undefined);
+                const minP = prices.length ? Math.min(...prices) : null;
+                const maxP = prices.length ? Math.max(...prices) : null;
+                const avgP = prices.length ? (prices.reduce((a, b) => a + b, 0) / prices.length) : null;
+                const unit = rows[0].unit || 'ea';
+
+                subEl.innerHTML = `Canonical Key: <code style="color:#93c5fd;">${escapeHtml(data.normalized_key || '')}</code> ${data.beef_grade && data.beef_grade !== 'none' ? `&bull; Grade: <strong style="color:#fbbf24;">${escapeHtml(data.beef_grade.toUpperCase())}</strong>` : ''}`;
+
+                let statsHtml = '';
+                if (minP !== null) {
+                    statsHtml = `
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px;">
+                            <div style="background:#0d1117; border:1px solid rgba(16,185,129,0.35); border-radius:8px; padding:10px; text-align:center;">
+                                <div style="font-size:11px; color:#94a3b8;">🏆 All-Time Low</div>
+                                <div style="font-size:18px; font-weight:800; color:#34d399; margin-top:2px;">$${minP.toFixed(2)}/${escapeHtml(unit)}</div>
+                            </div>
+                            <div style="background:#0d1117; border:1px solid #30363d; border-radius:8px; padding:10px; text-align:center;">
+                                <div style="font-size:11px; color:#94a3b8;">📊 Historical Avg</div>
+                                <div style="font-size:18px; font-weight:800; color:#60a5fa; margin-top:2px;">$${avgP.toFixed(2)}/${escapeHtml(unit)}</div>
+                            </div>
+                            <div style="background:#0d1117; border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:10px; text-align:center;">
+                                <div style="font-size:11px; color:#94a3b8;">📈 Peak Recorded</div>
+                                <div style="font-size:18px; font-weight:800; color:#f87171; margin-top:2px;">$${maxP.toFixed(2)}/${escapeHtml(unit)}</div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                bodyEl.innerHTML = statsHtml + `
+                    <div style="display:flex; flex-direction:column; gap:8px;">
+                        ${rows.map(r => {
+                            const dt = r.recorded_at ? new Date(r.recorded_at).toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'}) : '';
+                            const isLow = minP !== null && r.unit_price !== null && Math.abs(r.unit_price - minP) < 0.01;
+                            return `
+                                <div style="display:flex; justify-content:space-between; align-items:center; background:#0d1117; border:1px solid ${isLow ? 'rgba(16,185,129,0.4)' : '#21262d'}; border-radius:8px; padding:9px 12px;">
+                                    <div>
+                                        <span class="store-pill ${getStorePillClass(r.store_name)}">${escapeHtml(r.store_name)}</span>
+                                        <strong style="color:#fff; font-size:13px; margin-left:6px;">${escapeHtml(r.item_name)}</strong>
+                                        ${isLow ? `<span style="background:rgba(16,185,129,0.2); color:#34d399; font-size:10px; font-weight:700; padding:1px 6px; border-radius:4px; margin-left:6px;">🏆 LOW</span>` : ''}
+                                    </div>
+                                    <div style="text-align:right;">
+                                        <div style="color:#34d399; font-weight:800; font-size:14px;">${escapeHtml(r.price_str || '')}</div>
+                                        <div style="color:#64748b; font-size:11px;">${escapeHtml(dt)}</div>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                `;
+            } catch (e) {
+                bodyEl.innerHTML = `<div class="error">Failed to load price history.</div>`;
+            }
+        }
+
+        function closePriceHistoryModal() {
+            const modal = document.getElementById('price-history-modal');
+            if (modal) modal.style.display = 'none';
         }
 
         function showFloatingFeedback(targetEl, text, type) {
@@ -7353,13 +7671,35 @@
             loadActiveListItems();
         }
 
+        function parseEstimatedItemCost(priceNotes) {
+            if (!priceNotes) return 0;
+            const m = String(priceNotes).match(/\$(\d+(?:\.\d{1,2})?)/);
+            if (m) return parseFloat(m[1]) || 0;
+            const mc = String(priceNotes).match(/(\d+)\s*[¢c]\b/i);
+            if (mc) return (parseFloat(mc[1]) / 100.0) || 0;
+            return 0;
+        }
+
+        function filterGroceryListByStore(storeName) {
+            activeListStoreFilter = storeName || null;
+            loadActiveListItems();
+        }
+
         async function loadActiveListItems() {
             const container = document.getElementById('grocery-items-container');
             const totalCountEl = document.getElementById('grocery-total-count');
             const checkedCountEl = document.getElementById('grocery-checked-count');
+            const tripBox = document.getElementById('grocery-trip-breakdown-box');
+            const tripCards = document.getElementById('grocery-trip-store-cards');
+            const tripTotalEl = document.getElementById('grocery-trip-est-total');
+            const progBar = document.getElementById('grocery-shopping-progress-bar');
+            const progLabel = document.getElementById('grocery-shopping-progress-label');
+            const kpiCartItems = document.getElementById('groc-kpi-cart-items');
+            const kpiCartTotal = document.getElementById('groc-kpi-cart-total');
+            const filterPill = document.getElementById('grocery-active-store-filter-pill');
             
             if (!activeGroceryListId) {
-                container.innerHTML = '<div style="color:#aaa; text-align:center; padding:30px;">No list selected. Create or select a list above.</div>';
+                if (container) container.innerHTML = '<div style="color:#aaa; text-align:center; padding:30px;">No list selected. Create or select a list above.</div>';
                 return;
             }
 
@@ -7373,19 +7713,77 @@
                 if (totalCountEl) totalCountEl.innerText = total;
                 if (checkedCountEl) checkedCountEl.innerText = checked;
 
+                // Compute Smart Store Trip Breakdown
+                let estCartTotal = 0;
+                const storeStats = {};
+                items.forEach(it => {
+                    const st = it.store_name || 'Any Store';
+                    if (!storeStats[st]) storeStats[st] = { total: 0, unchecked: 0, subtotal: 0 };
+                    storeStats[st].total += 1;
+                    const cVal = parseEstimatedItemCost(it.price_notes);
+                    if (it.is_checked !== 1) {
+                        storeStats[st].unchecked += 1;
+                        storeStats[st].subtotal += cVal;
+                        estCartTotal += cVal;
+                    }
+                });
+
+                if (kpiCartItems) kpiCartItems.innerText = `${total - checked} active`;
+                if (kpiCartTotal) kpiCartTotal.innerText = `~$${estCartTotal.toFixed(2)} est.`;
+
+                if (filterPill) {
+                    if (activeListStoreFilter) {
+                        filterPill.style.display = 'inline-flex';
+                        filterPill.innerHTML = `🏪 Filtering: <strong>${escapeHtml(activeListStoreFilter)}</strong> &times;`;
+                    } else {
+                        filterPill.style.display = 'none';
+                    }
+                }
+
                 if (items.length === 0) {
+                    if (tripBox) tripBox.style.display = 'none';
                     container.innerHTML = `
-                        <div style="color: #aaa; text-align: center; padding: 35px; border: 1px dashed var(--border-color); border-radius: var(--radius-md);">
+                        <div style="color: #aaa; text-align: center; padding: 38px 20px; border: 1px dashed var(--border-color); border-radius: 12px; background: rgba(0,0,0,0.15);">
+                            <div style="font-size: 32px; margin-bottom: 8px;">🛒</div>
                             <h3 style="color: #fff; margin-top: 0;">Your Grocery List is Empty</h3>
-                            <p>Add items using the quick form above, browse <strong>🔥 My Deals</strong> for personalized specials, or click <strong>🤖 Generate with AI</strong> to build a meal plan!</p>
+                            <p style="max-width: 520px; margin: 0 auto 14px auto; font-size: 13.5px; color: #94a3b8;">
+                                Click any <strong>⚡ 1-Click Household Staple</strong> above to automatically pull the lowest local sale price, import your <strong>🍲 Smart Meal Plan</strong>, or add deals from <strong>🔥 My Deals Feed</strong>!
+                            </p>
                         </div>
                     `;
                     return;
                 }
 
+                if (tripBox && tripCards) {
+                    tripBox.style.display = 'block';
+                    if (tripTotalEl) tripTotalEl.innerText = `~$${estCartTotal.toFixed(2)}`;
+                    const pct = total > 0 ? Math.round((checked / total) * 100) : 0;
+                    if (progBar) progBar.style.width = `${pct}%`;
+                    if (progLabel) progLabel.innerText = `${checked} / ${total} checked (${pct}%)`;
+
+                    const stEntries = Object.entries(storeStats).sort((a, b) => b[1].unchecked - a[1].unchecked);
+                    tripCards.innerHTML = stEntries.map(([stName, stInfo]) => {
+                        const isSelected = activeListStoreFilter === stName;
+                        const safeSt = escapeHtml(stName).replace(/'/g, "\\'");
+                        return `
+                            <div onclick="filterGroceryListByStore(${isSelected ? 'null' : `'${safeSt}'`})" style="cursor: pointer; background: ${isSelected ? 'rgba(37,99,235,0.22)' : '#0d1117'}; border: 1px solid ${isSelected ? '#3b82f6' : '#21262d'}; border-radius: 8px; padding: 8px 12px; display: flex; align-items: center; gap: 10px; transition: all 0.15s;" title="Click to filter shopping list for ${escapeHtml(stName)}">
+                                <span class="store-pill ${getStorePillClass(stName)}">${escapeHtml(stName)}</span>
+                                <div style="font-size: 12px; color: #e2e8f0;">
+                                    <strong>${stInfo.unchecked}</strong> to buy <span style="color:#64748b;">(${stInfo.total} total)</span>
+                                    ${stInfo.subtotal > 0 ? `&bull; <strong style="color:#34d399;">~$${stInfo.subtotal.toFixed(2)}</strong>` : ''}
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+
+                const visibleItems = activeListStoreFilter
+                    ? items.filter(i => (i.store_name || 'Any Store') === activeListStoreFilter)
+                    : items;
+
                 // Group items
                 const groups = {};
-                items.forEach(item => {
+                visibleItems.forEach(item => {
                     const groupKey = currentGroceryGrouping === 'store' 
                         ? (item.store_name || 'Any Store') 
                         : (item.category || 'General');
@@ -7395,13 +7793,17 @@
 
                 let html = '';
                 for (const [groupName, groupItems] of Object.entries(groups)) {
+                    const groupSubtotal = groupItems.reduce((acc, it) => acc + (it.is_checked ? 0 : parseEstimatedItemCost(it.price_notes)), 0);
                     html += `
                         <div style="margin-bottom: 22px;">
-                            <h4 style="margin: 0 0 10px 0; color: #93c5fd; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px;">
-                                <span>${currentGroceryGrouping === 'store' ? '🏪' : '📂'}</span>
-                                <span>${escapeHtml(groupName)}</span>
-                                <span style="font-size: 12px; color: #888; font-weight: normal;">(${groupItems.length})</span>
-                            </h4>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 6px;">
+                                <h4 style="margin: 0; color: #93c5fd; font-size: 13.5px; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px;">
+                                    <span>${currentGroceryGrouping === 'store' ? '🏪' : getCategoryEmoji(groupName)}</span>
+                                    <span>${escapeHtml(groupName)}</span>
+                                    <span style="font-size: 12px; color: #888; font-weight: normal;">(${groupItems.length})</span>
+                                </h4>
+                                ${groupSubtotal > 0 ? `<span style="font-size: 12px; color: #34d399; font-weight: 700;">Est. Subtotal: ~$${groupSubtotal.toFixed(2)}</span>` : ''}
+                            </div>
                             <div>
                                 ${groupItems.map(item => {
                                     const isChecked = item.is_checked === 1;
@@ -7411,13 +7813,21 @@
                                     
                                     let compPillHtml = '';
                                     if (comp.badge_type === 'green') {
-                                        compPillHtml = `<span class="comp-pill comp-pill-green" style="font-size: 11px; padding: 2px 7px; margin-top: 0;" title="${escapeHtml(comp.summary || '')}">🟢 ${escapeHtml(comp.summary || 'Best Price')}</span>`;
+                                        compPillHtml = `<span class="comp-pill comp-pill-green" style="font-size: 11px; padding: 2px 7px; margin-top: 0;" title="${escapeHtml(comp.summary || '')}">🟢 ${escapeHtml(comp.summary || 'Best Local Price')}</span>`;
                                     } else if (comp.badge_type === 'red') {
-                                        compPillHtml = `<span class="comp-pill comp-pill-red" style="font-size: 11px; padding: 2px 7px; margin-top: 0;" title="${escapeHtml(comp.summary || '')}">🔴 ${escapeHtml(comp.summary || 'Cheaper elsewhere')}</span>`;
+                                        const safeBestStore = escapeHtml(comp.best_store || '').replace(/'/g, "\\'");
+                                        const safeBestPrice = escapeHtml(comp.best_price || '').replace(/'/g, "\\'");
+                                        compPillHtml = `
+                                            <span class="comp-pill comp-pill-red" style="font-size: 11px; padding: 2px 7px; margin-top: 0; cursor: pointer;" onclick="switchListItemToCheaperStore('${item.id}', '${safeBestStore}', '${safeBestPrice}')" title="Click to switch this item to ${escapeHtml(comp.best_store || 'cheaper store')} (${escapeHtml(comp.best_price || '')})">
+                                                🔴 ${escapeHtml(comp.summary || 'Cheaper elsewhere')} &bull; <u>Switch</u>
+                                            </span>
+                                        `;
                                     }
 
                                     const gradePillHtml = getGradePillHtml(item.beef_grade, item.item_name);
                                     const historyPillHtml = getHistoryPillHtml(item.price_history);
+                                    const safeItemForHist = escapeHtml(item.item_name || '').replace(/'/g, "\\'");
+                                    const safeCatForHist = escapeHtml(item.category || '').replace(/'/g, "\\'");
 
                                     const imageTag = item.image_url ? `
                                         <img src="${escapeHtml(item.image_url)}" alt="" style="width: 44px; height: 44px; object-fit: contain; padding: 2px; box-sizing: border-box;" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
@@ -7434,8 +7844,8 @@
                                                 <div style="flex: 1; min-width: 0;">
                                                     <span class="grocery-item-title" style="font-size: 14.5px; font-weight: 600; color: #fff;">${escapeHtml(item.item_name)}</span>
                                                     <div style="display: flex; gap: 6px; align-items: center; margin-top: 4px; flex-wrap: wrap;">
-                                                        ${currentGroceryGrouping !== 'store' ? `<span class="store-pill ${pillClass}">${escapeHtml(item.store_name || 'Any')}</span>` : ''}
-                                                        ${currentGroceryGrouping !== 'category' && item.category ? `<span class="category-pill">${escapeHtml(item.category)}</span>` : ''}
+                                                        <span class="store-pill ${pillClass}">${escapeHtml(item.store_name || 'Any')}</span>
+                                                        ${item.category ? `<span class="category-pill">${escapeHtml(item.category)}</span>` : ''}
                                                         ${gradePillHtml}
                                                         ${item.price_notes ? `<span class="price-pill">${escapeHtml(item.price_notes)}</span>` : ''}
                                                         ${compPillHtml}
@@ -7443,7 +7853,10 @@
                                                     ${historyPillHtml ? `<div style="margin-top: 4px;">${historyPillHtml}</div>` : ''}
                                                 </div>
                                             </div>
-                                            <button class="remove-btn" onclick="deleteGroceryItem('${item.id}')" style="margin: 0; padding: 4px 8px; font-size: 12px; opacity: 0.75;">🗑️</button>
+                                            <div style="display: flex; gap: 6px; align-items: center;">
+                                                <button class="deal-feedback-btn-mini" onclick="openPriceHistoryModal('${safeItemForHist}', '${safeCatForHist}')" title="View Historical Price Ledger">📈</button>
+                                                <button class="remove-btn" onclick="deleteGroceryItem('${item.id}')" style="margin: 0; padding: 4px 8px; font-size: 12px; opacity: 0.75;" title="Remove item">🗑️</button>
+                                            </div>
                                         </div>
                                     `;
                                 }).join('')}
@@ -7455,6 +7868,144 @@
 
             } catch(e) {
                 if (e.message !== "Unauthorized") container.innerHTML = '<div class="error">Failed to load grocery items.</div>';
+            }
+        }
+
+        async function switchListItemToCheaperStore(itemId, bestStore, bestPrice) {
+            if (!itemId || !bestStore) return;
+            try {
+                const res = await fetch(`/api/groceries/items/${itemId}`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        store_name: bestStore,
+                        price_notes: `${bestPrice} (Switched to lowest price)`
+                    })
+                });
+                await handleApiError(res);
+                showGroceryMsg(`✓ Switched item to ${bestStore} (${bestPrice})!`, 'success');
+                loadActiveListItems();
+            } catch (e) {
+                if (e.message !== "Unauthorized") alert("Could not switch store.");
+            }
+        }
+
+        async function quickAddStapleItem(stapleName, category, btn) {
+            if (!activeGroceryListId) {
+                await loadGroceryLists();
+            }
+            if (!activeGroceryListId) return alert("Please create a grocery list first.");
+
+            const origHtml = btn ? btn.innerHTML : stapleName;
+            if (btn) {
+                btn.innerHTML = `⏳ ${stapleName}...`;
+                btn.disabled = true;
+            }
+            try {
+                const res = await fetch(`/api/groceries/lists/${activeGroceryListId}/quick_staple`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({staple_name: stapleName, category: category || 'General'})
+                });
+                await handleApiError(res);
+                const data = await res.json();
+                const saleTxt = data.on_sale ? `at ${data.store_name} (${data.price_notes})` : '(Regular price)';
+                showGroceryMsg(`✓ Added ${data.item_name} ${saleTxt}!`, 'success');
+                if (btn) {
+                    btn.innerHTML = `✓ ${stapleName}`;
+                    setTimeout(() => { if (btn) btn.innerHTML = origHtml; }, 1400);
+                }
+                loadActiveListItems();
+            } catch (e) {
+                if (btn) btn.innerHTML = origHtml;
+                if (e.message !== "Unauthorized") alert(e.message || "Failed to quick-add staple.");
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+
+        async function optimizeActiveGroceryList(btn) {
+            if (!activeGroceryListId) return alert("Select a grocery list first.");
+            const orig = btn ? btn.innerHTML : '⚡ Auto-Optimize Best Stores';
+            if (btn) {
+                btn.innerHTML = '⏳ Optimizing Stores & Prices...';
+                btn.disabled = true;
+            }
+            try {
+                const res = await fetch(`/api/groceries/lists/${activeGroceryListId}/optimize`, {method: 'POST'});
+                await handleApiError(res);
+                const data = await res.json();
+                const savPill = document.getElementById('grocery-trip-savings-pill');
+                if (savPill && data.estimated_savings > 0) {
+                    savPill.style.display = 'inline-flex';
+                    savPill.innerText = `💰 Saved ~$${Number(data.estimated_savings).toFixed(2)} via Store Optimization`;
+                }
+                if (data.optimized_count > 0) {
+                    showGroceryMsg(`⚡ Optimized ${data.optimized_count} items to their cheapest local stores (Est. savings: ~$${Number(data.estimated_savings).toFixed(2)})!`, 'success');
+                } else {
+                    showGroceryMsg(`✓ All items on your list are already assigned to the lowest-priced local stores!`, 'success');
+                }
+                await loadActiveListItems();
+            } catch (e) {
+                if (e.message !== "Unauthorized") alert(e.message || "Failed to optimize grocery list.");
+            } finally {
+                if (btn) {
+                    btn.innerHTML = orig;
+                    btn.disabled = false;
+                }
+            }
+        }
+
+        async function importMealPlanToGroceryList(btn) {
+            if (!activeGroceryListId) return alert("Select a grocery list first.");
+            const orig = btn ? btn.innerHTML : '🍲 Import Meal Plan';
+            if (btn) {
+                btn.innerHTML = '⏳ Importing...';
+                btn.disabled = true;
+            }
+            try {
+                const res = await fetch(`/api/groceries/lists/${activeGroceryListId}/import_meal_plan`, {method: 'POST'});
+                await handleApiError(res);
+                const data = await res.json();
+                showGroceryMsg(`🍲 Imported ${data.added_count} new sale-matched ingredients from "${data.plan_title}"!`, 'success');
+                await loadActiveListItems();
+            } catch (e) {
+                if (e.message !== "Unauthorized") alert(e.message || "No active Meal Plan found. Generate one in the Smart Meal Planner tab first!");
+            } finally {
+                if (btn) {
+                    btn.innerHTML = orig;
+                    btn.disabled = false;
+                }
+            }
+        }
+
+        async function sendGroceryListToPhone(btn) {
+            if (!activeGroceryListId) return alert("Select a grocery list first.");
+            const orig = btn ? btn.innerHTML : '📲 Send to Phone';
+            if (btn) {
+                btn.innerHTML = '⏳ Sending...';
+                btn.disabled = true;
+            }
+            try {
+                const res = await fetch(`/api/groceries/lists/${activeGroceryListId}/send_to_phone`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({channels: ['discord', 'email']})
+                });
+                await handleApiError(res);
+                const data = await res.json();
+                if (data.status === 'success') {
+                    showGroceryMsg(`📲 Sent your store-grouped grocery list to your phone via Discord & Email!`, 'success');
+                } else {
+                    showGroceryMsg(`⚠️ Could not send alert — verify your Discord Webhook or Email account in Settings.`, 'warning');
+                }
+            } catch (e) {
+                if (e.message !== "Unauthorized") alert(e.message || "Failed to send grocery list to phone.");
+            } finally {
+                if (btn) {
+                    btn.innerHTML = orig;
+                    btn.disabled = false;
+                }
             }
         }
 
