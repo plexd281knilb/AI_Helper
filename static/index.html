@@ -2801,9 +2801,12 @@
 
                 <!-- FB SUB-PANE 3: WATCHLISTS & STRICT ANTI-GARBAGE RULES -->
                 <div id="fb-pane-watchlists" class="fb-sub-pane" style="display: none;">
-                    <div class="account-box" style="margin-bottom: 20px; border-color: rgba(59, 130, 246, 0.4);">
+                    <div class="account-box" id="fb-watchlist-form-card" style="margin-bottom: 20px; border-color: rgba(59, 130, 246, 0.4);">
                         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px;">
-                            <h3 style="margin: 0; color: #38bdf8;" id="fb-watchlist-form-title">🎯 Configure Search Watchlist &amp; Anti-Garbage Filters</h3>
+                            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                                <h3 style="margin: 0; color: #38bdf8;" id="fb-watchlist-form-title">🎯 Configure Search Watchlist &amp; Anti-Garbage Filters</h3>
+                                <span id="fb-watchlist-edit-badge" style="display: none; background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.45); font-size: 11.5px; font-weight: 800; padding: 3px 10px; border-radius: 99px;">✏️ EDITING SAVED WATCHLIST</span>
+                            </div>
                             <div style="display: flex; gap: 6px; flex-wrap: wrap;">
                                 <button type="button" class="btn-meal-action" onclick="applyWatchlistPreset('wife_bike')">🚲 Preset: Wife's Liv XXS Bike</button>
                                 <button type="button" class="btn-meal-action" onclick="applyWatchlistPreset('traeger')">🔥 Preset: Traeger / Yeti (DFW)</button>
@@ -2844,12 +2847,16 @@
                                 <input type="text" id="fbw-must-contain" value="liv, giant liv, avail, langma, devote, alight, tempt, envie, thrive" style="width: 100%; box-sizing: border-box; padding: 10px; background: #0d1117; border: 1px solid rgba(16,185,129,0.4); border-radius: 6px; color: #fff; font-size: 13px;">
                             </div>
                             <div>
-                                <label style="font-size: 12px; color: #38bdf8; display: block; margin-bottom: 4px; font-weight: 700;">📏 Required Size / Fit Spec (Must match at least one)</label>
+                                <label style="font-size: 12px; color: #38bdf8; display: block; margin-bottom: 4px; font-weight: 700;">📏 Required Size / Fit Spec (Must match at least one in text OR via AI Photo Vision)</label>
                                 <input type="text" id="fbw-req-attrs" value="xxs, 2xs, extra extra small, xs, extra small, 44cm, 45cm, 46cm, 47cm, 48cm, 4'10, 4'11, 5'0, 5'1, 5'2" style="width: 100%; box-sizing: border-box; padding: 10px; background: #0d1117; border: 1px solid rgba(56,189,248,0.4); border-radius: 6px; color: #fff; font-size: 13px;">
                             </div>
                             <div>
-                                <label style="font-size: 12px; color: #f87171; display: block; margin-bottom: 4px; font-weight: 700;">🚫 Excluded Garbage Keywords (Instantly blocks wrong sizes, wrong brands &amp; out-of-state)</label>
-                                <input type="text" id="fbw-exclude" value="large, size l, frame l, medium, size m, frame m, xl, extra large, trek, specialized, mens, men's, huffy, schwinn, bmx, kids 12, kids 16, 20 inch, arkansas, little rock, fayetteville, bentonville, oklahoma, tulsa, ships to you, iso, wanted, broken" style="width: 100%; box-sizing: border-box; padding: 10px; background: #0d1117; border: 1px solid rgba(239,68,68,0.4); border-radius: 6px; color: #fff; font-size: 13px;">
+                                <label style="font-size: 12px; color: #f87171; display: block; margin-bottom: 4px; font-weight: 700;">🚫 Excluded Garbage Keywords (Instantly blocks wrong sizes, wrong brands, 24" kids bikes &amp; out-of-state)</label>
+                                <input type="text" id="fbw-exclude" value="large, size l, frame l, medium, size m, frame m, xl, extra large, trek, specialized, mens, men's, huffy, schwinn, bmx, kids 12, kids 16, 20 inch, 24 inch, 24&quot;, enchant, arkansas, little rock, fayetteville, bentonville, oklahoma, tulsa, ships to you, iso, wanted, broken" style="width: 100%; box-sizing: border-box; padding: 10px; background: #0d1117; border: 1px solid rgba(239,68,68,0.4); border-radius: 6px; color: #fff; font-size: 13px;">
+                            </div>
+                            <div>
+                                <label style="font-size: 12px; color: #c084fc; display: block; margin-bottom: 4px; font-weight: 700;">🔬 AI Vision Photo &amp; Spec Inspection Instructions (What AI looks for in listing photos)</label>
+                                <textarea id="fbw-visual-targets" rows="2" style="width: 100%; box-sizing: border-box; padding: 10px; background: #0d1117; border: 1px solid rgba(192,132,252,0.4); border-radius: 6px; color: #fff; font-size: 12.5px; line-height: 1.4;">Inspect photos to identify exact Liv/Giant model from frame decals, verify XXS/XS compact sloping top-tube geometry &amp; seat-tube size stickers, check Carbon vs ALUXX welded aluminum, Disc vs Rim brakes, drivetrain tier, and block 20&quot;/24&quot; youth kids bikes (e.g. Liv Enchant).</textarea>
                             </div>
                         </div>
 
@@ -2865,11 +2872,17 @@
                                     <input type="checkbox" id="fbw-block-shipping" checked> 🚫 Block "Ships to You"
                                 </label>
                             </div>
-                            <button type="button" class="save-btn" onclick="saveFacebookWatchlist()">💾 Save Watchlist &amp; Run Scan</button>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <button type="button" id="fbw-cancel-edit-btn" class="remove-btn" onclick="cancelEditFbWatchlist()" style="display: none; margin: 0; background: #374151; color: #e2e8f0; padding: 10px 16px;">Cancel Edit</button>
+                                <button type="button" id="fbw-save-btn" class="save-btn" onclick="saveFacebookWatchlist()" style="margin: 0;">💾 Save Watchlist &amp; Run Scan</button>
+                            </div>
                         </div>
                     </div>
 
-                    <h3 style="margin-bottom: 12px;">Saved Watchlists</h3>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                        <h3 style="margin: 0;">Saved Watchlists <small style="font-size: 12.5px; color: #94a3b8; font-weight: 400;">(Click <strong>✏️ Edit</strong> on any watchlist to modify its rules, keywords, or AI photo targets)</small></h3>
+                        <button type="button" class="add-btn" onclick="openNewWatchlistForm()" style="margin: 0; padding: 6px 14px; font-size: 12.5px; background: #2563eb;">➕ Create New Watchlist</button>
+                    </div>
                     <div id="fb-watchlists-list-container"></div>
                 </div>
 
@@ -9707,6 +9720,45 @@
             }
         }
 
+        function swapFbCardPhoto(listingId, photoUrl, thumbEl) {
+            const mainImg = document.getElementById(`fb-main-img-${listingId}`);
+            if (mainImg && photoUrl) {
+                mainImg.src = photoUrl;
+            }
+            if (thumbEl && thumbEl.parentElement) {
+                Array.from(thumbEl.parentElement.children).forEach(el => {
+                    el.style.borderColor = 'rgba(255,255,255,0.18)';
+                    el.style.opacity = '0.72';
+                });
+                thumbEl.style.borderColor = '#38bdf8';
+                thumbEl.style.opacity = '1';
+            }
+        }
+
+        async function runFbListingVisionInspect(listingId, btn) {
+            const orig = btn ? btn.innerHTML : '';
+            if (btn) { btn.innerHTML = '🔬 Analyzing Photos...'; btn.disabled = true; }
+            try {
+                const res = await fetch(`/api/facebook/listings/${listingId}/vision_inspect`, { method: 'POST' });
+                await handleApiError(res);
+                const data = await res.json();
+                await loadFacebookOverview();
+                const msgBox = document.getElementById('fb-msg');
+                if (msgBox && data.vision_analysis) {
+                    const va = data.vision_analysis;
+                    msgBox.innerHTML = `<div class="${va.is_youth_or_wrong_category ? 'error' : 'success'}">
+                        <strong>🔬 AI Photo Vision X-Ray (${escapeHtml(va.identified_model || 'Bike')}):</strong> ${escapeHtml(va.verdict_summary || '')}
+                    </div>`;
+                    setTimeout(() => msgBox.innerHTML = '', 8000);
+                }
+            } catch (e) {
+                const msgBox = document.getElementById('fb-msg');
+                if (msgBox) msgBox.innerHTML = `<div class="error">Vision inspect failed: ${escapeHtml(e.message)}</div>`;
+            } finally {
+                if (btn) { btn.innerHTML = orig; btn.disabled = false; }
+            }
+        }
+
         function renderFbMatches(matches) {
             const container = document.getElementById('fb-matches-container');
             if (!container) return;
@@ -9726,9 +9778,44 @@
                 const isStarred = item.status === 'starred';
                 const reasons = Array.isArray(item.block_reasons) ? item.block_reasons : [];
                 const savings = Math.max(0, (item.est_retail_value || 0) - (item.price_num || 0));
-                const imgHtml = item.image_url
-                    ? `<img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.title)}" class="fb-listing-img" onerror="this.style.display='none'">`
+                const gallery = Array.isArray(item.gallery_photos) && item.gallery_photos.length > 0
+                    ? item.gallery_photos
+                    : (item.image_url ? [item.image_url] : []);
+                const primaryPhoto = gallery[0] || item.image_url || '';
+                const imgHtml = primaryPhoto
+                    ? `<img id="fb-main-img-${item.id}" src="${escapeHtml(primaryPhoto)}" alt="${escapeHtml(item.title)}" class="fb-listing-img" onerror="this.style.display='none'">`
                     : `<div style="font-size: 48px;">🚲</div>`;
+
+                const galleryThumbsHtml = gallery.length > 1 ? `
+                    <div style="display: flex; gap: 6px; padding: 8px 14px; background: rgba(0,0,0,0.45); border-bottom: 1px solid rgba(255,255,255,0.06); overflow-x: auto;">
+                        ${gallery.map((gUrl, gIdx) => `
+                            <img src="${escapeHtml(gUrl)}" alt="Photo ${gIdx + 1}"
+                                onclick="swapFbCardPhoto('${item.id}', '${escapeHtml(gUrl)}', this)"
+                                style="width: 48px; height: 42px; object-fit: cover; border-radius: 6px; cursor: pointer; border: 2px solid ${gIdx === 0 ? '#38bdf8' : 'rgba(255,255,255,0.18)'}; opacity: ${gIdx === 0 ? '1' : '0.72'}; flex-shrink: 0; transition: all 0.15s;"
+                                onerror="this.style.display='none'">
+                        `).join('')}
+                        <span style="font-size: 10.5px; color: #94a3b8; align-self: center; margin-left: auto; white-space: nowrap;">📷 ${gallery.length} Photos</span>
+                    </div>
+                ` : '';
+
+                const va = (item.vision_analysis && typeof item.vision_analysis === 'object') ? item.vision_analysis : {};
+                const hasVision = Boolean(va.identified_model || va.verdict_summary);
+                const isSizeWarn = Boolean(va.is_wrong_adult_size);
+                const visionBoxHtml = hasVision ? `
+                    <div style="background: ${isSizeWarn ? 'rgba(245, 158, 11, 0.08)' : 'rgba(56, 189, 248, 0.08)'}; border: 1px solid ${isSizeWarn ? 'rgba(245, 158, 11, 0.35)' : 'rgba(56, 189, 248, 0.3)'}; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; font-size: 11.8px; line-height: 1.45;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; gap: 6px;">
+                            <strong style="color: ${isSizeWarn ? '#fbbf24' : '#38bdf8'}; font-size: 12px;">🔬 AI Photo Vision &amp; Spec X-Ray</strong>
+                            <span style="background: rgba(15,23,42,0.75); color: ${va.photo_size_confirmed ? '#34d399' : '#fbbf24'}; border: 1px solid ${va.photo_size_confirmed ? 'rgba(16,185,129,0.4)' : 'rgba(245,158,11,0.4)'}; padding: 1px 7px; border-radius: 99px; font-size: 10.5px; font-weight: 700;">
+                                ${va.photo_size_confirmed ? '✓ Photo Size Confirmed' : '⚠️ Check Frame Geometry'}
+                            </span>
+                        </div>
+                        <div style="color: #e2e8f0; margin-bottom: 3px;"><strong>Model ID:</strong> ${escapeHtml(va.identified_model || item.title)}</div>
+                        <div style="color: #cbd5e1; margin-bottom: 3px;"><strong>Photo Frame Size:</strong> <span style="color: ${va.photo_size_confirmed ? '#34d399' : '#fbbf24'}; font-weight: 700;">${escapeHtml(va.photo_frame_size || 'Unverified')}</span></div>
+                        <div style="color: #94a3b8; margin-bottom: 3px;"><strong>Frame &amp; Brakes:</strong> ${escapeHtml(va.frame_material || 'Alloy')} &bull; ${escapeHtml(va.brake_type || 'Rim')}</div>
+                        ${va.drivetrain ? `<div style="color: #94a3b8; margin-bottom: 4px;"><strong>Drivetrain:</strong> ${escapeHtml(va.drivetrain)}</div>` : ''}
+                        ${va.geometry_notes ? `<div style="color: #93c5fd; font-size: 11.2px; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 4px; margin-top: 4px;">👁️ ${escapeHtml(va.geometry_notes)}</div>` : ''}
+                    </div>
+                ` : '';
 
                 return `
                     <div class="fb-listing-card" style="${isStarred ? 'border-color: #fbbf24; box-shadow: 0 0 18px rgba(245, 158, 11, 0.25);' : ''}">
@@ -9738,6 +9825,7 @@
                                 <span class="fb-score-badge">🔥 ${item.deal_score || 85}/100 Deal</span>
                                 <span class="fb-distance-badge">📍 ${escapeHtml(item.location || 'DFW, TX')} (~${Math.round(item.distance_miles || 10)} mi)</span>
                             </div>
+                            ${galleryThumbsHtml}
                             <div style="padding: 16px;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px;">
                                     <div>
@@ -9748,6 +9836,7 @@
                                 </div>
                                 <h3 style="margin: 0 0 8px 0; font-size: 15.5px; color: #f8fafc; line-height: 1.35;">${escapeHtml(item.title)}</h3>
                                 <p style="margin: 0 0 12px 0; font-size: 12.5px; color: #94a3b8; line-height: 1.45;">${escapeHtml(item.description || '')}</p>
+                                ${visionBoxHtml}
                                 <div style="margin-bottom: 10px;">
                                     ${reasons.map(r => `<span class="fb-reason-pill pass">${escapeHtml(r)}</span>`).join('')}
                                 </div>
@@ -9757,12 +9846,13 @@
                                 </div>
                             </div>
                         </div>
-                        <div style="padding: 12px 16px; background: rgba(0,0,0,0.25); border-top: 1px solid rgba(255,255,255,0.06); display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
-                            <a href="${escapeHtml(item.url || 'https://www.facebook.com/marketplace')}" target="_blank" rel="noopener noreferrer" class="add-btn" style="padding: 7px 13px; font-size: 12.5px; background: #2563eb; flex: 1; text-align: center;">
-                                🔗 Open on FB Marketplace ↗
+                        <div style="padding: 12px 16px; background: rgba(0,0,0,0.25); border-top: 1px solid rgba(255,255,255,0.06); display: flex; justify-content: space-between; align-items: center; gap: 6px; flex-wrap: wrap;">
+                            <a href="${escapeHtml(item.url || 'https://www.facebook.com/marketplace')}" target="_blank" rel="noopener noreferrer" class="add-btn" style="padding: 7px 11px; font-size: 12px; background: #2563eb; flex: 1; text-align: center;">
+                                🔗 Open on FB ↗
                             </a>
+                            <button type="button" class="btn-meal-action" onclick="runFbListingVisionInspect('${item.id}', this)" title="Run Deep AI Photo Vision & Spec X-Ray on listing images" style="color: #c084fc; border-color: rgba(192,132,252,0.4);">🔬 AI X-Ray</button>
                             <button type="button" class="btn-meal-action" onclick="fbListingAction('${item.id}', 'notify', this)" title="Send Email + Discord Alert for this listing">🔔 Alert</button>
-                            <button type="button" class="btn-meal-action" onclick="fbListingAction('${item.id}', 'star', this)" style="${isStarred ? 'color:#fbbf24; border-color:#f59e0b;' : ''}">${isStarred ? '⭐ Starred' : '☆ Star'}</button>
+                            <button type="button" class="btn-meal-action" onclick="fbListingAction('${item.id}', 'star', this)" style="${isStarred ? 'color:#fbbf24; border-color:#f59e0b;' : ''}">${isStarred ? '⭐' : '☆'}</button>
                             <button type="button" class="btn-meal-action" onclick="fbListingAction('${item.id}', 'dismiss', this)" title="Dismiss listing" style="color: #f87171;">✕</button>
                         </div>
                     </div>
@@ -9779,6 +9869,7 @@
             }
             container.innerHTML = blocked.map(item => {
                 const reasons = Array.isArray(item.block_reasons) ? item.block_reasons : [item.ai_verdict || 'Blocked by Watchlist Filter'];
+                const va = (item.vision_analysis && typeof item.vision_analysis === 'object') ? item.vision_analysis : {};
                 return `
                     <div class="fb-blocked-card">
                         <div style="flex: 1; min-width: 260px;">
@@ -9789,6 +9880,7 @@
                                 <span style="color: #94a3b8; font-size: 12.5px;">📍 ${escapeHtml(item.location || 'Unknown')}</span>
                             </div>
                             <div style="font-size: 12px; color: #94a3b8; margin-bottom: 6px;">${escapeHtml(item.description || '')}</div>
+                            ${va.geometry_notes ? `<div style="font-size: 11.5px; color: #c084fc; margin-bottom: 6px;">🔬 <strong>AI Photo Vision:</strong> ${escapeHtml(va.identified_model || '')} — ${escapeHtml(va.geometry_notes)}</div>` : ''}
                             <div>
                                 ${reasons.map(r => `<span class="fb-reason-pill block">${escapeHtml(r)}</span>`).join('')}
                             </div>
@@ -9808,14 +9900,16 @@
                 container.innerHTML = `<div style="color:#94a3b8;">No watchlists configured.</div>`;
                 return;
             }
+            const activeEditId = (document.getElementById('fbw-id') ? document.getElementById('fbw-id').value : '');
             container.innerHTML = watchlists.map(w => {
                 const mustStr = (w.must_contain_any || []).join(', ');
                 const attrStr = (w.required_attributes || []).join(', ');
-                const exclStr = (w.exclude_keywords || []).slice(0, 12).join(', ');
+                const exclStr = (w.exclude_keywords || []).slice(0, 14).join(', ');
+                const isEditingThis = (activeEditId && activeEditId === w.id);
                 return `
-                    <div class="account-box" style="margin-bottom: 14px; padding: 18px 20px;">
+                    <div class="account-box" style="margin-bottom: 14px; padding: 18px 20px; ${isEditingThis ? 'border: 2px solid #f59e0b; box-shadow: 0 0 18px rgba(245, 158, 11, 0.2);' : ''}">
                         <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 10px;">
-                            <div>
+                            <div style="flex: 1; min-width: 260px;">
                                 <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                                     <strong style="font-size: 16.5px; color: #fff;">${escapeHtml(w.name)}</strong>
                                     <span style="background: rgba(16,185,129,0.18); color: #34d399; border: 1px solid rgba(16,185,129,0.35); font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 99px;">Query: "${escapeHtml(w.query)}"</span>
@@ -9827,12 +9921,18 @@
                                     <span style="color:#38bdf8;">📏 Required Size/Spec:</span> ${escapeHtml(attrStr || 'Any')}
                                 </div>
                                 <div style="font-size: 12px; color: #fca5a5; margin-top: 4px;">
-                                    <strong>🚫 Blocked Words:</strong> ${escapeHtml(exclStr)}...
+                                    <strong>🚫 Blocked Words:</strong> ${escapeHtml(exclStr)}${(w.exclude_keywords || []).length > 14 ? '...' : ''}
                                 </div>
+                                ${w.visual_targets ? `
+                                    <div style="font-size: 11.8px; color: #d8b4fe; margin-top: 5px;">
+                                        <strong>🔬 AI Photo Targets:</strong> ${escapeHtml(w.visual_targets)}
+                                    </div>
+                                ` : ''}
                             </div>
                             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                                <button type="button" class="save-btn" onclick="scanSingleFbWatchlist('${w.id}', this)" style="padding: 7px 14px; font-size: 12.5px;">⚡ Scan Now</button>
-                                <button type="button" class="remove-btn" onclick="deleteFbWatchlist('${w.id}')" style="padding: 7px 12px; font-size: 12.5px;">Delete</button>
+                                <button type="button" class="add-btn" onclick="editFbWatchlist('${w.id}')" style="margin: 0; padding: 7px 14px; font-size: 12.5px; background: #d97706; color: #fff; font-weight: 700;">✏️ Edit</button>
+                                <button type="button" class="save-btn" onclick="scanSingleFbWatchlist('${w.id}', this)" style="margin: 0; padding: 7px 14px; font-size: 12.5px;">⚡ Scan Now</button>
+                                <button type="button" class="remove-btn" onclick="deleteFbWatchlist('${w.id}')" style="margin: 0; padding: 7px 12px; font-size: 12.5px;">Delete</button>
                             </div>
                         </div>
                     </div>
@@ -9840,14 +9940,85 @@
             }).join('');
         }
 
-        function openNewWatchlistForm() {
+        function editFbWatchlist(watchlistId) {
+            const watchlists = (fbOverviewData && fbOverviewData.watchlists) || [];
+            const w = watchlists.find(item => item.id === watchlistId);
+            if (!w) return;
+
+            switchFbSubTab('watchlists');
+            document.getElementById('fbw-id').value = w.id;
+            document.getElementById('fbw-name').value = w.name || '';
+            document.getElementById('fbw-query').value = w.query || '';
+            document.getElementById('fbw-zip').value = w.postal_code || '76226';
+            document.getElementById('fbw-radius').value = w.max_radius_miles || 45;
+            document.getElementById('fbw-min-price').value = w.min_price !== undefined ? w.min_price : 50;
+            document.getElementById('fbw-max-price').value = w.max_price !== undefined ? w.max_price : 1600;
+            document.getElementById('fbw-must-contain').value = Array.isArray(w.must_contain_any) ? w.must_contain_any.join(', ') : (w.must_contain_any || '');
+            document.getElementById('fbw-req-attrs').value = Array.isArray(w.required_attributes) ? w.required_attributes.join(', ') : (w.required_attributes || '');
+            document.getElementById('fbw-exclude').value = Array.isArray(w.exclude_keywords) ? w.exclude_keywords.join(', ') : (w.exclude_keywords || '');
+            const visEl = document.getElementById('fbw-visual-targets');
+            if (visEl) {
+                visEl.value = w.visual_targets || 'Inspect photos to identify exact Liv/Giant model from frame decals, verify XXS/XS compact sloping top-tube geometry & seat-tube size stickers, check Carbon vs ALUXX welded aluminum, Disc vs Rim brakes, drivetrain tier, and block 20"/24" youth kids bikes (e.g. Liv Enchant).';
+            }
+            document.getElementById('fbw-notify-email').checked = w.notify_email !== 0 && w.notify_email !== false;
+            document.getElementById('fbw-notify-discord').checked = w.notify_discord !== 0 && w.notify_discord !== false;
+            document.getElementById('fbw-block-shipping').checked = w.block_shipping_only !== 0 && w.block_shipping_only !== false;
+
+            const titleEl = document.getElementById('fb-watchlist-form-title');
+            const badgeEl = document.getElementById('fb-watchlist-edit-badge');
+            const cancelBtn = document.getElementById('fbw-cancel-edit-btn');
+            const saveBtn = document.getElementById('fbw-save-btn');
+            const formCard = document.getElementById('fb-watchlist-form-card');
+
+            if (titleEl) titleEl.innerText = `✏️ Edit Watchlist: ${w.name}`;
+            if (badgeEl) badgeEl.style.display = 'inline-block';
+            if (cancelBtn) cancelBtn.style.display = 'inline-block';
+            if (saveBtn) saveBtn.innerHTML = '💾 Update Watchlist &amp; Re-Scan';
+            if (formCard) formCard.style.borderColor = '#f59e0b';
+
+            renderFbWatchlists(watchlists);
+            if (formCard) formCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        function cancelEditFbWatchlist() {
             document.getElementById('fbw-id').value = '';
-            document.getElementById('fb-watchlist-form-title').scrollIntoView({ behavior: 'smooth' });
+            const titleEl = document.getElementById('fb-watchlist-form-title');
+            const badgeEl = document.getElementById('fb-watchlist-edit-badge');
+            const cancelBtn = document.getElementById('fbw-cancel-edit-btn');
+            const saveBtn = document.getElementById('fbw-save-btn');
+            const formCard = document.getElementById('fb-watchlist-form-card');
+
+            if (titleEl) titleEl.innerText = '🎯 Configure Search Watchlist & Anti-Garbage Filters';
+            if (badgeEl) badgeEl.style.display = 'none';
+            if (cancelBtn) cancelBtn.style.display = 'none';
+            if (saveBtn) saveBtn.innerHTML = '💾 Save Watchlist &amp; Run Scan';
+            if (formCard) formCard.style.borderColor = 'rgba(59, 130, 246, 0.4)';
+
+            if (fbOverviewData && fbOverviewData.watchlists) {
+                renderFbWatchlists(fbOverviewData.watchlists);
+            }
+        }
+
+        function openNewWatchlistForm() {
+            cancelEditFbWatchlist();
+            document.getElementById('fbw-id').value = '';
+            document.getElementById('fbw-name').value = '';
+            document.getElementById('fbw-query').value = '';
+            document.getElementById('fbw-must-contain').value = '';
+            document.getElementById('fbw-req-attrs').value = '';
+            const titleEl = document.getElementById('fb-watchlist-form-title');
+            if (titleEl) {
+                titleEl.innerText = '➕ Create New Search Watchlist';
+                titleEl.scrollIntoView({ behavior: 'smooth' });
+            }
+            const nameInput = document.getElementById('fbw-name');
+            if (nameInput) setTimeout(() => nameInput.focus(), 150);
         }
 
         function applyWatchlistPreset(preset) {
+            const currentEditId = document.getElementById('fbw-id').value || '';
             if (preset === 'wife_bike') {
-                document.getElementById('fbw-id').value = '';
+                document.getElementById('fbw-id').value = currentEditId;
                 document.getElementById('fbw-name').value = "🚲 Wife's Liv XXS / XS Bike (DFW Local Only)";
                 document.getElementById('fbw-query').value = "liv xxs bike";
                 document.getElementById('fbw-zip').value = "76226";
@@ -9856,9 +10027,11 @@
                 document.getElementById('fbw-max-price').value = "1600";
                 document.getElementById('fbw-must-contain').value = "liv, giant liv, avail, langma, devote, alight, tempt, envie, thrive";
                 document.getElementById('fbw-req-attrs').value = "xxs, 2xs, extra extra small, xs, extra small, 44cm, 45cm, 46cm, 47cm, 48cm, 4'10, 4'11, 5'0, 5'1, 5'2";
-                document.getElementById('fbw-exclude').value = "large, size l, frame l, medium, size m, frame m, xl, extra large, trek, specialized, mens, men's, huffy, schwinn, bmx, kids 12, kids 16, 20 inch, arkansas, little rock, fayetteville, bentonville, oklahoma, tulsa, ships to you, iso, wanted, broken";
+                document.getElementById('fbw-exclude').value = "large, size l, frame l, medium, size m, frame m, xl, extra large, trek, specialized, mens, men's, huffy, schwinn, bmx, kids 12, kids 16, 20 inch, 24 inch, 24\", enchant, arkansas, little rock, fayetteville, bentonville, oklahoma, tulsa, ships to you, iso, wanted, broken";
+                const visEl = document.getElementById('fbw-visual-targets');
+                if (visEl) visEl.value = "Inspect photos to identify exact Liv/Giant model from frame decals, verify XXS/XS compact sloping top-tube geometry & seat-tube size stickers, check Carbon vs ALUXX welded aluminum, Disc vs Rim brakes, drivetrain tier, and block 20\"/24\" youth kids bikes (e.g. Liv Enchant).";
             } else if (preset === 'traeger') {
-                document.getElementById('fbw-id').value = '';
+                document.getElementById('fbw-id').value = currentEditId;
                 document.getElementById('fbw-name').value = "🔥 Traeger Pellet Grill / Yeti Cooler (Argyle DFW)";
                 document.getElementById('fbw-query').value = "traeger ironwood timberline grill";
                 document.getElementById('fbw-zip').value = "76226";
@@ -9868,8 +10041,10 @@
                 document.getElementById('fbw-must-contain').value = "traeger, yeti, big green egg, blackstone";
                 document.getElementById('fbw-req-attrs').value = "";
                 document.getElementById('fbw-exclude').value = "broken, parts only, rusted, arkansas, oklahoma, ships to you, iso, wanted";
+                const visEl = document.getElementById('fbw-visual-targets');
+                if (visEl) visEl.value = "Inspect photos to identify exact grill/cooler model, check digital controller condition, interior grate rust, and overall physical condition.";
             } else if (preset === 'gym') {
-                document.getElementById('fbw-id').value = '';
+                document.getElementById('fbw-id').value = currentEditId;
                 document.getElementById('fbw-name').value = "🏋️ Rogue Fitness / Concept2 Rower (DFW Local)";
                 document.getElementById('fbw-query').value = "rogue squat rack bumper plates concept2";
                 document.getElementById('fbw-zip').value = "76226";
@@ -9879,13 +10054,17 @@
                 document.getElementById('fbw-must-contain').value = "rogue, concept2, concept 2, rep fitness, peloton";
                 document.getElementById('fbw-req-attrs').value = "";
                 document.getElementById('fbw-exclude').value = "arkansas, oklahoma, ships to you, iso, wanted, broken";
+                const visEl = document.getElementById('fbw-visual-targets');
+                if (visEl) visEl.value = "Inspect photos for genuine Rogue/Concept2 branding, PM5 monitor on rowers, and rust-free steel uprights/plates.";
             }
         }
 
         async function saveFacebookWatchlist() {
             const splitClean = (str) => (str || '').split(',').map(s => s.trim()).filter(Boolean);
+            const editId = document.getElementById('fbw-id').value || null;
+            const visEl = document.getElementById('fbw-visual-targets');
             const payload = {
-                id: document.getElementById('fbw-id').value || null,
+                id: editId,
                 name: document.getElementById('fbw-name').value || "Custom Watchlist",
                 query: document.getElementById('fbw-query').value || "liv xxs bike",
                 postal_code: document.getElementById('fbw-zip').value || "76226",
@@ -9895,13 +10074,14 @@
                 must_contain_any: splitClean(document.getElementById('fbw-must-contain').value),
                 required_attributes: splitClean(document.getElementById('fbw-req-attrs').value),
                 exclude_keywords: splitClean(document.getElementById('fbw-exclude').value),
+                visual_targets: visEl ? visEl.value.trim() : "",
                 notify_email: document.getElementById('fbw-notify-email').checked,
                 notify_discord: document.getElementById('fbw-notify-discord').checked,
                 block_shipping_only: document.getElementById('fbw-block-shipping').checked
             };
 
             const msgBox = document.getElementById('fb-msg');
-            if (msgBox) msgBox.innerHTML = `<div class="success">Saving watchlist &amp; running 4-stage anti-garbage scan...</div>`;
+            if (msgBox) msgBox.innerHTML = `<div class="success">${editId ? 'Updating saved watchlist' : 'Saving watchlist'} &amp; running 5-stage AI Vision + Anti-Garbage scan...</div>`;
             try {
                 const res = await fetch('/api/facebook/watchlists', {
                     method: 'POST',
@@ -9909,11 +10089,12 @@
                     body: JSON.stringify(payload)
                 });
                 await handleApiError(res);
+                cancelEditFbWatchlist();
                 await loadFacebookOverview();
                 switchFbSubTab('matches');
                 if (msgBox) {
-                    msgBox.innerHTML = `<div class="success">✓ Watchlist saved and scanned! Showing verified local DFW matches.</div>`;
-                    setTimeout(() => msgBox.innerHTML = '', 4000);
+                    msgBox.innerHTML = `<div class="success">✓ Watchlist ${editId ? 'updated' : 'saved'} and scanned! Showing verified local DFW matches with AI Photo Vision X-Ray.</div>`;
+                    setTimeout(() => msgBox.innerHTML = '', 5000);
                 }
             } catch (e) {
                 if (msgBox) msgBox.innerHTML = `<div class="error">Failed to save watchlist: ${escapeHtml(e.message)}</div>`;
