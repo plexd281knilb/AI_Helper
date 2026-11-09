@@ -60,8 +60,13 @@ Portalarr's native Seerr engine features deep per-episode monitoring synchroniza
 - **Targeted Episode Grabs**: Allows users to select individual unmonitored episodes or unmonitored seasons, dispatching `/api/v3/episode/monitor` and triggering `EpisodeSearch` commands without redundant series re-imports.
 
 ### 4. Multi-Channel Notification Engine (Discord Webhooks & HTML Emails)
-- **Discord Webhook Cards**: Dispatches embed cards for `PENDING`, `AUTO_APPROVED`, `APPROVED`, `DECLINED`, `AVAILABLE`, and `FAILED` events. Embeds feature poster artwork, format badges (🎬 MOVIE vs 📺 TV SERIES, 4K UHD vs 1080p), requester username, season counts, and direct action links.
-- **Rich HTML Emails**: Sends branded HTML emails via SMTP for admin approval alerts and user status updates, using dynamic public host resolution (`getAppUrl()`).
+- **Discord Webhook Cards**: Dispatches embed cards for `PENDING`, `AUTO_APPROVED`, `APPROVED`, `DECLINED`, `AVAILABLE`, and `FAILED` events. Embeds feature poster artwork, format badges (🎬 Movie, 📺 TV Series, 📖 Book, 🎧 Audiobook), author credits, requester username, season counts, and direct action links.
+- **Rich HTML Emails & Auto-Approved Admin Routing**:
+  - Automatically notifies all `ADMIN` and `SUPER_USER` accounts on **both** `PENDING` (needs manual review) and `AUTO_APPROVED` (automatically approved and queued) request events.
+  - Formats movie & TV show requests via `seerr_request_new_admin` and book/audiobook requests via `media_request_admin`.
+  - Sends user transactional status confirmations (`seerr_request_auto_approved`, `seerr_request_approved`, `seerr_request_available`).
+  - Sets `bypassApproval: true` on administrative alerts and user transactional status updates to prevent request notifications from being trapped in the `AdminApproval` queue.
+  - Automatically logs diagnostic warnings to Live System Logs (`logger.addLog("WARN", "EMAIL", ...)`) whenever SMTP credentials (`smtpHost`, `smtpUser`, `smtpPass`) or email delivery are unconfigured in Settings.
 
 ### 5. Automated Background Queue & Availability Reconciliation
 - **Unauthenticated Internal Runner (`syncMediaRequestsQueueAndAvailabilityInternal`)**:
@@ -69,6 +74,10 @@ Portalarr's native Seerr engine features deep per-episode monitoring synchroniza
   - Reconciles active requests (`PROCESSING`, `APPROVED`, `PENDING`) against the Plex library GUID index.
   - Queries `/api/v3/queue?page=1&pageSize=1000` on enabled Radarr and Sonarr instances to compute exact download progress percentages:
     $$\text{progress} = \max\left(1, \min\left(99, \text{round}\left(\frac{\text{size} - \text{sizeleft}}{\text{size}} \times 100\right)\right)\right)$$
+  - **Truthful Status Badge Semantics**: Requests in `PROCESSING`, `DOWNLOADING`, or `SEARCHING` are differentiated between active transfers vs monitored missing items:
+    - **Active Queue Transfer (`downloadProgress > 0`)**: Renders `Downloading • X%` in cyan with active progress bar and pulse icon.
+    - **Monitored Missing Release (`!downloadProgress || downloadProgress <= 0`)**: Renders `Looking for Media` and `Missing (Searching)` in amber with a search icon, avoiding misleading users into believing unavailable media is already transferring.
+    - **Queue Progress Cleanup**: Reconciles and resets `downloadProgress: null` whenever an item is no longer actively transferring in downloader queues.
   - Updates requests to `AVAILABLE` with `100%` progress when media is detected on PMS.
 
 ### 6. Kids Profile Isolation & Filtered Media Discovery
@@ -79,7 +88,7 @@ Portalarr's native Seerr engine features deep per-episode monitoring synchroniza
   - Assigns standardized age brackets: `"Kids"` (emerald), `"YA (12+)"` (sky), `"All Ages"` (slate), and `"18+ Mature"` (rose).
   - Flags mature indicators (`"MATURE"` vs `"NOT_MATURE"`) from explicit publisher labels and adult/erotica keywords.
   - **Kids Mode Filtering & Request Guard**: Whenever in Kids section mode (`section === "kids"`) or logged in under a child profile (`accountType === "KID"`), mature titles (`isMature === true` or `"18+ Mature"`) are completely omitted from trending ebooks/audiobooks, search results, missing series carousels, and `/library` shelf browsing. Attempting to submit a mature book request in Kids mode or under a kid profile is blocked at both client and server action levels (`submitBookOrAudiobookRequestAction`).
-  - **Kids Request Mandatory Admin Approval Gating**: All book and audiobook requests targeted for kids (identified via kids mode, child account profile, `ageRating === "Kids"`, target kids library evaluated via `isKidsLibrary`, or inferred age rating) are strictly saved with `status: "Pending"` (`BookRequest`) and `"PENDING"` (`MediaRequest`). They are barred from immediate auto-approval and auto-downloading until an administrator explicitly reviews and approves them via `approveBookRequestAction`. The periodic background scheduler (`src/lib/prisma.ts`) actively skips pending kids requests during auto-approval sweeps.
+  - **Kids Request Admin Approval Gating & Kyra/Public Auto-Approval**: Book and audiobook requests targeted for kids (identified via kids mode, child account profile, `ageRating === "Kids"`, target kids library evaluated via `isKidsLibrary`, or inferred age rating) are evaluated against target library policies. Requests directed to Kyra's library (`isKyrasLibrary`, matching "Kids' Bookshelf", "Kyra's Library", "Kid's Library") or Public libraries (`isPublicLibrary`, matching "General Public Library", "Public Audiobooks") via `isAutoApprovedBookLibrary` are automatically approved and dispatched to the download engine. Requests directed to non-Kyra private or restricted kids shelves remain strictly saved with `status: "Pending"` (`BookRequest`) and `"PENDING"` (`MediaRequest`), requiring explicit review and approval by an administrator via `approveBookRequestAction`. The periodic background scheduler (`src/lib/prisma.ts`) actively auto-approves pending requests for Kyra's and Public libraries while skipping restricted kids requests.
   - **Badge Display**: Color-coded age rating badges are rendered across discovery cards (`BookCard`), media details (`BookDetailModal`), and library shelf cards (`renderBookCard` and `renderAudiobookCard`).
 
 ### 7. Unified Multi-Media Pipeline (Movies, TV, Ebooks & Audiobooks)
@@ -93,6 +102,12 @@ Portalarr's native Seerr engine unifies all media types into a single mission co
 - **Search Relevance & Typo Problem**: TMDb's default keyword searches return results primarily by raw token match and fail completely on misspellings (e.g. `oppenhiemer`, `gladiater`, `stranger thngs`, `breaking bag`, `interstelar` return 0 results). Obscure, low-vote international releases also frequently displace iconic US blockbusters.
 - **US Domestic & English Priority Algorithm** (`src/lib/curation/tmdb.ts`):
   Each search candidate is evaluated and sorted by a weighted score prioritizing US domestic releases:
+- **Strict Authoritative US Rating Precedence & International Isolation**:
+  Official US MPAA (`G`, `PG`, `PG-13`, `R`, `NC-17`) and US TV (`TV-Y`, `TV-Y7`, `TV-G`, `TV-PG`, `TV-14`, `TV-MA`) ratings are strictly authoritative in `mapTmdbMovie` and `mapTmdbTv`. International classification board ratings (e.g. Russia, Singapore) are strictly forbidden from overwriting an established US rating (preventing wholesome PG/family movies like *Overcomer* from being mislabeled as 18+). International ratings are evaluated strictly as a fallback only when zero US release ratings exist.
+- **Ordered Progressive Search Stream & Latency-Capped Availability Engine**:
+  Browse search executes and renders results progressively in strict order: 1. Movies -> 2. TV Shows -> 3. Books -> 4. Audiobooks. `batchCheckMediaAvailability` bounds Plex GUID and Arr index lookups with a 1.5s timeout (`Promise.race`), guaranteeing that cold Plex server library scans or offline hosts never block search results from appearing on screen within ~200ms.
+- **Zero-Latency Detail Modal Architecture (`MediaDetailModal`)**:
+  `MediaDetailModal` accepts `initialItem` and `initialAvailability` to instantly mount the hero backdrop, poster, title, rating, and synopsis in 0ms without waiting on full network waterfalls. Deep Radarr/Sonarr 1080p and 4K monitoring statuses resolve instantly via in-memory `getArrIndex()` Map lookups without downloading entire movie/series libraries over HTTP. Client-side `modalDetailsCache` retains viewed titles for instant navigation.
   - **US Domestic Boost (+300 pts)**: Awarded when `originCountry.includes("US")` or when `originalLanguage === "en"` with no foreign origin country.
   - **English Language Boost (+200 pts)**: Awarded when `originalLanguage === "en"`.
   - **US Certification Boost (+50 pts)**: Awarded for standard US MPAA/TV ratings (`G`, `PG`, `PG-13`, `R`, `NC-17`, `TV-14`, `TV-MA`).
@@ -126,6 +141,12 @@ To achieve sub-second page loads and eliminate blank-screen flashing on tab chan
   - Race Condition Guards: Tracks `activeTabRef` to ensure that fast switching between "Movies" and "TV Shows" never allows older in-flight promises to overwrite the active tab's grid items.
   - Switching between tabs instantly displays cached data with `0ms` latency (zero loading spinner, zero screen flicker), then revalidates in the background if older than 2 minutes.
   - Search debounce is optimized to `350ms` for fluid responsiveness. Searches on `movies` and `tv` tabs strictly query TMDb media without firing redundant book APIs, while `ebooks` and `audiobooks` tabs strictly query book registries.
+  - **Sequential Progressive Search Pipeline (Browse Mode)**: In Browse (`discover`) mode, searches strictly execute and stream in order:
+    1. **Movies first** (`searchMediaAction(..., "movie")`) -> renders movies immediately (~150-250ms).
+    2. **TV Shows second** (`searchMediaAction(..., "tv")`) -> renders TV shows below movies.
+    3. **Books third** (`searchBooksAction(..., "ebook")`) -> renders ebooks below TV shows.
+    4. **Audiobooks fourth** (`searchBooksAction(..., "audiobook")`) -> renders audiobooks below books.
+    This guarantees instantaneous first-result rendering without waiting for all media forms to complete simultaneously. Search results are rendered in 4 dedicated, cleanly separated sections matching this exact order.
 - **Request Manager Module-Level Cache**:
   - `RequestManager` initializes from `cachedRequests` to render previous request listings instantly when switching between Discover and Requests tabs.
   - `filteredRequests` and status `counts` are memoized via `useMemo` for lag-free typing in large request catalogs.
@@ -200,3 +221,17 @@ To achieve sub-second page loads and eliminate blank-screen flashing on tab chan
       - **Explicit Sexual Acts, Tropes & Library Taxonomy**: Cunnilingus, fellatio, blowjob, handjob, anal/oral sex, deepthroat, pegging, rimming, creampie, ejaculation, squirting, cumming, moresome, threesome, gangbang, orgy, swingers, cuckold, hotwife, dub-con, non-con, consensual non-consent, somnophilia, primal play, omegaverse, knotting, breeding/praise kink, degradation, chastity, shibari, sex instruction, human sexuality, sexual behavior, BISAC `FICTION / Erotica` (`FIC005000`), `FICTION / Romance / Erotic` (`FIC027010`), `FICTION / Romance / Dark Romance` (`FIC027560`).
     - **Standardized Maturity Evaluation (`inferBookRating`)**: Evaluates all explicit sex guides, adult manuals, dark romance, and erotica strictly as `18+ Mature` with `maturityRating: "MATURE"`.
     - **Maturity Badge Streamlining**: Suppresses redundant "All Ages" badges from media cards in `BookCard`, reserving visible badges strictly for `Kids`, `YA (12+)`, and `18+ Mature`.
+
+
+---
+
+## 🚨 Mandatory Task Completion Protocol (Strict SemVer)
+
+To guarantee 100% reliability, quality control, and consistency, the following 5-step protocol MUST be executed at the end of every task or feature change before considering the work complete:
+
+0. **Step 0: Read Skill Upfront**: Call `read_file` on the relevant `SKILL.md` before writing code.
+1. **Step 1: Integration Testing**: Execute `cmd /c "npm test"` to run the verification suite (`scripts/verify-all.ts`). All test suites must pass (0 failures).
+2. **Step 2: Production Build Verification**: Execute `cmd /c "npm run build"`. Ensure 100% clean compilation, zero TypeScript errors, and zero Turbopack runtime errors.
+3. **Step 3: Edge Security & Cloudflare Policy Audit**: Whenever ANY page route (`src/app/**/page.tsx`) or API route (`src/app/api/**/route.ts`) is created, moved, or updated, register it in `src/lib/edge-policy-paths.ts` and inform the user.
+4. **Step 4: Skills & Documentation Sync**: Review and update relevant `.agents/skills/` documents to record any new UI patterns, API contracts, formulas, or operational guidelines **BEFORE** committing.
+5. **Step 5: SemVer Version Increment & Git Deployment Push**: Increment version in `package.json` according to SemVer (PATCH `+1` for fixes/polish, MINOR `+1` for features), stage all changes (`git add -A`), commit with freshly incremented semantic version prefix (`[v<version>] feat/fix(scope): message`), push strictly to `origin/main` (Beta). NEVER push to `stable` unless the user explicitly instructs.

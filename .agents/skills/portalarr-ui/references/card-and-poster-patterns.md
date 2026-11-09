@@ -157,3 +157,62 @@ Standard grid layout for media shelves and discovery pages:
   - **Row 1**: Pair the primary reading CTA (`Read Book` / `Resume (X%)`) with the `MoreVertical` (`h-8 w-8`) dropdown trigger in a `flex items-center gap-1.5 w-full` row.
   - **Row 2**: Render `Send to Kindle` as a dedicated full-width button (`w-full h-7.5 text-xs`) with `whitespace-nowrap font-medium`, guaranteeing complete visibility across all screen sizes and column widths.
 
+---
+
+## 8. Universal Media Poster Proxy, TMDb `w500` Standard & Multi-Tier Error Fallback
+
+- **TMDb Poster Dimensions Standard (`w500`)**:
+  - Always resolve TMDb poster artwork using `https://image.tmdb.org/t/p/w500` (`TMDB_IMAGE_BASE`).
+  - **Never use `original`** for card thumbnails or discovery carousels. Original source assets exceed 15MB–25MB uncompressed each; loading a 20-item carousel of `original` images downloads over 300MB of data, triggering network timeouts, aborted image loads, and mobile browser stalls. `w500` provides pristine sharpness under 60KB per poster.
+- **SQLite Watch History Proxying (`formatWatchHistoryThumb`)**:
+  - Raw Plex thumbnails in local SQLite `WatchHistory` (e.g. `/library/metadata/127011/thumb/1772434954`) cannot be resolved directly by remote client browsers without a session token and local network reachability.
+  - Always route watch history items through `formatWatchHistoryThumb(dbItem)`, which wraps the relative path into `/api/media/image?serverId=...&thumb=...&title=...&year=...&type=...`.
+- **Servarr (Radarr & Sonarr) Missing Remote URL Fallback**:
+  - When Radarr or Sonarr media items contain only container-local paths (`/MediaCover/123/poster.jpg`) without external `remoteUrl`, client browsers show a blank box or "No Cover".
+  - Always fall back to `/api/media/image?title=${encodeURIComponent(title)}&year=${encodeURIComponent(year)}&type=${type}` to automatically retrieve high-definition artwork from TMDb, iTunes, or PMS transcoder.
+- **MediaCard Multi-Tier Image Fallback**:
+  - In `MediaCard` (`src/components/seerr/media-card.tsx`), implement two-tier error handling with `imageError` and `fallbackError`:
+    1. Primary TMDb URL (`item.posterPath`).
+    2. Fallback to `/api/media/image` proxy if primary fails or is missing.
+    3. Styled placeholder container with `Tv`/`Film` icon and title line clamping if both fail.
+
+---
+
+## 9. Horizontal Library Media Cards & Anti-Overlap Architecture (Sonarr & Radarr)
+
+- **Problem & Failure Mode**:
+  - In horizontal media cards (e.g. Sonarr TV shows, Radarr movies), positioning status badges (like `MONITORED` or `NO SEASONS MONITORED`) or quick-action icons using `absolute top-2 right-2` while the title in the main content container uses `h4 className="truncate pr-6"` causes text collision. Long titles or medium-length titles on narrow viewports/multi-column grids render directly behind and through the badge and buttons, making both completely unreadable.
+- **Architectural Solution: Natural Flex Header Row**:
+  - Avoid `absolute` positioning for corner badges on horizontal cards where the title occupies the top line.
+  - Structure the header as a dedicated flex container with `items-start justify-between gap-2 min-w-0`:
+    ```tsx
+    <div className="flex items-start justify-between gap-2 min-w-0">
+      <h4
+        className="font-semibold text-sm truncate flex-1 min-w-0 text-foreground"
+        title={`${item.title} (${item.year})`}
+      >
+        {item.title}{" "}
+        <span className="text-muted-foreground font-normal text-xs">
+          ({item.year})
+        </span>
+      </h4>
+      <div className="flex items-center gap-1.5 shrink-0">
+        {/* Quick toggle icon & status badge */}
+        <Badge
+          variant="secondary"
+          className={`text-[9px] px-1.5 font-bold uppercase tracking-wider ${
+            isMonitored
+              ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+              : "bg-muted/40 text-muted-foreground border-border/40"
+          }`}
+        >
+          {isMonitored ? "Monitored" : "Unmonitored"}
+        </Badge>
+      </div>
+    </div>
+    ```
+  - **Rules**:
+    1. The title heading MUST have `flex-1 min-w-0 truncate` (with native `title` attribute for full title hover tooltips).
+    2. The status badge / action container MUST have `shrink-0`.
+    3. The title and badges are sibling elements in normal document flow, guaranteeing that titles truncate cleanly with an ellipsis (`...`) before touching the status badges across all viewport widths with 0% chance of overlap.
+

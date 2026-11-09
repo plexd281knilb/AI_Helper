@@ -458,3 +458,43 @@ For fast sub-millisecond query performance on multi-user and large datasets, the
 6. **Push to GitHub**:
    - Always push verified changes to GitHub (`git push origin main`) as the final step of the build and verification cycle.
    - Pushing to `main` automatically triggers the GitHub Actions workflow (`.github/workflows/docker.yml`), which builds and publishes the updated container image to GitHub Container Registry (`ghcr.io`).
+
+---
+
+## 8. Portalarr Multi-Tier Gemini Subagent Orchestration & Skill Catalog
+
+All skills, operational protocols, and architectural reference guides from **Portalarr** (`C:\Users\Dom\Documents\GitHub\portalarr`) are synchronized directly into this repository under `.agents/skills/`, `docs/portalarr/`, and `.vscode/tasks.json`.
+
+### 🧠🤖 Multi-Tier Gemini Subagent Orchestration Architecture (`gemini-orchestration`)
+1. **Default Root Session (Gemini 3.8 Flash High)**:
+   - Primary orchestrator runs on **Gemini 3.8 Flash** (`gemini-3.8-flash-high`) by default for fast response times and quota efficiency.
+   - **Strict Model Standard**: Only Google Gemini models (`gemini-4-argon-high`, `gemini-3.8-flash-high`, and `gemini-3.5-flash-lite`) are used for orchestration.
+2. **The 4-Layer Subagent Hierarchy**:
+   - **Layer 1: Deep Architect (`deep-architect`, `Model: "pro"`)**: Gemini 4 Argon / Pro with automatic quota fallback to Gemini 3.8 Flash (`Model: "flash"`). Invoked only for complex system architecture, multi-table schema design, security models, or intricate algorithmic puzzles.
+   - **Layer 2: Fast Parallel Researchers (`repo-researcher`, `Model: "flash"` | `"flash_lite"`)**: Can launch 2–3 in parallel safely for read-only codebase audits, tracing imports, and inspecting documentation.
+   - **Layer 3: Autonomous Execution Worker (`execution-worker` / `pinky`, `Model: "flash"`)**: **Strictly 1 worker at a time** for active coding and test runs to prevent SQLite write locks (`SQLITE_BUSY`) and file collisions. Runs `python -m py_compile app.py` and verifies endpoints before returning.
+   - **Layer 4: Quality & Route Security Verifier (`qa-verifier`, `Model: "flash_lite"` | `"flash"`)**: Audits route authentication (`Depends(verify_auth)` / `Depends(verify_admin)`), checks `git status` to ensure `data/` secrets are never tracked, and verifies SemVer/commit compliance.
+3. **🔔 Proactive User Model-Switching Notification Rule (Mandatory)**:
+   - **When to Recommend Switching TO Argon 4.0**: If the session is on Flash and the user requests a brand-new subsystem architecture, multi-table database redesign, or complex algorithmic puzzle, tell the user: *"🔔 **Switch to Argon 4.0**: Please switch your model dropdown to **Gemini 4 Argon** so we can architect the foundation."*
+   - **When to Recommend Switching BACK to Flash 3.8**: As soon as the Argon 4.0 architectural foundation, database schema, and core backend logic are complete—and before high-volume UI styling or test loops—tell the user: *"🔔 **Switch Back to Flash 3.8**: The Argon 4.0 foundation is complete! Switch your model dropdown back to **Gemini 3.8 Flash** now to save your 4.0 quota while we build the UI and run verification."*
+
+### 📚 Synchronized `.agents/skills/` Catalog (11 Expert Skills)
+Before modifying UI components, Discord webhooks, or homelab integrations, always call `read_file` on the relevant `.agents/skills/<skill>/SKILL.md`:
+1. [`portalarr-ui`](file:///C:/Users/Dom/Documents/GitHub/AI_Helper/.agents/skills/portalarr-ui/SKILL.md) (+ 5 references in `references/`): Comprehensive UI/UX design system, dark mode tokens, Bento grids, launchpads, modals, cards, and responsive drawer patterns.
+2. [`gemini-orchestration`](file:///C:/Users/Dom/Documents/GitHub/AI_Helper/.agents/skills/gemini-orchestration/SKILL.md): 4-layer Gemini subagent hierarchy, quota fallback, and task completion protocol.
+3. [`discord-expert`](file:///C:/Users/Dom/Documents/GitHub/AI_Helper/.agents/skills/discord-expert/SKILL.md): Discord webhook & bot embed standards, role blueprints, and notification formatting.
+4. [`plex-api-expert`](file:///C:/Users/Dom/Documents/GitHub/AI_Helper/.agents/skills/plex-api-expert/SKILL.md) (+ 2 references): Plex Media Server REST API, token auth, library sections, and stream session diagnostics.
+5. [`iptv-expert`](file:///C:/Users/Dom/Documents/GitHub/AI_Helper/.agents/skills/iptv-expert/SKILL.md): IPTV, Threadfin, Dispatcharr, M3U playlists, XMLTV EPG, and HDHomeRun tuner emulation.
+6. [`agregarr-expert`](file:///C:/Users/Dom/Documents/GitHub/AI_Helper/.agents/skills/agregarr-expert/SKILL.md) (+ 3 references): Collection aggregator, smart hubs, placeholder stubs, and poster styling.
+7. [`kometa-expert`](file:///C:/Users/Dom/Documents/GitHub/AI_Helper/.agents/skills/kometa-expert/SKILL.md) (+ 2 references): Automated poster overlays, collection builders, and YAML configuration.
+8. [`maintainerr-expert`](file:///C:/Users/Dom/Documents/GitHub/AI_Helper/.agents/skills/maintainerr-expert/SKILL.md) (+ 2 references): Media library retention rules, "Leaving Soon" staging, and storage reclamation.
+9. [`radarr-expert`](file:///C:/Users/Dom/Documents/GitHub/AI_Helper/.agents/skills/radarr-expert/SKILL.md) (+ 2 references): Radarr v3 API, movie models, indexers, and custom format scoring.
+10. [`sonarr-expert`](file:///C:/Users/Dom/Documents/GitHub/AI_Helper/.agents/skills/sonarr-expert/SKILL.md) (+ 2 references): Sonarr v3/v5 API, episode parsing, and season pack management.
+11. [`seerr-expert`](file:///C:/Users/Dom/Documents/GitHub/AI_Helper/.agents/skills/seerr-expert/SKILL.md) (+ 2 references): Overseerr / Jellyseerr media request management, quotas, and Servarr dispatch.
+
+### 📖 Synchronized Portalarr Reference Documentation (`docs/portalarr/`)
+- [`docs/portalarr/PORTALARR_GEMINI.md`](file:///C:/Users/Dom/Documents/GitHub/AI_Helper/docs/portalarr/PORTALARR_GEMINI.md): Complete 121 KB Portalarr architecture, feature specification, and operational bible.
+- [`docs/portalarr/DEV_ROADMAP.md`](file:///C:/Users/Dom/Documents/GitHub/AI_Helper/docs/portalarr/DEV_ROADMAP.md): Portalarr multi-phase engineering roadmap.
+- [`docs/portalarr/IPTV_ON_DEMAND_ARCHITECTURE.md`](file:///C:/Users/Dom/Documents/GitHub/AI_Helper/docs/portalarr/IPTV_ON_DEMAND_ARCHITECTURE.md): On-demand IPTV proxy and stream lifecycle architecture.
+- [`docs/portalarr/DISCORD_LIVE_SERVER.md`](file:///C:/Users/Dom/Documents/GitHub/AI_Helper/docs/portalarr/DISCORD_LIVE_SERVER.md) & [`docs/portalarr/DISCORD_TEST_SERVER.md`](file:///C:/Users/Dom/Documents/GitHub/AI_Helper/docs/portalarr/DISCORD_TEST_SERVER.md): Complete Discord server channel, role, and webhook blueprints.
+- [`docs/portalarr/USER_GUIDE.md`](file:///C:/Users/Dom/Documents/GitHub/AI_Helper/docs/portalarr/USER_GUIDE.md) & [`docs/portalarr/user_guide_ebooks.md`](file:///C:/Users/Dom/Documents/GitHub/AI_Helper/docs/portalarr/user_guide_ebooks.md): End-user homelab and ebook/audiobook guides.

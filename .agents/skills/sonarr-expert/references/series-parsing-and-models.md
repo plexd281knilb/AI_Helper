@@ -33,3 +33,25 @@ When creating Coming Soon placeholder stubs for TV series:
 - Create folder: `{libraryPath}/{SeriesTitle} ({Year})/Season 00/`
 - Create file: `S00E00.Trailer.mp4`
 - Set Plex episode title to `Trailer (Placeholder)` to ensure TV series counts and season listings remain clean.
+
+---
+
+## 4. Fuzzy Series Matching & Targeted Episode Search
+
+- **Fuzzy Series Resolution**:
+  Sonarr populates `cleanTitle` stripped of punctuation and whitespace (e.g., `"rjdecker"` for `"R.J. Decker"`).
+  Always check `cleanTitle` equality and substring overlap when matching query titles across multiple Sonarr instances.
+
+- **Targeted Episode & Season Searches**:
+  - Search specific episode:
+    ```json
+    { "name": "EpisodeSearch", "episodeIds": [12345] }
+    ```
+  - Search entire season:
+    ```json
+    { "name": "SeasonSearch", "seriesId": 2317, "seasonNumber": 2 }
+    ```
+  - Search entire series:
+    ```json
+    { "name": "SeriesSearch", "seriesId": 2317 }
+    ```

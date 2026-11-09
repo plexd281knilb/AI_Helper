@@ -111,4 +111,23 @@ Portalarr separates overlay generation into two distinct, decoupled automated sc
     - **Strict Top 150 Isolation**: `resolveStockRibbonPath` excludes `150` from matching `assetName = "imdb"`, mapping `imdb_top_150` to `blank-${color}.png` (`blank-yellow.png`) instead.
     - **Dynamic Vector Banner Rendering**: In `applyOverlaysToPoster`, when `winningRibbonName` is `imdb_top_150` (or `winningRibbonText` contains `150` or custom tier text is specified), the overlay engine routes to `generateBannerSvg` with `winningTheme` (`amber-gold`) and `winningRibbonText` (`IMDb TOP 150`), producing crisp vector text and correct corner rotation rather than stamping the stock `imdb.png` Top 250 graphic.
     - **Simulator Parity**: In `kometa-studio.tsx`, `isTop150` is evaluated before `isTop250` so that `cleanText.includes("150")` produces the `- TOP 150 -` sub-label on amber gold ribbons rather than `- ALL-TIME BEST -`.
+16. **Zero PMS Lock Architecture & Direct SQLite Snapshot Media Scanning (`plex-snapshot-engine.ts`)**:
+    - **PMS Crash & Lock Prevention**: Generating poster badges and overlays across large libraries requires media stream attributes (resolution 4K/1080p, HDR formats like Dolby Vision/HDR10, audio codecs TrueHD/Atmos/DTS-HD). Querying PMS via `/library/sections/{id}/all?includeStreams=1` forces PMS's SQLite database to perform multi-table joins across thousands of media items, causing 4-second request timeouts and server daemon crashes.
+    - **Snapshot-Driven Stream Extraction**: Poster Studio leverages `getSnapshotLibraryMediaItems(dbPath, sectionKey)` from `src/lib/curation/plex-snapshot-engine.ts`. It directly reads SQLite tables (`metadata_items`, `media_items`, `media_parts`, `media_streams`) from an atomic read-only database snapshot in `<10ms`, extracting stream specs and audio/video codecs with zero HTTP calls to the live PMS process.
+    - **Delta-Sync Overlay Processing**: Compares existing badge hashes and metadata against snapshot records. Only media items with genuine specification deltas or missing overlays undergo poster compositing and upload, minimizing write operations and PMS disk I/O.
+    - **Multi-Server Snapshot Isolation**: When configured across multiple Plex instances (`KidsPlexServer`, `MainPlexServerBackup`, `MainPlexServer`), snapshot paths are resolved per server (`server.databasePath`), eliminating cross-server network contention and keeping secondary servers isolated.
 
+
+
+---
+
+## 🚨 Mandatory Task Completion Protocol (Strict SemVer)
+
+To guarantee 100% reliability, quality control, and consistency, the following 5-step protocol MUST be executed at the end of every task or feature change before considering the work complete:
+
+0. **Step 0: Read Skill Upfront**: Call `read_file` on the relevant `SKILL.md` before writing code.
+1. **Step 1: Integration Testing**: Execute `cmd /c "npm test"` to run the verification suite (`scripts/verify-all.ts`). All test suites must pass (0 failures).
+2. **Step 2: Production Build Verification**: Execute `cmd /c "npm run build"`. Ensure 100% clean compilation, zero TypeScript errors, and zero Turbopack runtime errors.
+3. **Step 3: Edge Security & Cloudflare Policy Audit**: Whenever ANY page route (`src/app/**/page.tsx`) or API route (`src/app/api/**/route.ts`) is created, moved, or updated, register it in `src/lib/edge-policy-paths.ts` and inform the user.
+4. **Step 4: Skills & Documentation Sync**: Review and update relevant `.agents/skills/` documents to record any new UI patterns, API contracts, formulas, or operational guidelines **BEFORE** committing.
+5. **Step 5: SemVer Version Increment & Git Deployment Push**: Increment version in `package.json` according to SemVer (PATCH `+1` for fixes/polish, MINOR `+1` for features), stage all changes (`git add -A`), commit with freshly incremented semantic version prefix (`[v<version>] feat/fix(scope): message`), push strictly to `origin/main` (Beta). NEVER push to `stable` unless the user explicitly instructs.

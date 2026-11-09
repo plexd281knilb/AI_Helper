@@ -181,6 +181,7 @@ Agregarr dynamically pulls upcoming monitored content directly from Radarr and S
         - Plex Media Server REST API rejects cross-server URIs (`server://{different_machine_id}/...`) with `400 Bad Request` and logs `LPE: only library URIs are allowed right now. Failed to generate a query from uri server://...`.
         - `syncPlexCollection` dynamically resolves the exact machine identifier for each candidate base URL (`baseMachineIdMap.get(cleanBase)`), guaranteeing the URI matches the target server's local machine identifier.
         - If the server rejects the `server://` URI with 400 Bad Request, `syncPlexCollection` automatically retries with the local library URI scheme (`library:///item/%2Flibrary%2Fmetadata%2F{ratingKey}`) before falling back to direct item metadata tagging (`collection[0].tag.tag=...`), permanently preventing 400 Bad Request and LPE query failures across multi-server ecosystems.
+        - **Strict Candidate Machine Identifier Isolation (`resolveWorkingPlexServerConnection`)**: In multi-server setups (`KidsPlexServer`, `MainPlexServerBackup`, `MainPlexServer`), candidate endpoints that return a mismatched `machineIdentifier` on `/identity` probes are strictly purged from `allCandidateUrls`, preventing secondary instances from adopting the primary server's LAN IP (`192.168.1.87`).
       - **Concurrent Stale Item Purging**: `removeItemsFromPlexCollection` similarly uses concurrent `Promise.all` batches of 10 items calling `DELETE /library/collections/{collectionRatingKey}/items/{ratingKey}`.
     - **Active Scheduled Collection Item Sync Re-Triggering**:
       - In `runAgregarrSyncInternal`, active scheduled collections that already have a `ratingKey` must invoke `syncCollectionToPlexInternal` (for non-native/non-smart collections) to periodically refresh candidate item matches from upstream lists (TMDb genres/keywords, Trakt, Radarr/Sonarr) and prune stale items, rather than only updating sort promotion metadata.
@@ -229,5 +230,23 @@ Agregarr dynamically pulls upcoming monitored content directly from Radarr and S
       - `isSeasonalCollectionInSeason` and `isCollectionScheduleActive` in `curation-actions.ts` calculate calendar dates (`curMonth * 100 + curDay`) against seasonal start and end dates with year-end rollover support (e.g. Nov 20 to Jan 6 for Holiday Cheer).
       - When an active collection is out of season (e.g. Summer Blockbusters, Holiday Cheer, Thanksgiving in October), all sync and reorder operations (`syncCollectionToPlexInternal`, `runAgregarrSyncInternal`, `syncSeasonalAndScheduledCollectionsInternal`, `updateCollectionPlacementAction`, `reorderPlexCollectionsAction`) enforce `promotedToHome = false`, `promotedToSharedHome = false`, `promotedToRecommended = false`, and `collectionMode = "hide"` (when `seasonalAction === "promote_hide"` or `"create_delete"`).
       - Database records in SQLite `MediaCollection` are persisted with `false` across all three visibility fields (`promotedToHome`, `promotedToRecommended`, `promotedToSharedHome`), preventing subsequent manual, preset, or background sync sweeps from re-promoting inactive seasonal collections to Plex hubs.
+21. **Direct Plex SQLite Snapshot & Delta-Sync Integration (`plex-snapshot-engine.ts`)**:
+    - **Zero PMS Lock Collection Building**: High-frequency collection updates and candidate matching sweeps against large Plex libraries can trigger SQLite database locks and 4-second timeouts in PMS.
+    - **Snapshot Library Queries**: When server `databasePath` is configured, Agregarr can read library media items and GUID mappings directly from atomic SQLite snapshots (`getSnapshotLibraryMediaItems`) in `<15ms`.
+    - **Delta-Sync Content Updates**: Rather than indiscriminately untagging and re-tagging all items in a collection, Agregarr delta-checks existing collection items against target items, issuing `PUT .../items?uri=...` or `DELETE .../items/{ratingKey}` exclusively for items that changed. This minimizes PMS write locks and accelerates sync speed by up to 10x.
 
 
+
+
+---
+
+## 🚨 Mandatory Task Completion Protocol (Strict SemVer)
+
+To guarantee 100% reliability, quality control, and consistency, the following 5-step protocol MUST be executed at the end of every task or feature change before considering the work complete:
+
+0. **Step 0: Read Skill Upfront**: Call `read_file` on the relevant `SKILL.md` before writing code.
+1. **Step 1: Integration Testing**: Execute `cmd /c "npm test"` to run the verification suite (`scripts/verify-all.ts`). All test suites must pass (0 failures).
+2. **Step 2: Production Build Verification**: Execute `cmd /c "npm run build"`. Ensure 100% clean compilation, zero TypeScript errors, and zero Turbopack runtime errors.
+3. **Step 3: Edge Security & Cloudflare Policy Audit**: Whenever ANY page route (`src/app/**/page.tsx`) or API route (`src/app/api/**/route.ts`) is created, moved, or updated, register it in `src/lib/edge-policy-paths.ts` and inform the user.
+4. **Step 4: Skills & Documentation Sync**: Review and update relevant `.agents/skills/` documents to record any new UI patterns, API contracts, formulas, or operational guidelines **BEFORE** committing.
+5. **Step 5: SemVer Version Increment & Git Deployment Push**: Increment version in `package.json` according to SemVer (PATCH `+1` for fixes/polish, MINOR `+1` for features), stage all changes (`git add -A`), commit with freshly incremented semantic version prefix (`[v<version>] feat/fix(scope): message`), push strictly to `origin/main` (Beta). NEVER push to `stable` unless the user explicitly instructs.

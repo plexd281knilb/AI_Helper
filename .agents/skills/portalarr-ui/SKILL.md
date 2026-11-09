@@ -28,9 +28,40 @@ Portalarr uses a **Modern Cinematic Dark Theme** powered by Tailwind CSS, Radix 
   - 🔴 **Crimson / Rose (`rose-400` / `rose-500`)**: Media Requests (Seerr/Overseerr engine), prune deletions, errors, stream terminations, declined requests.
   - 🟠 **Vibrant Orange (`orange-400` / `orange-500`)**: General setup, alert banners, server configuration.
 
-### 2. Multi-Tab Navigation & Active State Contrast
+### 2. Multi-Tab Navigation, 5-Hub Settings Architecture & Active State Contrast
+- **System Settings 5-Hub Architecture (`src/app/settings/page.tsx`)**:
+  Settings are consolidated into 5 high-level mission hubs, each organized with responsive sub-tab switchers, dirty-state indicators, and full backward-compatible routing:
+  1. **General & Platform (`general`)**:
+     - `platform`: Web & Storage Paths (Base URL, Webhook URL, Completed Downloads Directory, filesystem permissions matrix).
+     - `schedules`: Schedules & Automation (Library Auto-Scan & Sync Frequency with spinning disk optimizations, and interactive System Schedules Dashboard matrix displaying all 13 background runners, real-time frequency selector dropdowns with instant persistence for configurable tasks, relative countdowns, next run timestamps, and 1-click manual triggers).
+     - `announcements`: Announcements & Roadmap (Feature broadcast banner, maintenance alert, roadmap cards).
+     - `logs`: Live System Logs (Real-time colored terminal log viewer, category filters, auto-refresh toggle).
+  2. **Servers & Fleet (`servers`)**:
+     - `fleet`: Server Fleet & Multi-Platform (Plex, Jellyfin, Emby server fleet, self-selection toggles, library discovery).
+     - `plex-admin`: Master Plex & Direct Snapshots (Primary PMS URL, Admin token, direct connection tester, cache flush).
+     - `plex-cluster`: Plex Cluster & Auto-Discovery (Multi-server cluster nodes, auto-discovery worker, monitored server toggles).
+     - `telemetry`: Historical Watch & Host Telemetry (Watch session tracking, sharing detection thresholds, Glances host hardware endpoints).
+  3. **Access & Members (`access`)**:
+     - Access Control, Admin Approval Gates, User Accounts, Role Assignments, and Pending Action Reviews (`<AccessSettingsPage />`).
+  4. **Integrations & Servarr (`integrations`)**:
+     - `servarr`: Servarr Stack & Downloaders (Radarr, Sonarr, Lidarr, Readarr, SABnzbd, qBittorrent connection testing and API keys).
+     - `requests`: Media Requests (Seerr / Jellyseerr / Overseerr synchronization, auto-approval rules, default request limits).
+     - `ai`: AI Agent & Curation Keys (Google Gemini API keys, OpenAI tokens, Kometa, Agregarr, Maintainerr curation webhooks).
+  5. **Communications & Alerts (`communications`)**:
+     - `smtp`: Global SMTP & Kindle Delivery (Outbound mail server, SMTP credentials, TLS/SSL, Amazon Send-to-Kindle address, live test email dispatches, and Admin Recipient indicator with 1-click Change Recipient modal).
+     - `broadcast`: Broadcasts, Notification Templates & Granular Outgoing Email Approval Policy (12 granular notification templates, Markdown editor, test email dispatches, distinct "To: Users" vs "To: Admin" audience badges, interactive recipient filtering, Dominic personal sender anti-spam notices, and automated policy verification on template edit/save).
+     - `discord`: Discord Bot & Automation (Bot token, Guild ID, channel mappings for alerts/status/requests, role assignments).
+
+- **Sub-Tab Switcher Pattern & URL Synchronization**:
+  - Top hubs are switched via `<TabsList>` with active semantic brand tokens (`orange`, `blue`, `emerald`, `rose`, `indigo`).
+  - Active sub-tabs use secondary pill buttons (`variant="default"` when active with brand glow, `variant="outline"` when inactive).
+  - Dirty state tracking (`hasChanges`) highlights both the parent hub pill and the active sub-tab pill with amber warning accents (`border-amber-500/70 shadow-[0_0_15px_rgba(245,158,11,0.2)]`).
+  - Navigation guards prompt confirmation if unsaved changes exist before switching tabs or leaving the page.
+  - Deep-link and backward-compatible URL query routing: `/settings?tab=general&subtab=logs` or legacy parameters (`/settings?tab=logs`, `/settings?tab=monitoring`, `/settings?tab=beta`, `/settings?tab=emails`, `/settings?tab=discord`) automatically resolve to their respective parent hub and sub-tab.
+
 - **Semantic Tab Accents**: Tabs in settings or dashboards must never rely on monochrome/desaturated `text-primary` in dark mode. Every tab must specify its distinct brand color token for its icon, hover ring/shadow, and active selection state:
   - **General & Setup**: `text-orange-400`, `hover:ring-orange-400/80`, `data-[state=active]:text-orange-400 data-[state=active]:bg-orange-500/10 data-[state=active]:border-orange-500/40`
+  - **Media Servers**: `text-blue-400`, `hover:ring-blue-400/80`, `data-[state=active]:text-blue-400 data-[state=active]:bg-blue-500/10 data-[state=active]:border-blue-500/40`
   - **Access Control**: `text-emerald-400`, `hover:ring-emerald-400/80`, `data-[state=active]:text-emerald-400 data-[state=active]:bg-emerald-500/10 data-[state=active]:border-emerald-500/40`
   - **Media Requests**: `text-rose-400`, `hover:ring-rose-400/80`, `data-[state=active]:text-rose-400 data-[state=active]:bg-rose-500/10 data-[state=active]:border-rose-500/40`
   - **Broadcast & Emails**: `text-amber-400`, `hover:ring-amber-400/80`, `data-[state=active]:text-amber-400 data-[state=active]:bg-amber-500/10 data-[state=active]:border-amber-500/40`
@@ -40,6 +71,84 @@ Portalarr uses a **Modern Cinematic Dark Theme** powered by Tailwind CSS, Radix 
   - **Live System Logs**: `text-emerald-400`, `hover:ring-emerald-400/80`, `data-[state=active]:text-emerald-400 data-[state=active]:bg-emerald-500/10 data-[state=active]:border-emerald-500/40`
 - **Zero Opacity Washes on Tab Switch**: Tab switches must be instantaneous client-side state transitions. Never wrap tab content in `opacity-50` or `isPending` transitions that dim the screen on click. For URL updates, use `router.replace(url, { scroll: false })` without `startTransition`.
 - **Slot Inactive/Disabled Card Styling**: Unconfigured or optional slots (e.g. 4K Arrs or Kids Arrs) must use dashed borders (`border border-dashed border-border/40`) with muted text rather than container-wide `opacity-75` washes which make the whole panel look faded and inactive.
+
+### 3. Multi-Platform Media Servers (Plex, Jellyfin, Emby) & Library Self-Selection
+- **Distinct Server Brand Tokens**:
+  - **Plex**: Amber badge (`bg-amber-500/10 text-amber-400 border-amber-500/30`)
+  - **Jellyfin**: Purple badge (`bg-purple-500/10 text-purple-400 border-purple-500/30`)
+  - **Emby**: Emerald green badge (`bg-emerald-500/10 text-emerald-400 border-emerald-500/30`)
+- **Admin Server Whitelisting & Library Scoping**:
+  - In Admin Settings (`AdminMediaServersPanel`), each server exposes toggles for `Allow Full Members to Self-Select` alongside clear indicators that Trial Account access is centralized in Access Control.
+  - **Server Edit & Credential Transparency**: Jellyfin and Emby server cards include a dedicated `Edit` action button opening an edit modal. Administrators can modify the server display name and connection URL. The modal securely delivers and populates the saved decrypted API key for verified admins, with an interactive Show/Hide eye toggle and 1-click clipboard copy button, while displaying an active key badge (`Saved Key Loaded`).
+  - **Multi-Scheme Reverse Proxy & Jellyfin 10.9/12+ Authentication**: Backend requests (`testMediaServerConnection`, `fetchMediaServerLibraries`, `syncUserMediaServerAccess`) send modern `Authorization: MediaBrowser Token="..."`, `X-Emby-Authorization`, `X-Emby-Token`, and `X-MediaBrowser-Token` headers, alongside an automatic `?api_key=` query parameter fallback to guarantee seamless communication through reverse proxies (Nginx Proxy Manager, Cloudflare) that may strip custom headers.
+  - **Centralized Trial Safe Pool Governance**: Trial member library access is governed 100% centrally in `/settings/access` under Onboarding (`defaultTrialPlexLibraries` / "Trial Safe Pool / Restricted Shelf"). Per-server trial toggles are avoided to prevent fragmented or conflicting access rules.
+  - When whitelisting specific libraries, render interactive checkbox pills for each discovered virtual folder or PMS section with high-contrast text and clean allowed counts.
+- **User Self-Selection & Tier Capabilities**:
+  - In User Profile (`UserMediaServersManager`), render an informative Tier Capabilities Banner highlighting Full Member privileges (unlimited media server and library self-selection across Plex, Jellyfin, and Emby, book library access, uncapped requests, and household sub-accounts).
+  - Enforce server-side whitelist validation: any client tampering attempting to select unauthorized servers or hidden libraries is strictly filtered out before database persistence and API policy sync.
+- **Profile Page Clean Minimal Cards & Coming Soon Gating**:
+  - **Household Sub-Accounts & Profiles** and **Content Safety & Family Profile** are cleanly rendered as "Coming Soon • Beta" cards while library metadata tagging and parental rating filters remain in active development.
+  - **Notification Preferences (User Opt-In Second Gate)**: Full granular control over user-targeted automated email categories (`emailRequestApproved`, `emailMediaReady`, `emailSubscriptionReminders`, `emailAnnouncements`, `emailSupportTickets`, `emailReferralRewards`). Acts as an authoritative second gate: even when an email passes global server settings and the admin approval queue, if the member has opted out of that notification category, it is automatically dropped and skipped with audit logging.
+  - **Kids & Audiobooks Library Access Cards**: Excluded internal backend library dumps ("Managed Family Libraries" and "Detected Audiobook Libraries") to maintain member privacy and prevent empty badge artifacts.
+- **Strict Full-Member Gating for Jellyfin & Emby**:
+  - Emby and Jellyfin server options and add-ons (`jellyfin_access`, `emby_access`) are **strictly restricted to Full Members** (and Super Users / Admins). Note: `emby_access`, `music_streaming`, and `priority_requests` are marked unavailable (`isAvailable: false`) and filtered from the user account add-ons catalog until real backend integrations are deployed.
+  - For Trial Members (`isTrialUser`), Jellyfin and Emby switches are locked/disabled (`checked={false} disabled={true}`) with a `Full Members Only` lock badge and a prominent locked informational banner: "Jellyfin & Emby multi-platform streaming is exclusively available for Full Members. Upgrade your membership pass to unlock."
+  - Backend enforcement in `updateUserMediaServersAndLibrariesAction` and `toggleFreeAddonAction` strictly blocks and strips Jellyfin/Emby selections for trial users.
+- **Interactive Step-by-Step Setup Guides (`MediaServerSetupGuideModal` & `PlexSetupGuides`)**:
+  - Accessible via prominent "📖 Setup Guide" buttons on each Jellyfin/Emby card in `UserMediaServersManager`, inside the Free Add-ons catalog in `profile/page.tsx`, and auto-opened whenever a Full Member toggles ON a Jellyfin or Emby server for the first time.
+  - Dedicated tabs in `PlexSetupGuides` (`getPlexSetupGuides()`) for Jellyfin and Emby with platform device icons.
+  - 4-step interactive checklist:
+    1. **Connect to Server Address**: Copyable server URL with 1-click clipboard copy and web client launch.
+    2. **Sign In with Your Account**: Copyable configured username and password instructions.
+    3. **Recommended Client Apps**: Swiftfin (Apple TV & iOS), official Jellyfin/Emby on Roku Channel Store, Fire TV, Android TV, Google TV, and web browsers.
+    4. **Direct Play Optimization**: Instructions to set Remote Quality / Bitrate to Maximum / Auto for 100% Direct Play.
+- **Native Jellyfin & Emby Active Playback Sessions & Remote Termination**:
+  - **Admin Detailed Streams Matrix & User Dashboard Parity**: Active streams playing on monitored Jellyfin and Emby instances are queried natively via `/Sessions?activeWithinSeconds=960` and integrated seamlessly into `getAdminDetailedStreamsAction` and `getUserPlexHubData`.
+  - **Telemetry Normalization**: Extracts canonical playback metrics: item title, season/episode badges (S01E05), progress bar and percentages, video/audio transcoding decisions, codecs (H264, HEVC, AAC), resolution (4K, 1080p, 720p), bitrates, client devices, and IP addresses.
+  - **Brand Badge Styling**: Media server badges display signature brand tokens: Jellyfin uses a purple accent (`bg-purple-500/10 text-purple-400 border-purple-500/30`) and Emby uses emerald (`bg-emerald-500/10 text-emerald-400 border-emerald-500/30`).
+  - **Interactive Remote Stream Termination (`killUserStream`)**: Users can terminate their own active Jellyfin and Emby streams directly from the dashboard, and administrators can terminate any stream across the cluster via `stopMediaServerSession` (`POST /Sessions/{sessionId}/Playing/Stop`).
+
+### 4. Button-Led User Dashboard Architecture & Role Parity (`UserLaunchpad`)
+- **DRY Launchpad Pattern**: Replace lengthy, text-heavy vertical card stacks with the touch-friendly `UserLaunchpad` (`src/components/dashboard/user-launchpad.tsx`) positioned immediately below the dashboard header.
+- **Role Parity Standard (Super User = Full Member + Servarr)**:
+  - **Super Users do NOT have a stripped-down or disconnected dashboard**. They share the exact same rich Full Member dashboard experience (My Plex Hub, AI Assistant, Book & Audiobook Library, Server Speed Test, Plex Setup Guides, Support Tickets).
+  - The ONLY architectural difference is that `isSuperUser={true}` dynamically unlocks dedicated **🎬 Radarr Movies** and **📺 Sonarr TV Shows** quick-action buttons in an expanded 8-button launchpad grid (`grid-cols-2 sm:grid-cols-4 xl:grid-cols-8`).
+  - Full Members receive the streamlined 6-button launchpad grid (`grid-cols-2 sm:grid-cols-3 xl:grid-cols-6`).
+- **Free Trial Accounts (`TrialDashboardView`)**:
+  - Compact glowing amber countdown pill header: `⏳ Free Trial: [X] Days Remaining` with `[View Pricing]` trigger.
+  - 4-button launchpad (2x2 on mobile, 4 columns on desktop):
+    1. 🎬 **Request Media** (`/discover`) with live remaining quota badge (`3 Movies • 3 TV Left`).
+    2. 📺 **Plex Setup Guides** (modal trigger).
+    3. ⚡ **Server Speed Test** (modal trigger).
+    4. 💳 **Membership Pricing** (modal trigger with prorated monthly & annual calculations).
+- **Headless Modal Trigger Pattern**:
+  - Components like `ServerSpeedTest`, `PlexSetupGuides`, and `SupportTicketModal` support an optional `trigger?: React.ReactNode` prop. When provided, the dialog renders the custom launchpad card as its `DialogTrigger` without duplicate state or detached trigger buttons.
+- **Admin Mission Control Immunity**:
+  - The Administrator view (`isAdmin === true`) remains 100% strictly untouched, preserving the single-pane `AdminSystemHealthGrid`, `AdminDetailedStreams`, hardware telemetry meters, and 8-tool quick admin bar.
+
+### 4. Account Settings Profile Prewarming & Dashboard Servers Launchpad
+- **Account Settings SWR Prewarming (`getUserProfileBootstrapAction`)**:
+  - Eliminates sequential request waterfalls by executing 10+ user profile queries in parallel and storing in RAM cache (`user_profile_bootstrap:${userId}`).
+  - Warm cache hits return in <50ms with zero loading spinners or delayed layout shifts.
+  - Automatically prewarmed during `prewarmUserSession` on login.
+- **Quick-Access Dashboard Launchpad ("Servers & Libraries")**:
+  - Mounted on the user dashboard launchpad grid (`UserLaunchpad`) with blue accent branding (`text-blue-400`, `bg-blue-500/10 border-blue-500/30`) and `Access` badge.
+  - Links directly to `/profile` for 1-click management of Plex/Jellyfin/Emby servers, libraries, and add-ons.
+- **Dashboard Paid Through Header (`PaidThroughHeader`)**:
+  - Positioned at the top of the user dashboard view (`isMember`) and as a compact pill in the System Dashboard title header.
+  - Renders active plan badge (`Annual Plan` / `Monthly Plan` / `Lifetime Pass`), pulsing indicator, exact `Paid Through: [MMMM d, yyyy]`, countdown days remaining, applied account credit, and 1-click direct link to `/profile` for renewal management.
+- **Discrete Invite Banner (`PlexInviteBanner`)**:
+  - Positioned unobtrusively below the AI Assistant card rather than commanding top billing.
+  - Designed as a sleek, low-profile card (`bg-[#121218]/60 border-border/40`) with inline copy input and collapsible guide.
+
+### 5. Send-to-Kindle Sender Update Notice Modal (`KindleSenderUpdateModal`)
+- **Sender Address Lifecycle & Gating Rule**:
+  - Outbound wireless Kindle delivery emails are dispatched from `kindle@domshomelab.com`.
+  - When the outbound sender address is updated, Amazon requires that recipient Kindle users explicitly add `kindle@domshomelab.com` to their Amazon **Approved Personal Document E-mail List** (under *Manage Your Content and Devices → Preferences*).
+  - To prevent delivery failures or silent document drops by Amazon, an interactive update modal (`<KindleSenderUpdateModal />`) is triggered:
+    - **Trigger**: Displayed when an existing user with Send-to-Kindle set up (`user.kindleEmail` contains `@` and is not `"DIRECT_DOWNLOAD"`) goes to request an ebook or missing book in a series, or dispatches an existing ebook.
+    - **Isolation**: Strictly NOT shown to users who do not have Send-to-Kindle enabled or who have already acknowledged the notice (`user.kindleSenderUpdateAcknowledgedAt !== null`).
+    - **User Experience**: Features a 1-click clipboard copy button for `kindle@domshomelab.com`, a direct external link to Amazon's Personal Document Settings, step-by-step instructions, and an "I've Updated My Settings" confirmation button that records acknowledgment in the database (`acknowledgeKindleSenderUpdateAction`) and immediately resumes the pending book request without requiring the user to re-click.
 
 ## 📐 Key Layout & Component Rules
 
@@ -77,10 +186,19 @@ See detailed reference: [card-and-poster-patterns.md](./references/card-and-post
 
 ### 3. Forms, Autocomplete & Dirty State Management
 - **Autocomplete Dropdowns**: Always use `onMouseDown` on dropdown suggestion items instead of `onClick` to prevent input `onBlur` from unmounting items before the click event fires.
-- **Unsaved Settings Protection**:
-  - Track dirty states against `initialDataRef` snapshots.
-  - Highlight dirty sections with amber glowing borders (`border-2 border-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.2)]`) and `● Unsaved Changes` badges.
-  - Render the standard `<UnsavedChangesPrompt />` component for floating docked save bars, `beforeunload` protection, and in-app navigation dialogs.
+- **Universal Unsaved Settings Protection Standard (`<UnsavedChangesPrompt />`)**:
+  - All settings pages, curation studios, and administrative configuration panels enforce strict dirty tracking against baseline `initialDataRef` / `initialSettingsRef` snapshots.
+  - **3-Layer Defense Contract**:
+    1. **Docked Floating Save Bar**: Fixed at `bottom-6 right-6 z-50` with pulsating amber indicator, modified sections summary (`● Unsaved Settings (N)`), Discard button, and primary Save button.
+    2. **In-App Navigation Interception Guard**: Intercepts link clicks (e.g. sidebar navigation, header logo, in-app redirects) using capturing `document.addEventListener("click", handleLinkClick, true)` and displays an interactive modal dialog offering `Stay on Page`, `Discard & Leave`, and `Save & Continue`.
+    3. **Browser Tab Close & Reload Guard**: Listens on `window.beforeunload` whenever `hasUnsavedChanges === true` to prevent accidental tab closing or page refresh.
+  - **Embedded Sub-Panel Dirty & Imperative Save/Discard Protocol**: Child panels mounted within parent settings hubs (e.g. `SeerrSettingsPanel`, `DiscordSettingsPanel`, `AdminMediaServersPanel`, `UserMediaServersManager`) accept `onDirtyChange?: (isDirty: boolean, dirtySections?: string[]) => void` and expose an imperative handle (`ref?: React.Ref<{ saveAllDirty: () => Promise<boolean>; discardAllDirty: () => void; }>`). Parent pages retain these panels in the DOM using CSS class toggling (`className={subTab === "active" ? "space-y-6" : "hidden"}`) rather than unmounting conditionally, ensuring in-progress form inputs and imperative refs remain intact across subtab switches. When the parent master floating save bar triggers "Save All Changes" or "Discard", it imperatively executes `panelRef.current.saveAllDirty()` or `panelRef.current.discardAllDirty()`, while saving single cards immediately updates baseline snapshots to clear dirty state.
+  - **100% Page Coverage**:
+    - **System Settings Hub (`src/app/settings/page.tsx`)**: Dirty tracking for General, Public URL, SMTP, Plex server tokens, Direct SQLite DB snapshot presets/paths, Servarr/Requests (`SeerrSettingsPanel`), Media Server Fleet (`AdminMediaServersPanel`), Discord Bot (`DiscordSettingsPanel`), Curation keys, and Roadmap/Beta text.
+    - **Access Control (`src/app/settings/access/page.tsx`)**: Full `<UnsavedChangesPrompt />` tracking onboarding gates, role permissions, trial quotas, and Discord role mappings.
+    - **User Profile (`src/app/settings/profile/page.tsx` & `/profile`)**: Tracks profile info, passwords, shared Plex libraries, notifications, content safety, and `UserMediaServersManager` server access and library whitelist preferences (`isMediaServersDirty`).
+    - **Curation Studios (`KometaStudio`, `AgregarrStudio`, `PruneStudio`, `TaggingStudio`)**: Standardized on `<UnsavedChangesPrompt />` guaranteeing navigation modal interception and beforeunload guards across all 4 studios.
+    - **Script Editor Modal (`src/components/scripts/script-editor-modal.tsx`)**: Protects script content, interpreters, schedules, and timeouts against accidental outside-click dismissals.
 - **Sensitive Fields**:
   - Mask tokens and passwords by default (`type={showToken ? "text" : "password"}`).
   - Provide an inline toggle button with Lucide `<Eye />` / `<EyeOff />`.
@@ -95,7 +213,27 @@ See detailed reference: [form-and-input-patterns.md](./references/form-and-input
 
 ---
 
-### 4. Responsive Media Grids
+### 4. User Authentication, Deep Link Redirection & Frictionless Login UX
+- **Safe `returnTo` Deep Linking**:
+  - Whenever an unauthenticated user visits a protected route (e.g. `/requests?tab=books&query=dune`, `/library`, `/tickets`, `/profile`), `src/proxy.ts` preserves the destination path and search query via `?returnTo=${encodeURIComponent(pathname + search)}`.
+  - On both Password and Plex login, sanitize `returnTo` (ensure it starts with `/` and not `//` or `/\\` to prevent open redirects) and navigate directly to the intended destination instead of resetting users back to `/`.
+  - If an already-authenticated user navigates to `/login?returnTo=...`, `proxy` immediately routes them to their intended destination.
+- **Resilient Multi-Alias Account Matching**:
+  - Match user credentials against `username`, `email`, `plexUsername`, and `plexEmail` (case-insensitively and whitespace trimmed).
+  - Users auto-provisioned via Plex who do not remember their unique auto-generated local username/email can seamlessly sign in or reset passwords using their original Plex username or Plex email address.
+  - When resetting passwords for Plex-provisioned accounts, Portalarr dispatches the temporary password to their verified `plexEmail` and heals placeholder `@plex.local` addresses.
+- **Mobile Popup Blocker Fallback & CapsLock Detection**:
+  - If a mobile browser (iOS Safari, Android Chrome) or strict desktop setting blocks the Plex login popup, render an immediate 1-click fallback button (*"Popup blocked? Tap here to authorize on Plex.tv"*) opening the authorization URL in a new tab while continuing background PIN polling.
+  - Provide a 8-second grace period on `popup.closed` detection to prevent premature polling termination when users switch to password managers or 2FA authenticators.
+  - Include an interactive show/hide password toggle (`Eye` / `EyeOff`) and a real-time CapsLock detection badge (*"Caps Lock is ON"*) on all password fields.
+
+- **Semantic Subtab & Hash Navigation Standards**:
+  - **Two-Tier Hub & Subtab Resolution**: When nesting sub-panels (e.g. in `src/app/settings/page.tsx` and `src/app/settings/access/page.tsx`), parent tab resolvers must never drop child subtab parameters to `""`. Inter-tab jump buttons (e.g. jumping from PMS tokens to Media Servers fleet) must call explicit subtab transition handlers (`handleSubTabChange("servers", "fleet")`) rather than generic hub changes to eliminate silent self-referential no-ops.
+  - **Post-Loading DOM Hash Jump Guard**: On pages that render conditionally during data fetching (such as `/profile` or `/settings/access` displaying full-page loaders), browser-native hash jumps fail on initial mount because the target elements do not yet exist in the DOM. Always mount a `useEffect` that listens for `!loading` and triggers `document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "start" })`, paired with a `window.addEventListener("hashchange", ...)` listener so that deep links (`/profile#kindle`, `/profile#referral`, `/profile#billing`, `/settings/access?tab=onboarding#trial-safe-pool`) always scroll cleanly into view.
+
+---
+
+### 5. Responsive Media Grids
 Use dynamic wrapping columns optimized across all screen breakpoints:
 ```tsx
 className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8 gap-3 sm:gap-4 lg:gap-5"
@@ -141,9 +279,14 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 - **Mobile Phones (`< 640px`)**:
   - Container padding: `p-2.5 sm:p-4 md:p-6 lg:p-8 3xl:p-10`.
   - Poster grids: Standardize on `grid-cols-2 sm:grid-cols-3` so mobile displays show a clean 2-card grid without excessive vertical scrolling.
-  - Action toolbars: Always wrap controls with `flex-wrap gap-2 w-full sm:w-auto`, allowing search inputs and filter selects to collapse gracefully to full width on mobile (`w-full sm:w-64`).
+  - Action toolbars: Always wrap controls with `flex-wrap gap-2 w-full sm:w-auto`, allowing search inputs and filter selects to collapse gracefully to full width on mobile (`w-full sm:w-64` or `flex-col sm:flex-row`).
   - Dropdown & Select Truncation: Every select trigger must include `w-full min-w-0 truncate` to prevent long option text from breaking out of the viewport.
   - Slide-out Mobile Sidebar: Ensure drawer body has `flex-1 overflow-y-auto min-h-0` with touch-friendly tap targets (`min-h-[38px]`).
+  - **Admin Mission Control & User Switcher Stack**: Never fix impersonation selects and "Return to Admin" buttons side-by-side with fixed `w-full` or `shrink-0`. Use `flex-col sm:flex-row items-stretch sm:items-center` so controls stack neatly at 100% width on phone screens.
+  - **Telemetry Toolbars & Action Buttons**: Button bars with 3+ tools (e.g. "Stream Intelligence Hub", "Watch History & Audit", "Refresh") must use `flex-wrap gap-1.5 sm:gap-2 w-full sm:w-auto` with responsive mobile labels (`<span className="hidden sm:inline">Stream Intelligence Hub</span><span className="sm:hidden">Intelligence</span>`).
+  - **Stream Telemetry & Codec Badges**: Video and audio badges containing full transcode paths (`CONVERT (TRUEHD 7.1 ➔ EAC3 Stereo)`) must include `max-w-full break-all sm:break-normal` with `min-w-0` on parent containers to prevent wide badges from spreading cards beyond the mobile viewport.
+  - **Filter Bars with Search & Category Dropdowns**: Never place category dropdowns with lengthy labels alongside search inputs in an unconstrained flex row. Wrap with `flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto` and give inputs full width on mobile (`w-full sm:w-44` / `w-full sm:w-56`).
+  - **Download Queue Rows**: Stack release title above bandwidth/ETA badges on mobile (`flex-col sm:flex-row sm:items-center items-start gap-1 sm:gap-3`) to give release titles 100% width and prevent truncated unreadable filenames.
 - **720p Displays (`1280 x 720` / Compact Height Viewports)**:
   - **Vertical Height Defense**: Total browser viewport height is often under 650px. Dialogs and modals must strictly constrain height with `max-h-[85vh]` or `max-h-[88vh]` and place `overflow-y-auto` on the inner body container.
   - Sidebars: Both desktop and mobile sidebars must use `h-full min-h-0` with `flex-1 overflow-y-auto` so the footer logout button and bottom items remain accessible.
@@ -173,17 +316,57 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 
 ---
 
-### 8. Consolidated Email Management & Trigger Documentation (`/settings?tab=emails`)
+### 8. Dynamic Branch, Version & Build Telemetry (`BuildBadge` & `getBuildTelemetry`)
+
+Portalarr features an automated, real-time versioning, branch identification, and build-workflow tracking system. It enables homelab administrators to look at any dashboard and immediately differentiate **Beta preview environments (`main` branch)** from **Production release environments (`stable` branch)**:
+
+- **Telemetry Engine (`src/lib/version.ts`)**:
+  - `getBuildTelemetry()` automatically resolves: `version`, `branch` (`main` vs `stable`), `commitSha`, `commitShortSha` (first 7 characters), `buildNumber` (GitHub Actions run number), `buildTimestamp`, `channel` (`beta` | `stable` | `dev`), `isBeta`, `isStable`, `displayBadge`, `fullDisplay`, `workflowUrl`, and `dockerImageTag`.
+  - Works seamlessly on both client and server components with zero network overhead.
+  - Automatically baked at build time via `next.config.ts` (`NEXT_PUBLIC_PORTALARR_VERSION`, `NEXT_PUBLIC_GIT_BRANCH`, `NEXT_PUBLIC_GIT_SHA`, `NEXT_PUBLIC_BUILD_NUMBER`, `NEXT_PUBLIC_BUILD_TIMESTAMP`) and Dockerfile build arguments (`GIT_BRANCH`, `GIT_SHA`, `BUILD_NUMBER`).
+
+- **Interactive Build Badge (`src/components/build-badge.tsx`)**:
+  - **Compact Variant (`variant="compact"`)**:
+    - Embedded in the top of Desktop and Mobile sidebars right next to the app brand header.
+    - Beta (`main`): Glowing neon purple pill with pulsing indicator (`bg-purple-500/15 text-purple-300 border-purple-500/30`, e.g. `BETA • v1.0.0-beta.1`).
+    - Prod (`stable`): Emerald pill with steady dot (`bg-emerald-500/15 text-emerald-300 border-emerald-500/30`, e.g. `PROD • v3.0.0`).
+  - **Full Variant (`variant="full"`)**:
+    - Embedded on the home dashboard header (`src/app/page.tsx`) immediately adjacent to the `System Dashboard` title.
+    - Displays channel icon (`FlaskConical` for Beta, `ShieldCheck` for Prod), channel name, version, commit short SHA (`[2cf7cdf]`), and build run badge (`build #142`).
+  - **Subtle Variant (`variant="subtle"`)**:
+    - Minimalist monospace branch, build, and SHA breadcrumb rendered in sidebar footers or headers (`main • #142 • 2cf7cdf`).
+  - **Interactive Build Diagnostics Dialog (`Dialog`)**:
+    - Clicking any `BuildBadge` opens a glassmorphic diagnostics modal displaying: Environment Status, Active Git Branch, Full Commit SHA with 1-click clipboard copy, GitHub Actions Workflow Run number, Build Timestamp, Target Docker Image (`ghcr.io/plexd281knilb/portalarr:main` vs `:stable`), and a direct link to GitHub Actions workflow runs.
+
+---
+
+### 9. Consolidated Email Management & Trigger Documentation (`/settings?tab=emails`)
 - **Single Authoritative Email Hub**: Outgoing email dispatches and notification master switches are strictly consolidated inside `<EmailManagement />` on Tab 3 (`/settings?tab=emails`), eliminating obsolete duplicate cards in Tab 1 ("General & Setup"). The General SMTP card provides a direct 1-click navigation button to the Email Hub.
 - **Exact Trigger Event Documentation**: Every email template definition includes an explicit, user-facing `triggerEvent` field. The UI displays this with a `Zap` icon in both the template selection sidebar and a prominent callout card in the template editor header.
 - **Automated Payment Receipts & Upgrade Notifications**: Incoming payments verified via automated IMAP scraping or manual attribution dispatch the `payment_received` receipt to the user and `admin_payment_received` alert to admins. Upgrades from trial or pending to full membership automatically dispatch `subscription_activated` detailing all unlocked perks.
+- **Bidirectional Approval Gate Integration in Dispatch Controls (`subTab === "notifications"`)**:
+  - **Governance Summary Banner**: Positioned right above the category grid, rendering the master gate toggle (`requireApprovalForEmails`), status badge (`🔒 Approval Gate Active` vs `⚡ Gate Bypassed`), 1-click presets (`⚡ Auto-Send Kindle Only`, `Stage All`, `Auto-Send All`), and a jump button directly to `/settings/access?tab=approvals`.
+  - **Per-Category Approval Gate Toggles**: Every one of the 12 notification category cards features a dedicated bottom row with `FolderCheck` icon, status badge (`🔒 Staged` vs `⚡ Auto-Send`), and an inline toggle switch to control whether that notification type is held for admin review or auto-sent via SMTP.
+- **Inline Template Approval Control (`subTab === "templates"`)**:
+  - Directly inside the template customization editor header, an **Action Approval Gate** card allows administrators to inspect and toggle the staging requirement for the currently selected template without having to switch tabs.
 
 ---
 
 ### 9. Admin Approval Gates & Governance (`/settings/access`)
 - **Strict Dual-Gate Governance**: Two independent switches in Access Settings govern automated system mutations:
   - `requireApprovalForPlexChanges` (default `true`): When enabled, NO modifications to live Plex library shares (new trial invites, user preference updates, manual library expansions, or trial/subscription expirations) are applied immediately to Plex servers. Instead, all proposed modifications are staged as `PENDING` records in the `AdminApproval` queue (`PLEX_ACCESS_GRANT` or `PLEX_ACCESS_REVOKE`).
-  - `requireApprovalForEmails` (default `true`): When enabled, NO automated user-facing emails (account approvals, password resets, trial welcome, full membership activations, payment receipts, media availability notifications, support ticket updates, mass broadcasts) are dispatched via SMTP. Instead, they are held in `AdminApproval` (`EMAIL`) until explicitly approved.
+  - `requireApprovalForEmails` (default `true`): When enabled globally, automated user-facing emails are held in `AdminApproval` (`EMAIL`) until explicitly approved, unless configured to auto-dispatch under the Granular Email Approval Policy.
+- **Granular Outgoing Email Approval Policy (`emailApprovalPolicy`)**:
+  - Provides template-by-template governance over every email type in the system.
+  - Unconditionally accessible on `/settings/access` under the Approval Queue tab (displaying an amber informational banner if the master gate is currently inactive).
+  - Individual switches allow administrators to require approval or permit immediate automatic dispatch via SMTP (e.g. unchecking `kindle_delivery` allows Send-to-Kindle book deliveries to transmit immediately without admin bottlenecking).
+  - Quick action presets: `⚡ Auto-Send Kindle Only` (sets Kindle templates to auto-send while retaining approval on account/subscription emails), `Require All`, and `Auto-Send All`.
+  - Filter by search and category pills (`All`, `Kindle`, `Requests`, `Auth`, `Trials`, `Payments`, `Support`, `Broadcast`).
+- **Admin Pending Approval Notifications & Alerts**:
+  - `notifyAdminOnPendingApproval` (default `true`): Automatically notifies administrators whenever an action (Plex access change or staged email) enters the Action Approval Queue requiring review.
+  - Multi-channel notification delivery:
+    - **Discord Bot / Webhook Alerts (`adminApprovalDiscordNotify`)**: Posts rich amber embeds (`0xF59E0B`) to `#system-status`, request channel, or webhook with action type, target entity, queue status, and direct link.
+    - **Admin Review Emails (`adminApprovalEmailNotify`)**: Dispatches branded HTML alert emails via SMTP to all `ADMIN` and `SUPER_USER` accounts with 1-click review buttons (`bypassApproval: true`).
 - **Admin Alert Immunity**: Direct alerts sent to administrators (e.g. `admin_payment_received`, new user account requests, AI bot escalation tickets) pass `bypassApproval: true` so administrators receive timely system alerts without self-blocking their own notification channels.
 - **Interactive Review Queue**: Accessible on `/settings/access`, offering instant status filters (`PENDING`, `APPROVED`, `REJECTED`, `ALL`), type filters (`EMAIL`, `PLEX_ACCESS_GRANT`, `PLEX_ACCESS_REVOKE`), batch approvals (`Approve All`), batch rejections (`Reject All`), payload inspection modals, and custom rejection reason tracking.
 
@@ -203,8 +386,10 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
   - Secondary profiles (Living Room TV with severe nudity filtering, Kids account with PG ratings ceiling) are exclusive full member perks.
   - Trial users see clean perk preview blocks and "Unlocks with Full Membership" actions linking to subscription options.
 - **Account Add-Ons & Features**:
-  - Optional add-ons (Books & Audiobooks, extra profile slots) display "Unlocks with Full Membership" buttons for trial users.
-  - Backend actions (`toggleFreeAddonAction`, `createOrUpdateSubAccountAction`) strictly enforce full membership status.
+  - Separated optional free add-ons: **E-Books & Reading Access** (`ebooks`, `icon: "book"`, unlocks Kindle delivery and browser reader) and **Audiobooks Plex Library Access** (`audiobooks`, `icon: "headphones"`, unlocks narrated audiobook streaming directly through Plex and updates live Plex sharing permissions).
+  - Dedicated **Audiobooks Plex Library Access Card** (`#audiobooks-library`, `purple-500/30`) in Account Profile (`/settings/profile`) allowing users to opt into or out of the Audiobooks library section with automated PMS share syncing (`syncAudiobooksPlexLibraryAccessForUser`).
+  - Optional add-ons display "Unlocks with Full Membership" buttons for trial users.
+  - Backend actions (`toggleFreeAddonAction`, `updateUserAudiobooksLibraryAccessAction`, `createOrUpdateSubAccountAction`) strictly enforce full membership status.
 
 ---
 
@@ -216,7 +401,7 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 - **Zero Generic Branding Leakage in User Communications**:
   - Never allow internal/generic software names (e.g. "Portalarr") to appear in outgoing email subjects, email body text, email header banners, or user-facing UI views. Users must instantly recognize the communications as coming directly from their trusted server host to prevent confusion or spam reports.
   - Email header banner: `DOMS<span style="color: #6366f1;">HOMELAB</span>` with subtitle `d281knilb Media Server & Dashboard`.
-  - Email footer: `DomsHomeLab • d281knilb Media Server • Open Dashboard` and `© {year} DomsHomeLab. All rights reserved.`.
+  - Email footer: `DomsHomeLab • d281knilb Media Server` with high-contrast, theme-resilient `Open Dashboard →` action button (deep indigo `#4f46e5` / `#6366f1` and pure white text for guaranteed WCAG AA legibility across dark and light modes, automatically deduplicated if already mounted inline within the email content) and `© {year} DomsHomeLab. All rights reserved.`.
 - **Payment Reconciliation Memo Notes**:
   - Payment memo notes are cleanly formatted as the member's username (e.g. `johndoe`), making it simple and frictionless for members to include in transaction notes.
   - Payment scrapers retain backwards-compatible substring matching for plain usernames as well as legacy `#DOMSHOMELAB-`, `#D281KNILB-`, and `#PORTALARR-` tags.
@@ -265,16 +450,18 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 - **Comprehensive Single-Pane Monitoring**:
   - Positioned at the very top of Admin Mission Control (`/`), aggregating all configured infrastructure services across 5 distinct categories:
     1. **Plex Media Servers** (Direct PMS status, API identity ping, latency)
-    2. **Host Hardware (Glances)** (Physical machines, CPU & RAM utilization, port 61208 status)
-    3. **Stream Monitors (Tautulli)** (Active playback count, API reachability, port 8181/18181)
-    4. **Servarr & Request Apps** (Radarr, Sonarr, Seerr, Ombi, Prowlarr, Bazarr, Maintainerr)
-    5. **Download Clients** (SABnzbd, qBittorrent, NZBGet)
+    2. **Jellyfin Media Servers** (Native Jellyfin REST ping `/System/Info`, dual-URL fallback, server version, purple badge)
+    3. **Emby Media Servers** (Native Emby REST ping `/System/Info`, dual-URL fallback, server version, emerald badge)
+    4. **Host Hardware (Glances)** (Physical machines, CPU & RAM utilization, port 61208 status)
+    5. **Stream Monitors (Tautulli)** (Active playback count, API reachability, port 8181/18181)
+    6. **Servarr & Request Apps** (Radarr, Sonarr, Seerr, Ombi, Prowlarr, Bazarr, Maintainerr)
+    7. **Download Clients** (SABnzbd, qBittorrent, NZBGet)
 - **Visual Status Hierarchy & Pulse States**:
   - 🟢 **ONLINE**: Emerald indicator with pulse, verified reachable response, and round-trip ping latency badge (e.g. `14ms`).
   - 🔴 **OFFLINE / UNREACHABLE**: Crimson rose badge and animated beacon, surfaced prominently with promoted filter badge (`Down (X)`).
   - ⚪ **PAUSED**: Slate neutral badge indicating intentional opt-out (`monitored === false`) configured in Settings > Monitoring. No unnecessary network probing or false alarms.
 - **Interactive Multi-Axis Filtering & Instant Search**:
-  - Status filter pills (`All`, `Down`, `Online`, `Paused`) paired with category dropdown selector (`All Categories`, `Plex Media Servers`, `Host Hardware`, `Stream Monitors`, `Servarr & Request Apps`, `Download Clients`) and client-side instant search input.
+  - Status filter pills (`All`, `Down`, `Online`, `Paused`) paired with category dropdown selector (`All Categories`, `Plex Media Servers`, `Jellyfin Media Servers`, `Emby Media Servers`, `Host Hardware`, `Stream Monitors`, `Servarr & Request Apps`, `Download Clients`) and client-side instant search input.
 - **My Plex Hub Real Monitored Server Isolation (`my-plex-hub.tsx`)**:
   - In user-facing `MyPlexHub` connected servers dialogs and status counters, dummy, paused, or unmonitored Plex servers (`monitored === false`) are strictly filtered out so that only genuine, monitored Plex instances (`KidsPlexServer`, `MainPlexServerBackup`, `MainPlexServer`) are visible to members.
 
@@ -624,11 +811,27 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 ---
 
 ### 28. Action Approval Gates & Governance (Strict Staging & Manual Review)
-- **Email Dispatch Gating (`requireApprovalForEmails`)**:
+- **Email Dispatch Gating & Granular Policy (`requireApprovalForEmails` & `emailApprovalPolicy`)**:
   - 100% of outgoing emails across the entire codebase route through `sendOrQueueEmail` in `src/app/actions.ts`.
-  - When `requireApprovalForEmails` is `true` (default), outgoing emails (user approvals, trial reminders, subscription notices, request alerts, Kindle deliveries, support ticket escalations, etc.) are strictly staged in the `AdminApproval` table with `type: "EMAIL"` and status `"PENDING"`.
+  - When `requireApprovalForEmails` is `true` (default), outgoing emails are staged in `AdminApproval` (`type: "EMAIL"`, `status: "PENDING"`) unless their specific `templateId` is configured with `emailApprovalPolicy[templateId] === false`.
+  - Individual template toggling enables granular operational automation: unchecking "Require Approval" for `kindle_delivery`, `kindle_success`, or `kindle_failed` allows books to be sent instantly to Kindle readers via SMTP while keeping account and payment emails securely staged for manual review.
+  - Quick action presets: `⚡ Auto-Send Kindle Only`, `Require All`, `Auto-Send All`.
   - Staged emails preserve recipient, subject, rendered HTML, templateId, and file attachments in `payload`.
-  - Emails are ONLY dispatched via SMTP when an administrator explicitly approves the item in the Action Approval Queue (`approveAdminApprovalAction`) or when the toggle is turned OFF (`requireApprovalForEmails === false`).
+  - Emails are dispatched via SMTP when approved in the queue (`approveAdminApprovalAction`) or when configured to auto-dispatch.
+- **Dedicated Category-Based Outbound Sender Routing (`resolveSenderAddress`)**:
+  - Dynamically routes outgoing email dispatches to category-matched sender mailboxes based on `templateId` when using a custom verified domain (e.g. `domshomelab.com`):
+    - **Kindle Ebooks (`kindle@<domain>`)**: `"DomsHomeLab Kindle"` for `kindle_delivery`, `kindle_failed`, `kindle_success`.
+    - **Billing & Payments (`payments@<domain>`)**: `"DomsHomeLab Billing"` for `payment_received`, `payment_underpayment`, `admin_payment_received`, `subscription_activated`, and renewal reminders.
+    - **Accounts & Authentication (`accounts@<domain>`)**: `"DomsHomeLab Accounts"` for `user_approval`, `admin_new_user`, `password_reset`, `trial_welcome`, `trial_expiring_soon`, `trial_expired`, and `library_access_request`.
+    - **Requests & Seerr (`requests@<domain>`)**: `"DomsHomeLab Requests"` for `media_ready`, `media_request_admin`, and all `seerr_request_*` notifications.
+    - **Support Tickets (`support@<domain>`)**: `"DomsHomeLab Support"` for `ticket_update` and `ticket_error_alert`.
+    - **Governance Approvals (`accounts@<domain>`)**: `"DomsHomeLab Governance"` for `admin_approval` queue alerts.
+    - **General Announcements & Broadcasts (`notifications@<domain>`)**: `"DomsHomeLab"` for broadcasts and general alerts.
+  - **Safe Webmail Fallback (`PUBLIC_WEBMAIL_DOMAINS`)**: When the configured SMTP sender is a public webmail domain (e.g. `@gmail.com`, `@yahoo.com`, `@outlook.com`), the exact configured sender address is strictly preserved to prevent SPF/DKIM/DMARC rejection by recipient mail providers.
+  - **Email Management UI Integration**: Displays dedicated sender mailboxes (`From: <sender>`) on each template card and in the template editor header, with 1-click preview testing matching the exact routed sender.
+- **Admin Real-Time Approval Notifications (`notifyAdminOnPendingApproval`)**:
+  - Whenever an action or staged email enters the queue, Portalarr automatically alerts administrators via configured channels (`adminApprovalDiscordNotify` Discord embeds and `adminApprovalEmailNotify` SMTP emails).
+  - Admin notification emails pass `bypassApproval: true` to prevent infinite recursion into the approval queue.
 - **Live Plex Modification Gating (`requireApprovalForPlexChanges`)**:
   - All operations that grant, sync, modify, or revoke Plex server shares (`revokePlexAccessForUserInternal`, `updateUserPlexLibraries`, `setUserTrialOrSubscription`, `createOrUpdateSubAccountAction`, `registerUserWithInviteAction`, `updateUserSelectedPlexLibrariesAction`) respect `requireApprovalForPlexChanges`.
   - When active (`true`), modifications are strictly staged in `AdminApproval` (`PLEX_ACCESS_GRANT` or `PLEX_ACCESS_REVOKE`). PMS friends and library share updates are withheld until an administrator explicitly reviews and approves the staged change.
@@ -698,11 +901,13 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
   - Covers movie and TV show library management (`/radarr*`, `/sonarr*`).
   - Allowed for `ADMIN` and `SUPER_USER` roles in both `src/proxy.ts` and `src/app/arr-actions.ts`.
   - In Cloudflare Zero Trust, Rule 2 permits both Admin and Super User emails, or can be bypassed at the edge while strictly guarded by Portalarr session authentication.
-- **Zero-Conflict End-User Routing (`/profile*`)**:
-  - `/settings*` is 100% strictly Admin-Only. End-users manage profile settings, Kindle email, preferences, and subscription billing exclusively at `/profile` (eliminating `/settings/profile` bypass conflicts).
-  - All email notifications (renewal notices, trial expiration alerts) dispatch links with `{billingUrl}` = `/profile#billing`.
+- **Dual End-User Routing (`/profile*` & `/settings/profile*`)**:
+  - End-users can manage profile settings, Kindle email, preferences, and subscription billing seamlessly at both `/profile` and `/settings/profile`.
+  - In `src/proxy.ts`, `/settings/profile*` is explicitly exempted from the admin-only redirect to `/profile`, allowing direct bookmarking and navigation to `/settings/profile`.
+  - In `src/lib/edge-policy-paths.ts`, `/settings/profile*` is included in `CLOUDFLARE_BYPASS_PATHS` and excluded from `matchesCloudflareAdmin()`, guaranteeing friends and family are never blocked by Cloudflare Zero Trust login walls when visiting `/settings/profile`.
+  - All email notifications dispatch links with `{billingUrl}` = `/profile#billing`.
 - **Strict Non-Bypassable Admin Guard (`matchesCloudflareBypass`)**:
-  - `matchesCloudflareBypass()` explicitly verifies that if `matchesCloudflareAdmin(path)` is true, the route is NEVER bypassed, guaranteeing zero leakage or path collisions.
+  - `matchesCloudflareBypass()` explicitly verifies that if `matchesCloudflareAdmin(path)` is true and the path is not `/settings/profile`, the route is NEVER bypassed, guaranteeing zero leakage or path collisions.
 - **Three-Rule Cloudflare Zero Trust Setup**:
   - **Rule 1 (Admin Only - High Priority)**: Action = `Allow`, Selector = `CLOUDFLARE_ADMIN_PATHS`, Include = `Emails: [your-admin-email@example.com]`. Blocks all outsiders with HTTP 403 at Cloudflare's edge before requests reach the server.
   - **Rule 2 (Super Users & Admin - Priority 2)**: Action = `Allow`, Selector = `CLOUDFLARE_SUPER_USER_PATHS` (`/radarr*`, `/sonarr*`), Include = `Emails: [your-email, superuser-emails]`.
@@ -819,7 +1024,7 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
     - *Roku Auto-Adjust 720p 4Mbps Cap*: Detects default "Auto Adjust Quality" setting forcing server transcoding.
     - *Default Remote Quality Cap (2-4 Mbps)*: Detects Apple TV, Fire TV, Android TV, and Smart TVs running factory default 720p caps.
     - *Web Browser HEVC/4K Codec Incompatibility*: Prompts users to download the native Plex Desktop App for direct playback.
-    - *Subtitle Burn-in & Audio Transcodes*: Detects image-based subtitle burning (PGS/VOBSUB) and passthrough audio downmixing.
+    - *Subtitle Burn-in & Audio Conversion Suppression*: Detects image-based subtitle burning (PGS/VOBSUB) requiring server transcoding. For audio-only conversions (e.g. TrueHD or DTS to stereo/EAC3 with Direct Play video), suppresses doctor fix warnings (`hasIssue: false`, zero troubleshooting steps) since lightweight audio downmixing consumes negligible server resources (~0% CPU, 0% GPU) and is standard for TV/stereo speakers.
     - *Actionable Guidance*: Provides interactive step-by-step fix guides and 1-click copyable user notices ready to send via Discord or email.
   - **Sidebar Navigation**: Positioned under "Administration" (`Activity` icon, cyan/emerald accents) visible exclusively to administrators.
 
@@ -916,8 +1121,13 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 ### 38. AI Server Assistant Mission Control & Universal Floating Launcher (`AiServerAssistant` & `FloatingAiLauncher`)
 - **Prominent User Mission Control Placement**:
   - Positioned prominently on the main dashboard (position #2 on user/trial/super-user views, and directly accessible in Admin Mission Control) for all accounts (Admins, Full Accounts, Super Users, and Trial Users).
-  - Styled with glowing purple/cyan linear gradient borders (`from-purple-500/20 via-primary/10 to-transparent`), a pulse status badge (`24/7 AI Diagnostic Engine Active`), and 6 instant 1-click quick-chips (`⚡ Buffering`, `🔊 Quiet Dialogue`, `💬 Subtitles`, `📺 Unlock 4K/1080p`, `🎬 Missing Media`, `🟢 Server Health`).
+  - Styled with glowing purple/cyan linear gradient borders (`from-purple-500/20 via-primary/10 to-transparent`), a pulse status badge (`24/7 AI Diagnostic Engine Active`), and instant 1-click quick-chips (`⚡ Buffering`, `🔊 Quiet Dialogue`, `💬 Subtitles`, `📺 Unlock 4K/1080p`, `🎬 Missing Media`, `🟢 Server Health`, and `📚 Book Recommendations`).
   - Automatically loads the user's active streaming session telemetry into the diagnostic prompt for zero-click context awareness.
+- **Personalized Book & Media Recommendations Engine (`ai-book-recommendations.ts` & `recommend_books_and_media`)**:
+  - Aggregates user taste from previous `MediaRequest` and `BookRequest` records, Kindle deliveries (`KindleDeliveryLog`), and content preferences (`UserContentPreference`).
+  - Detects favorite authors, universe affinities across 8 major genres, and cross-references existing disk catalog (`Book`) vs unacquired comparable works.
+  - Generates actionable recommendation cards distinguishing between server-available books (`inLibrary: true`, linking directly to `/library` for Read Now or 1-Click Send-to-Kindle) and unacquired recommendations (`inLibrary: false`, linking to `/requests` for 1-Click Auto-Grab).
+  - Supported across both LLM tool calling (Gemini `recommend_books_and_media`, OpenAI tools) and the zero-dependency heuristic engine fallback (`resolvePlexMasterHeuristic`).
 - **Universal Floating Launcher & Event Bus**:
   - Rendered globally via `<FloatingAiLauncher />` in `LayoutWrapper` at `fixed bottom-4 right-4 z-40` for all authenticated members.
   - Supports programmatic triggers via `openAiAssistant(initialQuery?: string)` custom DOM events (`window.dispatchEvent(new CustomEvent("open-ai-assistant", ...))`) and query params (`?openAssistant=true`).
@@ -946,6 +1156,259 @@ className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid
 
 ---
 
+### 41. Live Activity Transcode Telemetry, Resolution Downscaling & Power/Buffer Cockpit
+- **Target Resolution Resolution (`resolveResolution`)**:
+  - In Plex Media Server `/status/sessions`, `TranscodeSession` supplies target dimensions via `height` (e.g. 1080, 720, 480) and `width` (e.g. 1920, 1280) rather than a string `videoResolution` attribute.
+  - `resolveResolution` evaluates both pixel dimensions (including cinemascope aspect ratios like 1920x800 for 1080p, 1280x534 for 720p) and standard string formats (`4k`, `1080`, `720`, `480`), ensuring downscaled streams accurately reflect their target resolution instead of falling back to source resolution.
+- **Visual Downscaling & HDR Tone-Mapping Indicators**:
+  - **Resolution Conversion**: When downscaling (`sourceResolution !== streamResolution`), render an amber glowing badge: `📉 4K UHD ➔ 1080p` or `📉 4K UHD ➔ 720p`.
+  - **HDR Tone-Mapping**: When an HDR or Dolby Vision stream is transcoded down to SDR, render `✨ HDR10 ➔ SDR Tone Mapped` or `✨ Dolby Vision ➔ SDR Tone Mapped`.
+- **Hardware Acceleration & Power Consumption Badges**:
+  - **GPU Hardware Accelerated (`isHw`)**: Renders cyan badge with `<Zap className="h-2.5 w-2.5" />`: `{hwEngine} ({dec} ➔ {enc}) • Low Power` (e.g. `Nvidia NVENC (nvenc ➔ nvenc) • Low Power` or `Intel QuickSync • Low Power`).
+  - **CPU Software Transcode**: Renders rose badge with `<Flame className="h-2.5 w-2.5" />`: `CPU Software • High Power` (signaling heavy CPU core saturation).
+- **Multi-Edition & Transcode Media Selection**:
+  - When a movie or episode has multiple files on disk (e.g. a 4K UHD file and a 1080p file), Plex creates a dedicated transcode `Media` entry with `selected: true` and active streams under `Part[0].Stream`.
+  - Never naively read `s.Media[0]`. Always find the media marked `selected: true` or with `Part[0].selected`.
+  - The active video stream's `displayTitle` (e.g. `"1080p (HEVC Main)"` or `"4K HDR10+ (HEVC Main 10)"`) is Plex's canonical indicator of the actual source resolution and codec, preventing false 4K reporting when a 1080p edition is played.
+- **Transcode Speed, Throttle & Buffer Ahead Metrics**:
+  - **Speed Multiplier**: Renders emerald badge `⚡ 2.8x speed (Real-Time OK)` when speed $\ge 1.0x$, or pulsing rose badge `⚡ 0.8x speed (Slow)` when $< 1.0x$ and unthrottled.
+  - **Throttle Power Saving State (0.0x Speed is Healthy)**: When Plex pauses the transcoder because playback buffer is satisfied, Plex sets `throttled: true` and speed drops to `0.0x`. This is 100% HEALTHY (CPU/GPU at 0% idle power saving, never a red error!). Renders healthy emerald badge `⚡ 0.0x speed (Throttled • Power Saving)`.
+  - **Buffer Ahead Duration**: Displays buffer lead time calculated from `maxOffsetAvailable - viewOffset` (e.g. `(+2m 00s buffer ahead)`).
+
+---
+
+### 42. Stream Intelligence Time Range Filtering, Aggregation Engine & User Directory Sorting
+- **Single-Source-of-Truth Time Range Selector Bar**:
+  - Positioned prominently above Metric Summary Cards with responsive layout (`flex-col md:flex-row`).
+  - Supports preset filter pills: `All Time`, `Last 30 Days` (`30d`), `Last 60 Days` (`60d`), `Last 90 Days` (`90d`), and `Custom Range...` (`custom`).
+  - When `Custom Range...` is active, displays native start date and end date inputs (`type="date"`) with timezone-safe start-of-day (`00:00:00.000`) and end-of-day (`23:59:59.999`) clamping, paired with an "Apply" button.
+  - Active time range badge updates on Metric Summary Cards (Direct Play Rate and Hours Streamed) so administrators always have unambiguous visual context of the active time window.
+- **Full Database SQLite SQL Aggregations (Zero Truncation)**:
+  - Metric summary cards, user directory metrics, and library analytics must NEVER truncate records using arbitrary `take: 2000` or `take: 3000` limits.
+  - Aggregations are calculated dynamically in SQLite via `COUNT(*)`, `SUM(durationMs)`, `SUM(directPlay)`, `SUM(transcode)`, and `SUM(sharingAlerts)`, completing in $< 500$ms even on databases with $> 28,000$ historical sessions.
+- **User Directory Multi-Metric Sorting**:
+  - Administrators can sort users on-the-fly via a dedicated sort dropdown:
+    - **Most Plays** (`plays_desc`, default)
+    - **Most Watch Hours** (`hours_desc`)
+    - **Highest Transcode %** (`transcode_desc`)
+    - **Most Sharing Alerts** (`alerts_desc`)
+    - **Alphabetical (A-Z)** (`name_asc`)
+  - Backed by zero-latency client-side `useMemo` sorting and server-side ordering.
+- **User Telemetry Modal Range Toggling**:
+  - When inspecting a user in the User Telemetry modal, administrators can toggle between the active page date range (e.g. `Last 30 Days`) and `All Time` right in the modal header to instantly compare recent streaming habits against all-time totals.
+  - All numbers formatted with `toLocaleString()` for professional presentation.
+
+---
+
+### 43. Member Roadmap & Feature Announcements: User-Facing Beta Framing vs Admin Concealment
+- **User-Facing Roadmap Rule**:
+  - The public member Roadmap (`roadmap.md`, `getRoadmapText()`) is viewed by all authenticated members across DomsHomeLab.
+  - **Strict Admin Feature Concealment**: Never include internal administrative tools, security heuristics, or surveillance engines in the member-facing Roadmap (e.g. cluster Tautulli telemetry, concurrent multi-IP monitoring, household fraud heuristics, Docker fleet management).
+  - **Active Beta Notice**: Frame all newly released platform capabilities with an active beta notice inviting members to test features and report feedback or issues directly to Dominic / the administrator.
+  - **Core Member Focus Areas**:
+    - **What's New**: Unified 1-click media requests (movies, TV, ebooks, audiobooks), AI Server Assistant support bot, in-browser Kindle reader, 1-click Send-to-Kindle, floating audiobook player, Live Streams Doctor & Transcode diagnostics, personalized invite links, family sub-profiles (Kids & Living Room TV), custom library selection, and Radarr/Sonarr power user tools.
+    - **Coming Soon**: 4K HDR badges, "Leaving Soon" collections and countdown ribbons, smart hubs and custom media tagging, member referral rewards, 1-click subtitle search, personal year-in-review, and real-time server status indicators.
+
+---
+
+### 44. Universal Mobile Viewport Optimization & Layout Container Architecture
+- **Single Top-Level Main Layout Wrapper (`layout-wrapper.tsx`)**:
+  - The root layout already encapsulates all page content inside:
+    ```tsx
+    <main className="flex-1 overflow-y-auto p-2.5 sm:p-4 md:p-6 lg:p-8 3xl:p-10 w-full min-w-0">
+    ```
+  - **Zero Duplicate Nested Padding Rule**: Subpages (`src/app/**/page.tsx`) must NEVER wrap themselves in redundant `min-h-screen`, `bg-background`, nested `<main>` tags, or duplicate `p-4 sm:p-6` padding. Doing so strips mobile viewports (< 640px) of 30–50px of precious horizontal space and introduces HTML accessibility violations (multiple `<main>` elements).
+  - **Standard Subpage Root Container**:
+    ```tsx
+    <div className="flex-1 max-w-7xl 2xl:max-w-[1600px] 3xl:max-w-[2200px] 4xl:max-w-[2560px] mx-auto w-full min-w-0 space-y-4 sm:space-y-6 animate-in fade-in duration-500">
+    ```
+- **Mobile Action Stacking & Responsive Controls**:
+  - Header control bars, search inputs, instance selectors, and filters must adapt cleanly on small screens:
+    - Use `flex-col sm:flex-row gap-2 sm:gap-3` on control rows.
+    - Full width on mobile: `w-full sm:w-auto` or `w-full sm:w-48`.
+    - Stackable buttons: `flex-1 sm:flex-initial justify-center` so touch targets are large and easy to tap.
+  - Multi-button card actions (such as in Admin Scripts or Arr queues) must use `flex-wrap items-center justify-between gap-2` with `flex-1 min-w-[120px]` on primary action buttons so they never truncate or overflow outside the card boundaries.
+- **Universal Mobile Modal Sizing**:
+  - All modals, sheets, and dialogs must specify `w-[95vw]` to prevent clipping on 360px–420px mobile screens:
+    ```tsx
+    <DialogContent className="w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden p-4 sm:p-6">
+    ```
+  - Form footers in dialogs must use `flex-col-reverse sm:flex-row gap-2 sm:gap-0` with `w-full sm:w-auto` for action buttons.
+
+---
+
+### 46. Sidebar & Header Navigation Architecture (`SidebarNavContent`)
+- **DRY Desktop & Mobile Parity**:
+  - The navigation structure is unified in `SidebarNavContent` (`src/components/sidebar.tsx`) to prevent code duplication between Desktop (`<aside>`) and Mobile (`<Sheet>`).
+- **Header Structure & Typography**:
+  - App title: `DomsHomeLab` formatted with `whitespace-nowrap font-bold shrink-0 text-foreground` ensuring zero truncation across mobile and desktop scaling.
+  - Vertical lockup: Compact `<BuildBadge variant="compact" isAdmin={isAdmin} />` mounted directly below the title.
+- **Admin-Only Build Telemetry Gating**:
+  - Passing `isAdmin={isAdmin}` strictly gates the interactive build modal, commit SHA copying, and workflow links to Administrators.
+  - Non-admin users see a static indicator (`cursor-default select-none`) with no modal mounted in the DOM.
+- **Vibrant Signature App Colors**:
+  - All icons and active highlights preserve recognizable brand accents:
+    - Plex: Amber (`text-amber-400`)
+    - Sonarr: Sky (`text-sky-400`)
+    - Radarr: Yellow (`text-yellow-400`)
+    - Tautulli: Flame Orange (`text-orange-400`)
+    - Glances: Purple (`text-purple-400`)
+    - Docker Fleet: Cyan (`text-cyan-400`)
+    - User Scripts: Emerald (`text-emerald-400`)
+    - Tickets: Rose (`text-rose-400`)
+- **AI Assistant Hero Card**:
+  - Full-width hero container with dual-tier typography, glowing bot icon, and live pulse status badge (`24/7 AI Diagnostic Engine Active`).
+- **Top-Level Curation Studios Section**:
+  - Rendered as first-class, unindented `NavItem` elements with zero accordion dropdowns and pixel-perfect alignment across Desktop and Mobile sidebars.
+- **System Settings & Live System Logs Navigation**:
+  - Rendered as dedicated, full-width NavItem components with Live System Logs positioned directly below System Settings jumping to /settings?tab=logs.
+
+---
+
+### 46. Multi-Platform Media Server Auto-Provisioning & Streaming Password Architecture
+- **Plex OAuth vs Jellyfin/Emby Password Reality**:
+  - DomsHomeLab members authenticate via Plex OAuth and have no local passwords stored in Portalarr.
+  - Jellyfin and Emby accounts created via `POST /Users/New` initialize with a **BLANK (no password)** default state.
+  - Setup Guide Step 2 clearly explains this: members sign into Jellyfin client apps with their portal username and **leave the password field blank**.
+- **Instant Auto-Provisioning on Modal Mount**:
+  - Opening the setup guide modal (`MediaServerSetupGuideModal`) immediately invokes `ensureUserMediaServerProvisionedAction(serverId)` in the background.
+  - If the user does not yet exist on Jellyfin/Emby, Portalarr automatically provisions the user, configures library access policies, and saves `jellyfinUserId` / `embyUserId` in `prisma.user`.
+- **Dedicated Streaming Password Manager**:
+  - Inside Step 2 of the setup guide, users can optionally set a dedicated streaming password (min 4 characters) directly within Portalarr via `setUserMediaServerPasswordAction`.
+  - Portalarr pushes the new password to the Jellyfin API (`POST /Users/{id}/Password`) using admin API credentials, without requiring members to access the Jellyfin web client settings.
+- **Reverse Proxy Header Stripping & Dual-Mode Auth Fallback**:
+  - Reverse proxies (like Nginx Proxy Manager and Cloudflare) frequently strip non-standard HTTP request headers like `X-Emby-Token` or `Authorization`.
+  - `mediaServerFetch` implements automatic query parameter fallback: if header authentication returns HTTP 401 or network errors, it retries transparently with `?api_key=${apiKey}` appended to the URL.
+- **Two-URL Dual-Routing Architecture (Public Client URL + Internal LAN Fallback URL)**:
+  - **Public Client URL (`url`)**: The public reverse proxy address (e.g. `https://jellyfin.domshomelab.com`) presented to members in the Setup Guide and used by remote player apps, as well as pinged by Portalarr to monitor external reachability.
+  - **Internal LAN Fallback URL (`internalUrl`)**: The direct local network address (e.g. `http://192.168.1.87:8096`) used by Portalarr for high-speed backend API operations (user provisioning, password updates, library scans, and Quick Connect authorization) to completely bypass reverse proxy header stripping, SSL overhead, and NAT loopback.
+  - **Resilient Fallback**: `resilientMediaServerFetch` automatically tries the internal LAN URL first if available, and transparently falls back to the public URL.
+- **Native Quick Connect TV & Device Pairing (`authorizeMediaServerQuickConnectAction`)**:
+  - Embedded in Step 2 of `MediaServerSetupGuideModal`: allows members to enter the 6-character Quick Connect code displayed on smart TVs, Apple TV (Swiftfin), Android TV, Roku, or Fire TV.
+  - Portalarr calls `POST /QuickConnect/Authorize?Code={code}&UserId={userId}` using admin credentials and resilient internal LAN routing, immediately logging the TV into the member's account with zero remote typing.
+  - Includes a direct fallback button opening the Jellyfin Web Quick Connect page (`${resolvedUrl}/web/index.html#!/quickconnect.html`).
+
+---
+Before completing any task, execute:
+1. `cmd /c "npm test"`: Full 18+ suite verification (`scripts/verify-all.ts`), 0 failures.
+2. `cmd /c "npm run build"`: Next.js production build, 0 TS errors, 100% clean.
+3. Skills & Documentation Sync: Update `.agents/skills/` and `.md` files with architectural learnings.
+4. SemVer Version Increment & Git Deployment Push: Increment version in `package.json` according to SemVer (PATCH `+1` for fixes/polish, MINOR `+1` for features), commit with freshly incremented `[v<version>]` prefix, push strictly to `origin/main` (Beta). NEVER push to `stable` unless the user explicitly instructs.
+
+---
+
+### 45. Unified Payment Pricing, Prorated Billing & Referral Discount Alignment
+- **Standard Pricing Fallbacks**:
+  - **Tier 1 (Standard)**: `$180.00/year` (averaging `$15.00/mo` for annual Rest-of-Year proration and referral reward credits) and `$17.50/month` for the standalone Monthly Plan.
+  - **Tier 2 (VIP / Managed Support)**: `$240.00/year` (averaging `$20.00/mo` for annual proration and referral reward credits) and `$25.00/month` for the standalone Monthly Plan.
+  - Never fall back to `$15` for standalone monthly plan displays in `PaymentMethodsGrid`, `PaymentQrModal`, `TrialDashboardView`, `/join`, `/pending`, or `/profile`; always use `config?.monthlyPrice ?? 17.50`.
+- **Consistent Prorated Quotes & Payment Prefilling**:
+  - For active Trial accounts on `/` and `/profile`, always pass `trialEndDate: user?.trialEndsAt` to `calculateProratedBilling` so both views display identical prorated Rest-of-Year and Rest-of-Month dollar amounts.
+  - For expired/suspended accounts reactivating on `/pending`, pass `trialDays: 0` to `calculateProratedBilling` so proration begins immediately from today rather than 14 days in the future.
+  - On `/profile#billing`, pass the user's net effective amount due (accounting for trial proration, converted referral discounts, and `user.accountCredit`) into `<PaymentMethodsGrid amount={...} cadence={...} />`.
+- **Threshold Engine & Scraper Reconciliation (`evaluatePaymentThreshold`)**:
+  - Automatically honors active referral discounts (`effectiveYearlyTarget = yearlyPrice - referralDiscount`), Rest-of-Year prorated annual quotes (within `$1.00` tolerance), and first-month prorated standalone monthly quotes (within `$0.50` tolerance) as full subscription fulfillments.
+
+---
+
+### 46. Dispatched Email Audit Log Architecture (`/settings/access?tab=sent-emails`, `SentEmailAuditLog`, `SentEmailLog`)
+- **6-Tab Access Control Navigation**:
+  - The Access Control directory (`src/app/settings/access/page.tsx`) features 6 dedicated tabs organized in a balanced `grid-cols-2 sm:grid-cols-3 lg:grid-cols-6` layout:
+    1. **User Directory**: Member directory, roles, and live Plex library shares.
+    2. **Referrals & Leaderboard**: Ambassador referral ranks, rewards, and credits.
+    3. **Payment & Onboarding**: Trial safe pool, automated proration, and pricing tiers.
+    4. **Email Scraper**: IMAP/Gmail automated payment scraping and ledger reconciliation.
+    5. **Approval Queue**: Staged live PMS modifications and staged user-facing emails.
+    6. **Sent Emails (`sent-emails`)**: Complete outbound email audit log displaying dispatch modes, delivery status, and full message previews.
+- **Automatic vs Approved & Sent Distinction (`SentEmailLog`)**:
+  - **Sent Automatically (`sendMode: "AUTOMATIC"`)**: Displays a purple/indigo badge (`bg-purple-500/15 text-purple-400 border-purple-500/40`) with `Bot` icon indicating messages triggered autonomously by background system workflows (welcome emails, automated renewal notices, system alerts, test emails via `sendTestEmailAction`, template preview tests, and scheduled digests).
+  - **Approved & Sent (`sendMode: "APPROVED_AND_SENT"`)**: Displays an emerald badge (`bg-emerald-500/15 text-emerald-400 border-emerald-500/40`) with `ShieldCheck` icon indicating messages that were staged in the Action Approval Queue and vetted by an administrator prior to live SMTP transmission. Displays approver identity (`Approved by "Admin"`) and exact approval timestamp.
+  - **Comprehensive Outbound Logging**: 100% of outbound platform email paths (automated workflows, approved queue dispatches, test connection checks via Resend or Custom SMTP, template previews, and admin approval notifications) record directly to `SentEmailLog` to ensure the audit log is never falsely empty.
+- **Audit Metrics & Telemetry Grid**:
+  - **Total Dispatched**: Platform-wide outbound email volume with `Mail` icon in sky blue (`text-sky-400`).
+  - **Sent Automatically**: Count of autonomous notifications in purple (`text-purple-400`).
+  - **Approved & Sent**: Count of vetted dispatches in emerald (`text-emerald-400`).
+  - **Delivery Failures**: Count of SMTP rejections or network errors in rose (`text-rose-400`).
+- **Inspection Modal & Operator Controls**:
+  - **Rendered Message Preview**: Sandboxed HTML view displaying the exact layout, styles, and branding received by the recipient.
+  - **Plaintext View & Audit Metadata**: Displays raw plain text body, log IDs, SMTP errors, and template identifiers.
+  - **1-Click Resend (`resendSentEmailAction`)**: Allows administrators to re-dispatch any previous message directly to the recipient via SMTP with immediate visual feedback.
+  - **Clean Pruning**: Supports individual log deletion and platform-wide audit log clearing.
+
+---
+
+### 41. Universal Floating Suggest Fix Launcher & Decoupled SMTP Settings Architecture
+- **Floating Suggest Fix Launcher (`FloatingSuggestFixLauncher` & `SuggestFixModal`)**:
+  - Mounted globally in `src/components/layout-wrapper.tsx` at `fixed bottom-16 right-4 sm:bottom-20 sm:right-6 z-40` for all authenticated members (positioned just above the AI Assistant pill).
+  - Explicit canonical label: **`Suggest Fix`** with `Wrench` icon (`text-amber-200`) and glowing purple/indigo pill gradient (`from-amber-600 via-purple-600 to-indigo-600`).
+  - Dismissible with `X` button and programmatically operable via `window.dispatchEvent(new CustomEvent("open-suggest-fix"))`.
+- **Decoupled SMTP & Resend Settings Architecture (`src/app/settings/page.tsx`)**:
+  - Resend credentials (`resendApiKey`, `resendFrom`) and Custom SMTP credentials (`customSmtpHost`, `customSmtpPort`, `customSmtpUser`, `customSmtpPass`, `customSmtpFrom`) are completely isolated in separate database columns and UI form states.
+  - **Active Outbound Email Engine Selector Bar**: Administrators can toggle which outbound engine is active using dedicated selector buttons: `Resend (Domain: @domshomelab.com)` with purple styling and `Custom SMTP (Gmail / Outlook / SES)` with sky-blue styling, each displaying real-time `[ ACTIVE ]` vs `[ Standby ]` indicators.
+  - **Panel Status Badges & Quick Set-Active Controls**: Each provider panel features an `Active Engine` emerald pulse badge or a direct 1-click `Set Active` action button.
+  - **Provider-Aware Test Connection (`sendTestEmailAction(emailProviderMode)`)**: When an administrator clicks `Test Connection (Resend)` or `Test Connection (Custom SMTP)`, the action tests the explicitly chosen provider mode rather than whatever was previously saved in the generic SMTP fields. Resend tests route strictly through `smtp.resend.com:465` with `notifications@domshomelab.com`, while Custom SMTP routes through the configured custom host/credentials.
+  - Switching between provider tabs never mutates or overwrites the other provider's credentials, preventing API keys and passwords from overwriting each other.
+  - Active provider mode synchronizes outbound SMTP parameters while leaving both credential sets permanently preserved.
+
+### 42. Outbound Kindle Sender Update Notice & Ebooks Request Tab Banner (`KindleSenderNoticePopup`, `KindleSenderUpdateBanner`, `KindleSenderUpdateModal`)
+- **Targeted Trigger Architecture (`KindleSenderUpdateBanner`)**:
+  - Rendered on the Ebooks request tab in Media Requests (`src/components/seerr/discover-hub.tsx` when `activeTab === "ebooks"`) and Book Library (`src/app/library/page.tsx`).
+  - For existing Kindle users whose accounts require the outbound sender update (`user.kindleSenderUpdateAcknowledgedAt === null`), automatically displays the action-required update banner and modal.
+  - Confirming writes `user.kindleSenderUpdateAcknowledgedAt = new Date()` via `acknowledgeKindleSenderUpdateAction()`, permanently dismissing it.
+- **Clickable Amazon Settings Link**:
+  - Displays `https://www.amazon.com/hz/mycd/myx#/home/settings/payment` as an active, clickable link (`target="_blank" rel="noopener noreferrer"`) in modal descriptions, step-by-step instructions, and tab banners.
+
+### 43. Send-to-Kindle First-Time Setup Guide & Onboarding Architecture (`KindleSetupGuideModal`, `KindleSenderUpdateBanner`)
+- **Automatic Setup Detection**:
+  - Whenever a member without Send-to-Kindle configured (`!user.kindleEmail` or `user.kindleEmail === "DIRECT_DOWNLOAD"`) accesses the **Ebooks requests tab** in Media Requests (`/requests?tab=ebooks` or `/discover?tab=ebooks`), the **Book Library** (`/library`), or clicks **Request Ebook** on any book card (`book-detail-modal.tsx`), the system guides them through complete setup.
+- **Interactive 3-Step Setup Wizard (`KindleSetupGuideModal`)**:
+  1. **Step 1: Find Kindle Email**: Direct clickable link to Amazon Personal Document Settings (`https://www.amazon.com/hz/mycd/myx#/home/settings/payment`) to find their `@kindle.com` address.
+  2. **Step 2: Authorize Homelab Sender**: Shows `kindle@domshomelab.com` with 1-click clipboard copy (`copied ? "Copied!" : "Copy Email"`).
+  3. **Step 3: Direct In-Modal Save**: Inline input with real-time `@kindle.com` validation and a 1-click **"Save & Activate Kindle"** button calling `updateCurrentUserKindleEmail(cleanEmail)` to immediately activate wireless delivery without leaving the page.
+- **Full Viewport Responsive Modals & Footers**:
+  - Base `DialogContent` standardizes `max-h-[92vh] overflow-y-auto scrollbar-thin` to ensure no modal clips vertically in landscape orientation or on small mobile devices.
+  - Dialog footers strictly follow `flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5` with `w-full sm:w-auto shrink-0 whitespace-nowrap` on action buttons to prevent text wrapping or truncation on narrow screens (<375px).
+
+### 44. End-User Plain-English Terminology Standards (Zero Jargon Policy)
+To ensure Portalarr remains approachable for non-technical family members, trial accounts, and casual users, user-facing views must strictly adhere to plain-English replacements:
+- **Build & Branch Telemetry (`BuildBadge`)**: Non-admins seeing `variant="full"` are shown `Beta Preview • v<version>` or `Production • v<version>`. Git branch names (`(main)`, `(stable)`), commit short hashes (`[90fb926]`), and workflow run badges are strictly restricted to administrators.
+- **Streaming Quality vs Direct Play**:
+  - Replace "100% Direct Play" with **"Original Quality (Zero Buffering)"** or **"Maximum Quality"**. Plex device apps label their setting "Maximum / Original Quality", so users cannot find a setting called "Direct Play".
+  - Replace "4K Remux Ready" with **"Maximum 4K HDR Quality"**.
+  - Replace "1080p High Bitrate Ready" with **"Crisp 1080p Full HD"**.
+- **Server Processing vs Transcode Doctor**:
+  - Transcode Doctor modal is presented to members as **"Stream Quality & Playback Diagnostics"**.
+  - Server transcode decisions are presented as **"Original Quality (Direct Play)"**, **"Optimized via Hardware Acceleration"**, or **"Server Transcoding Active"** under a clean **"Server Processing"** header.
+- **AI Assistant Labels**:
+  - Live Telemetry tab ➔ **"Live Stream Stats"**.
+  - Server Disk & Probes tab ➔ **"Server Health Check"**.
+  - NVENC HW badge ➔ **"GPU Accelerated"**.
+  - Video/Audio Codec ➔ **"Video Format"** / **"Audio Format"**.
+  - Synthetic probes / byte-range reads ➔ **"Live diagnostic tests measuring drive read performance and streaming health"**.
+- **Daemon & Backend App Names**:
+  - In media requests and detail modals, avoid surfacing raw *Arr names ("Sonarr", "Radarr", "Prowlarr", "Tautulli"). Use **"Movie Manager"**, **"TV Manager"**, **"Stream Monitor"**, and **"Online Catalogs / Release Sources"**.
+  - Button text: "Re-Search Movie in Radarr" ➔ **"Re-Search Releases"**.
+- **System Email Notices & Templates**:
+  - Replace raw protocol names: "SMTP server rejected the delivery" ➔ **"Amazon's email service rejected the delivery"**.
+  - Replace Usenet/torrent indexer terms: "when indexers or sources become available" ➔ **"when new releases or sources become available"**.
+  - Replace homelab terms: "transcoding allocation" ➔ **"high-priority dedicated streaming allocation for smooth playback anywhere"**.
+  - Standardize streaming terminology: "Direct Play" ➔ **"Original Studio Quality"** / **"Original Quality"**.
+  - Diagnostic references: "Stream Quality Doctor" ➔ **"Stream Diagnostics & Device Setup Guides"**.
+
+### 45. User Media Server & Library Access Verification Standards (Zero False-Positive Permissions)
+To prevent confusing false positives on user settings and profile pages:
+- **Audiobooks Plex Library Access Gating (`getUserAudiobooksLibraryAccessAction`)**:
+  - Must strictly verify whether the user actually has the Plex Audiobooks library granted via active live Plex share (`livePlexShareKeys`) or explicit local library access.
+  - The presence of the `audiobooks` add-on in `enabledAddons` alone must NEVER cause "Plex Library Granted" or the toggle switch to report true if Plex has not actually granted the library.
+  - Local web bookshelf libraries (`prisma.library`) with wildcard `allowedUsers: "*"` must NEVER cause "Plex Library Granted" or switch check to report true.
+- **Multi-Platform Media Servers & Libraries (`getUserMediaServersAndLibrariesAction`)**:
+  - Automatically queries live Plex friend shares (`getUserPlexSharedLibraries`) to match per-server shares so all active servers (e.g. Main Server, Kids Server) and their exact shared sections properly evaluate to `isSelected: true`, completely eliminating single-server alphabetical fallback bugs.
+  - Secondary media platforms (Jellyfin and Emby) must never default to `isServerSelected: true` or have libraries checked for users who have not opted in, been granted explicit access (`allowedServerKeys`), or been provisioned on the remote server (`jellyfinUserId` / `embyUserId`).
+  - When a server is unselected/disabled, its individual libraries must evaluate to `isSelected: false` with zero selections returned in `selectedMediaLibraryKeys`.
+  - On update (`updateUserMediaServersAndLibrariesAction`), preserves per-server machine identifiers (`${srvMachineId}:${secId}`) when dispatching to `syncUserPlexShareInternal` to ensure multi-server shares are never overwritten or collapsed onto a single server.
+
+---
+
 As the Portalarr frontend evolves or new design decisions are finalized:
 1. **Adding a New UI Rule**: Add the rule to the relevant section above or under `references/`.
 2. **Tweaking Component Defaults**: Update the corresponding reference file in `references/`.
@@ -962,3 +1425,92 @@ Detailed guide on updating: [updating-this-skill.md](./references/updating-this-
 - [Form & Input Patterns](./references/form-and-input-patterns.md)
 - [Theme & Color Tokens](./references/theme-and-color-tokens.md)
 - [Updating This Skill](./references/updating-this-skill.md)
+### 46. "What's New in DomsHomeLab" Role-Based Gating & Zero-Jargon Protocol
+- **Source of Truth (`roadmap.md`)**:
+  - Maintained with clean, approachable, plain-English release highlights and coming soon items.
+  - Features designated for administrators must be marked with `(Admin)` so they are programmatically excluded for all non-admins.
+  - Features designated for super users must be marked with `(Super Users)` so they are excluded for standard users and trial accounts.
+  - Zero raw jargon: strictly replace "Direct Play" with "Original Quality (Zero Buffering)", "Quality Doctor" with "Stream Diagnostics", "playback telemetry" with "stream health stats", and avoid daemon/tool names ("Radarr", "Sonarr", "Dispatcharr").
+- **Dynamic Role Filtering (`filterRoadmapByRole` in `src/components/whats-new-modal.tsx`)**:
+  - **Administrator View (`role === "ADMIN"`)**: Full visibility into all features, administrative auditing tools, and operational roadmaps.
+  - **Super User View (`role === "SUPER_USER"`)**: Excludes any administrative items, action approval queues, or outbound audit logs, but retains power-user queue and release management.
+  - **Standard User View (`role === "USER"`)**: Retains full member perks (Ebooks & Audiobooks subsystem with reading/Kindle features, multi-platform media servers, family sub-profiles, poster curation badges, and Live TV preview) while excluding admin tools and super user management.
+  - **Trial Account View (`role === "TRIAL"`)**: Excludes full-member exclusive features (Ebooks & Audiobooks subsystem including indented child items, multi-platform media servers, family profiles, poster curation badges, and Live TV) and smoothly adapts Unified Media Requests to `(Movies & TV Shows)`.
+  - **Automatic Jargon Sanitation Pass**: Automatically translates any residual technical jargon ("Direct Play", "Quality Doctor", "playback telemetry", "homelab streaming", "Dispatcharr") into clean, friendly plain English.
+  - **Mandatory Pre-Push Audit**: Verified automatically in Suite 22 of `scripts/verify-all.ts` across all 4 role views before every deployment push.
+
+### 47. Guide Surfaces & Coming Soon Alignment Standard
+- **Zero Misrepresentation Policy**: All user-facing documentation surfaces (`USER_GUIDE.md`, `user_guide_ebooks.md`, `src/app/guides/page.tsx`, `src/components/feature-guide-modal.tsx`, `src/app/join/page.tsx`, `src/lib/discord/discord-bot.ts`, `src/lib/email-templates.ts`) must strictly mirror the roadmap's Coming Soon status for upcoming platform features (e.g. Member Referral Rewards, Family Sub-Profiles, Persistent Floating Web Audio Player, Enhanced Curation & Poster Badges).
+- **Mandatory (Coming Soon) Tagging**: Upcoming features must always be labeled with `(Coming Soon)` or `*(Upcoming Feature — Currently in Development)*`, ensuring members and visitors are never misled into believing an in-development feature is already operational.
+
+### 48. Cloudflare Zero Trust Strict Admin Path Isolation
+- **Admin-Only Blocking Architecture**: Cloudflare Zero Trust blocks access strictly to designated Admin-Only paths (`/settings*`, `/admin*`, `/curation*`, `/tautulli*`, `/streams*`, `/api/admin*`, `/api/system*`, `/api/debug*`, `/api/curation*`, `/api/users*`, `/api/books/upload*`). All other paths are open at the edge and handled by Portalarr's native JWT session management.
+- **Strict Prohibition of User/Super User Features Under Admin Prefixes**: No user-facing or super-user-facing page, button, link, or API fetch may ever target an admin-only path.
+- **Canonical `/profile` Route**: User profile, server selection, and password management reside strictly at `/profile`. Any legacy hits to `/settings/profile` are automatically redirected to `/profile` on the server. Non-admins must never fetch `/api/users` on `/library` or any other view.
+
+
+### 49. Dual Roadmap Architecture: User-Facing Roadmap vs Developer Backlog
+- **Separation of Concerns**:
+  - **User-Facing Roadmap (`roadmap.md`)**: Publicly accessible and tailored across 4 role views (`USER`, `TRIAL`, `SUPER_USER`, `ADMIN`). Formatted in approachable, plain English zero-jargon language highlighting platform capabilities, media features, and new enhancements.
+  - **Developer Maintenance Backlog (`docs/DEV_ROADMAP.md`)**: Strictly restricted to Administrators. Contains technical maintenance tasks, background scheduler mutexes, edge policies, Docker socket optimizations, API sync pipelines, and database migrations.
+- **UI Interaction & Gating**:
+  - `WhatsNewModal` (`src/components/whats-new-modal.tsx`) provides an integrated dual-tab switcher (`🚀 User Roadmap` vs `🛠️ Developer Roadmap`) mounted strictly for verified Administrators (`userRole === "ADMIN"`).
+  - Dedicated `[🛠️ Dev Roadmap]` button (`DevRoadmapModal`) is mounted on the Home Dashboard (`src/app/page.tsx`) header lockup and inside `AdminDetailedStreams` (`src/components/admin-detailed-streams.tsx`).
+  - **Settings Management**: In `/settings?tab=announcements`, administrators can edit, preview, and save both `roadmap.md` and `docs/DEV_ROADMAP.md` via a dual-tab Markdown editor with dirty state tracking.
+  - **Container Packaging**: `Dockerfile` copies `/app/docs` to the runtime container so developer maintenance logs persist in Docker homelab deployments.
+
+
+### 50. Live TV & Channel Lineup UI Architecture
+- **Origin Channel Logo Proxy (`/api/iptv/logo/[id]`)**: To prevent Mixed Content (`http://` on `https://`) blocks and unroutable private LAN IP (`192.168.x.x`) failures on remote client devices, channel logos from Dispatcharr are proxied through Portalarr's HTTPS origin with 7-day browser caching (`Cache-Control: public, max-age=604800, stale-while-revalidate=86400`).
+- **Fail-Safe Card Logo Fallback**: `ChannelCard` components dynamically sanitize raw upstream URLs to the proxy path, handle `onError` via component state, and render a semantic Lucide genre icon (e.g. `Trophy`, `Tv`, `Newspaper`, `Baby`, `Film`) if the image fails or is unavailable, preventing blank or broken cards.
+- **Dynamic Media Market Customization Shelves**: Displays sticky anchor feeds for the host server market (Dallas CBS/NBC/FOX/ABC/CW) alongside a client-selected or IP-detected local media market shelf, college sports (NCAA), and NFL showcase carousels.
+- **DVR Stream Reservation Controls**: Dedicated stream headroom reservation prevents concurrent client live TV viewers from starving scheduled Plex DVR tuner recordings, configurable by homelab administrators down to 0 if DVR recording is not utilized.
+
+
+### 51. Member Live TV Access & Platforms Management UI (`admin-iptv-client.tsx`)
+- **Plex 3-Tier Restriction Badge Lockup**:
+  - `Live TV + DVR` (Emerald `bg-emerald-500/20 text-emerald-300`): Displayed when user has both live channel and DVR privileges (`Allow Live TV and DVR access` in Plex).
+  - `Live TV Only` (Sky Blue `bg-sky-500/20 text-sky-300`): Displayed when user has channel tuning without DVR recording privileges (`Allow Live TV only` in Plex).
+  - `⚠️ Missing Live TV & DVR` (Rose `bg-rose-500/20 text-rose-300`): Displayed when user lacks tuner and DVR access (`No Live TV and DVR access` in Plex).
+- **Hierarchical Action Buttons**:
+  - `[Live TV: ON]` / `[Enable Live TV]`: Toggles live stream privileges. Revoking Live TV automatically revokes DVR privileges.
+  - `[DVR: ON]` / `[Enable DVR]`: Toggles DVR recording privileges. Granting DVR automatically ensures live tuner privileges are active.
+  - `[Free Slot]`: Ghost button demoting the user to a regular Plex friend to free up one of the 14 shared Plex Home slots.
+- **Card Status Outlines**: Cards are outlined with `border-rose-500/40 bg-rose-500/5` when a Plex Home member lacks live privileges, and `border-amber-500/30 bg-amber-500/5` when identified as an inactive rotation candidate.
+
+
+### 52. Secondary & Linked Notification Inboxes (`/profile`)
+- **Multi-Inbox Notification Architecture**:
+  - Homelab members frequently request that their spouse, partner, or family member receive specific notifications (e.g. billing receipts or media request approvals) without sharing account passwords.
+  - In `/profile` under **Secondary & Linked Inboxes**, members can link additional notification emails stored in `prisma.linkedNotificationEmail`.
+  - **Granular Category Routing**: Each linked inbox has independent category toggles (`BILLING`, `REQUESTS`, `MAINTENANCE`).
+  - **User-Level Notification Preference Second Gate**: User-level notification settings in `user.emailPreferences` act as an absolute second gate. If the account owner opts out of a category (e.g. Media Available alerts), dispatches to both the primary inbox and any linked inboxes for that category are strictly suppressed.
+
+
+### 53. User Directory Sorting & Account Age (`/settings?tab=access`)
+- **Multi-Column Directory Sorting**:
+  - In the User Management panel (`/settings?tab=access`), administrators can sort members by `lastLogin` (active vs inactive), account creation date, username, role, or storage footprint.
+  - Dynamic `lastLogin` tracking in `createSession()` updates automatically on password sign-in, Plex SSO, and active site visits.
+  - Active vs Inactive indicators display relative age (`Joined: MMM d, yyyy • Last Login: 4d ago` vs `Never`).
+
+
+### 54. First-Time Send-to-Kindle Setup Guide & Amazon Approved Sender Notice
+- **Amazon Approved Personal Document List Protection**:
+  - Amazon Kindle devices reject `.epub` deliveries from unapproved sender addresses with a silent delivery failure.
+  - Portalarr dispatches ebooks from `books@domshomelab.com`.
+  - **Auto-Popup Sender Notice Modal**: On the eBooks request tab and book library shelf, a setup guide pops up for first-time visitors with a 1-click link to their Amazon Personal Document Settings (`amazon.com/myk`), guiding them to add `books@domshomelab.com` to their Approved Personal Document E-mail List.
+  - **Persistent Dismissal**: Once acknowledged, dismissal is stored in `localStorage` (`kindleSenderNoticeDismissed`) so members are not repeatedly interrupted.
+
+
+---
+
+## 🚨 Mandatory Task Completion Protocol (Strict SemVer)
+
+To guarantee 100% reliability, quality control, and consistency, the following 5-step protocol MUST be executed at the end of every task or feature change before considering the work complete:
+
+0. **Step 0: Read Skill Upfront**: Call `read_file` on the relevant `SKILL.md` before writing code.
+1. **Step 1: Integration Testing**: Execute `cmd /c "npm test"` to run the verification suite (`scripts/verify-all.ts`). All test suites must pass (0 failures).
+2. **Step 2: Production Build Verification**: Execute `cmd /c "npm run build"`. Ensure 100% clean compilation, zero TypeScript errors, and zero Turbopack runtime errors.
+3. **Step 3: Edge Security & Cloudflare Policy Audit**: Whenever ANY page route (`src/app/**/page.tsx`) or API route (`src/app/api/**/route.ts`) is created, moved, or updated, register it in `src/lib/edge-policy-paths.ts` and inform the user.
+4. **Step 4: Skills & Documentation Sync**: Review and update relevant `.agents/skills/` documents to record any new UI patterns, API contracts, formulas, or operational guidelines **BEFORE** committing.
+5. **Step 5: SemVer Version Increment & Git Deployment Push**: Increment version in `package.json` according to SemVer (PATCH `+1` for fixes/polish, MINOR `+1` for features), stage all changes (`git add -A`), commit with freshly incremented semantic version prefix (`[v<version>] feat/fix(scope): message`), push strictly to `origin/main` (Beta). NEVER push to `stable` unless the user explicitly instructs.

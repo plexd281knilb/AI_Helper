@@ -162,8 +162,8 @@ All Discord embeds generated via `generateDiscordEmbed(key, customData)` in [`sr
 
 ## Web Account Linking & Verification Workflows
 
-### 1. Member Self-Service Linking (`/settings/profile`)
-1. User navigates to **Account Settings → Profile → Discord Community & Role Sync**.
+### 1. Member Self-Service Linking (`/profile`)
+1. User navigates to **User Profile → Discord Community & Role Sync** at canonical route `/profile`. Non-administrators never access `/settings/profile` as `/settings*` is strictly blocked at the Cloudflare Zero Trust edge.
 2. If not yet in the Discord server, user clicks **"Join Discord Community"** (`https://discord.gg/KNvUSmPtD3`).
 3. User enters their Discord handle or username (e.g. `username` or `username#1234`).
 4. System invokes `linkMyDiscordAccountAction(query)` in [`src/app/discord-actions.ts`](file:///C:/Users/Dom/Documents/GitHub/portalarr/src/app/discord-actions.ts).
@@ -202,4 +202,60 @@ To ensure test suites (`npm test` / `verify-all.ts`) never post messages, dispat
    - `sendSeerrDiscordWebhook`: Silently returns `{ success: true }` without dispatching webhooks or bot messages if `PORTALARR_TEST` is set or if the request title/requester contains `"test"`.
    - `sendSeerrEmailNotification`: Silently returns `{ success: true }` during test runs.
 3. **Auto-Download Decoupling:** `dispatchBookOrAudiobookRequest` skips background `autoDownloadBookRequest` loops in test runs to prevent async race conditions during bulk approval/decline verification.
-4. **Test Discord Guild:** When testing bot features in staging, administrators can bind dedicated test servers (e.g., Guild ID `1559231517325135892`) in Settings → Discord. Ensure the bot application is invited with Administrator permissions (`permissions=8&scope=bot%20applications.commands`).
+4. **Test Discord Guild & Staging Isolation:**
+   - Dedicated test server: **Test Plex Server** (`1559231517325135892`). Full architectural map in [`DISCORD_TEST_SERVER.md`](file:///C:/Users/Dom/Documents/GitHub/portalarr/DISCORD_TEST_SERVER.md).
+   - Production server: **Plex Group** (`553667067363196941`). Full architectural map in [`DISCORD_LIVE_SERVER.md`](file:///C:/Users/Dom/Documents/GitHub/portalarr/DISCORD_LIVE_SERVER.md).
+   - Bot application must be invited with Administrator permissions (`permissions=8&scope=bot%20applications.commands`).
+   - All website parity features (24/7 AI Assistant links, "Suggest a Fix" guidance, My Plex Hub speed test, Kindle Wi-Fi sync, Leaving Soon 14-day grace period) are staged and verified on the Test Server first before safe promotion to production.
+
+---
+
+## Live Status Channel Resolution & Auto-Provisioning (`resolveOrProvisionStatusChannel`)
+
+Portalarr v1.0.1 provides resilient, multi-tiered resolution for the live platform status embed and outage alert channel:
+
+1. **Explicit Setting Check**: Verifies if `Settings.discordStatusChannelId` is set and exists in the target guild.
+2. **Candidate Channel Name Search**: If not set or invalid, searches guild text channels for candidates in priority order:
+   - `#system-status`
+   - `#server-uptime`
+   - `#server-status`
+   - `#status`
+   - `#uptime`
+3. **Auto-Provisioning Fallback**: If no candidate exists in the Discord server, automatically creates `#server-uptime` under category `HELP & TICKETS` with read-only permissions for `@everyone`.
+4. **Automatic Persistence**: Automatically saves the resolved or newly provisioned channel ID to `Settings.discordStatusChannelId` in `prisma.settings`.
+
+---
+
+## Automated Outage & Incident Alert Dispatching (`dispatchDiscordOutageNotification`)
+
+Portalarr's uptime and system health tracker monitors physical hosts, Plex Media Servers, Glances, Tautulli, download clients, and Servarr applications. When reaching failure thresholds or recovering, rich status embeds are automatically dispatched to Discord:
+
+- **Dual Dispatch Mechanism**:
+  1. **Custom Discord Webhooks**: Configured via `Settings.discordWebhookUrl` or `config.discordWebhookUrl`. Posts directly to any user-designated Discord channel via webhook URL.
+  2. **Native Discord Bot & Status Cockpit**: Configured via `Settings.discordBotToken` and dynamically resolved status channel ID (`#server-uptime` / `#system-status`). Uses `postDiscordMessage` to transmit real-time outage alerts directly into the status cockpit channel.
+- **Visual Alert Embed Standards**:
+  - **Service Failure (`STARTED`)**:
+    - Color: `#EF4444` (Crimson / Red, `0xEF4444`).
+    - Title: `🚨 Service Outage Detected: {targetName}`
+    - Description: Details failure cause (e.g., connection timeout, HTTP 500 error, unreachable socket), target host, and start timestamp.
+  - **Service Recovery (`RESOLVED`)**:
+    - Color: `#10B981` (Emerald / Green, `0x10B981`).
+    - Title: `✅ Service Restored: {targetName}`
+    - Description: Summarizes total outage duration (e.g. `Downtime: 4m 12s`) and confirms healthy round-trip ping latency.
+- **Diagnostic Testing (`testDiscordOutageAlertAction`)**:
+  - Administrators can simulate an outage notification directly from the Admin Monitoring Cockpit (**Tab 3: Outages & Automated Incident Alerts**) to verify Discord webhook delivery and bot channel permissions.
+
+
+
+---
+
+## 🚨 Mandatory Task Completion Protocol (Strict SemVer)
+
+To guarantee 100% reliability, quality control, and consistency, the following 5-step protocol MUST be executed at the end of every task or feature change before considering the work complete:
+
+0. **Step 0: Read Skill Upfront**: Call `read_file` on the relevant `SKILL.md` before writing code.
+1. **Step 1: Integration Testing**: Execute `cmd /c "npm test"` to run the verification suite (`scripts/verify-all.ts`). All test suites must pass (0 failures).
+2. **Step 2: Production Build Verification**: Execute `cmd /c "npm run build"`. Ensure 100% clean compilation, zero TypeScript errors, and zero Turbopack runtime errors.
+3. **Step 3: Edge Security & Cloudflare Policy Audit**: Whenever ANY page route (`src/app/**/page.tsx`) or API route (`src/app/api/**/route.ts`) is created, moved, or updated, register it in `src/lib/edge-policy-paths.ts` and inform the user.
+4. **Step 4: Skills & Documentation Sync**: Review and update relevant `.agents/skills/` documents to record any new UI patterns, API contracts, formulas, or operational guidelines **BEFORE** committing.
+5. **Step 5: SemVer Version Increment & Git Deployment Push**: Increment version in `package.json` according to SemVer (PATCH `+1` for fixes/polish, MINOR `+1` for features), stage all changes (`git add -A`), commit with freshly incremented semantic version prefix (`[v<version>] feat/fix(scope): message`), push strictly to `origin/main` (Beta). NEVER push to `stable` unless the user explicitly instructs.

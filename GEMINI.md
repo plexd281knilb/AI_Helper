@@ -1,0 +1,500 @@
+# AGENTS.md — Developer & AI Agent Guide
+
+This document provides a comprehensive overview of the **AI Helper** codebase, its architectural design, data flows, database schemas, and guidelines for AI agents and developers working on this repository.
+
+---
+
+## 1. Project Overview
+
+**AI Helper** is a self-hosted, multi-user web application designed to automatically scan incoming emails via IMAP, detect calendar events and deadlines using Large Language Models (Google Gemini or OpenAI), present extracted events in a clean dashboard, and synchronize them directly with Google Calendar.
+
+It is built with **FastAPI** (Python 3.11) on the backend and a responsive, vanilla JavaScript/HTML5/CSS3 Single Page Application (SPA) on the frontend, containerized for easy deployment on Docker / Unraid.
+
+---
+
+## 2. Directory Structure
+
+```
+.
+├── app.py                 # Core backend: FastAPI app, DB initialization, API routes, IMAP fetching, AI parsing, and Google OAuth
+├── static/
+│   └── index.html         # Complete frontend SPA (Portalarr-inspired sidebar navigation, Dashboard, History, Deals, Settings, Users, Logs)
+├── .agents/
+│   └── skills/            # Imported expert skills from Portalarr (agregarr, discord, kometa, maintainerr, plex, portalarr-ui, radarr, seerr, sonarr)
+├── roadmap.md             # Multi-phase long-term feature roadmap
+├── requirements.txt       # Python dependencies
+├── Dockerfile             # Python 3.11 slim container image
+├── docker-compose.yml     # Container definition, volume mapping (`./data:/app/data`), and healthcheck
+├── README.md              # High-level project README
+├── AGENTS.md              # Architectural and development guide for AI agents
+└── data/                  # Persistent data directory (auto-created at runtime)
+    ├── app.db             # SQLite database storing users, accounts, events, and email history
+    ├── app.log            # Rotating application logs (1MB max)
+    ├── client_secret.json # Uploaded Google OAuth credentials
+    └── token_<user_id>.json # Stored Google Calendar OAuth tokens per user
+```
+
+---
+
+## 3. Technology Stack
+
+- **Backend Framework**: [FastAPI](https://fastapi.tiangolo.com/) with [Uvicorn](https://www.uvicorn.org/)
+- **Database**: SQLite3 (managed in `data/app.db`)
+- **Email Fetching**: [imap-tools](https://github.com/ikvk/imap_tools) (IMAP protocol)
+- **AI Providers**:
+  - Google Gemini (`google-generativeai`)
+  - OpenAI (`openai`)
+- **Calendar Integration**: Google Calendar API v3 (`google-api-python-client`, `google-auth-oauthlib`)
+- **Frontend**: Vanilla JS (ES6+), HTML5, CSS3 with dark mode theme (embedded in `static/index.html`)
+- **Containerization**: Docker & Docker Compose
+
+---
+
+## 4. Database Schema (`data/app.db`)
+
+All tables are initialized and automatically migrated on startup in `init_db()` (`app.py`):
+
+### `users`
+| Column | Type | Description |
+|---|---|---|
+| `id` | TEXT PRIMARY KEY | Unique user UUID |
+| `username` | TEXT UNIQUE | Login username |
+| `password_hash` | TEXT | Salted PBKDF2-HMAC-SHA256 password hash |
+| `settings` | TEXT (JSON) | JSON object containing AI provider, keys, models, custom instructions, public URL, OAuth state, `family_profile`, `parsing_rules`, and meal preferences |
+| `role` | TEXT | User role: `'admin'` or `'user'` (default `'user'`) |
+
+### `sessions`
+| Column | Type | Description |
+|---|---|---|
+| `token` | TEXT PRIMARY KEY | 64-character hex session token |
+| `user_id` | TEXT | Associated user UUID |
+| `expires` | REAL | Timestamp for session expiration |
+
+### `email_accounts`
+| Column | Type | Description |
+|---|---|---|
+| `id` | TEXT PRIMARY KEY | Account UUID |
+| `user_id` | TEXT | Foreign key referencing `users.id` |
+| `email_user` | TEXT | IMAP email address |
+| `email_pass` | TEXT | IMAP App Password |
+| `email_host` | TEXT | IMAP server host (e.g. `imap.gmail.com`) |
+
+### `events`
+| Column | Type | Description |
+|---|---|---|
+| `id` | TEXT PRIMARY KEY | Event UUID |
+| `user_id` | TEXT | User UUID |
+| `account` | TEXT | Email account that received the message |
+| `title` | TEXT | Event title |
+| `date` | TEXT | ISO 8601 event start date/time |
+| `description` | TEXT | Detailed notes / event context |
+| `location` | TEXT | Physical address, room, or location |
+| `status` | TEXT | `'pending'`, `'added'`, or `'dismissed'` |
+
+### `processed_emails_v2`
+| Column | Type | Description |
+|---|---|---|
+| `id` | TEXT | Email UID from IMAP server |
+| `user_id` | TEXT | User UUID |
+| `account` | TEXT | Email address that received the email |
+| `subject` | TEXT | Email subject line |
+| `date` | TEXT | Email date (ISO 8601 format) |
+| `body` | TEXT | Full plain text / HTML body of the email |
+| `sender` | TEXT | Sender email/name (`From:` header) |
+| `reason` | TEXT | AI decision explanation and sync outcome |
+| `status` | TEXT | `'added'` or `'no_event'` |
+| **PRIMARY KEY** | `(id, user_id, account)` | Prevents duplicate processing per account per user |
+
+### `grocery_stores`
+| Column | Type | Description |
+|---|---|---|
+| `id` | TEXT PRIMARY KEY | Store UUID |
+| `user_id` | TEXT | Foreign key referencing `users.id` |
+| `name` | TEXT | Store name (e.g. HEB, Kroger, Tom Thumb, Costco, Sprouts, Whole Foods, Walmart) |
+| `ad_url` | TEXT | Weekly ad or circular URL |
+| `notes` | TEXT | Custom store notes or location details |
+| `last_scanned` | TEXT | ISO timestamp of last successful circular scan |
+| `cached_deals` | TEXT (JSON) | Cached JSON array of extracted weekly deals |
+| `valid_from` | TEXT | ISO timestamp when the active circular begins (e.g. `2026-09-01T00:00:00-04:00`) |
+| `valid_to` | TEXT | ISO timestamp when the active circular expires (e.g. `2026-09-08T23:59:59-04:00`) |
+
+### `grocery_lists`
+| Column | Type | Description |
+|---|---|---|
+| `id` | TEXT PRIMARY KEY | Grocery list UUID |
+| `user_id` | TEXT | Foreign key referencing `users.id` |
+| `title` | TEXT | List title (e.g. "Weekly Essentials", "Costco Run") |
+| `created_at` | TEXT | ISO timestamp of creation |
+| `updated_at` | TEXT | ISO timestamp of last update |
+
+### `grocery_list_items`
+| Column | Type | Description |
+|---|---|---|
+| `id` | TEXT PRIMARY KEY | Item UUID |
+| `list_id` | TEXT | Foreign key referencing `grocery_lists.id` |
+| `user_id` | TEXT | Foreign key referencing `users.id` |
+| `item_name` | TEXT | Item name and quantity |
+| `store_name` | TEXT | Designated store (e.g. "HEB", "Costco", "Any") |
+| `price_notes` | TEXT | Price or deal notes (e.g. "$4.99/lb sale", "Digital coupon") |
+| `category` | TEXT | Item category (Produce, Meat & Seafood, Dairy, etc.) |
+| `is_checked` | INTEGER | `0` = pending, `1` = checked/bought |
+| `image_url` | TEXT | Product image or cutout thumbnail URL |
+
+### `grocery_price_history`
+| Column | Type | Description |
+|---|---|---|
+| `id` | TEXT PRIMARY KEY | History entry UUID |
+| `user_id` | TEXT | Foreign key referencing `users.id` |
+| `item_name` | TEXT | Raw item name |
+| `normalized_key` | TEXT | Canonicalized search and grouping key (e.g. `beef:beef ribeye steak:prime`) |
+| `store_name` | TEXT | Supermarket or store name |
+| `price_str` | TEXT | Clean formatted price string (e.g. `$9.99/lb`) |
+| `unit_price` | REAL | Numeric unit price (e.g. `9.99`) |
+| `unit` | TEXT | Price unit (`lb`, `ea`, `oz`) |
+| `beef_grade` | TEXT | Detected USDA beef grade (`prime`, `choice`, `select`, `wagyu`, `angus`, `none`) |
+| `category` | TEXT | Department / category |
+| `recorded_at` | TEXT | ISO timestamp of price recording |
+
+### `meal_plans`
+| Column | Type | Description |
+|---|---|---|
+| `id` | TEXT PRIMARY KEY | Meal plan UUID |
+| `user_id` | TEXT | Foreign key referencing `users.id` |
+| `plan_type` | TEXT | Plan timeframe: `'week'` (7 days) or `'month'` (28 days) |
+| `start_date` | TEXT | ISO start date (`YYYY-MM-DD`) |
+| `end_date` | TEXT | ISO end date (`YYYY-MM-DD`) |
+| `title` | TEXT | Clean plan title (e.g. "Weekly Smart Meal Plan (Oct 19 – Oct 25)") |
+| `created_at` | TEXT | ISO creation timestamp |
+| `updated_at` | TEXT | ISO last updated timestamp |
+| `meals_data` | TEXT (JSON) | Complete JSON array of meal objects with on-sale highlights, ingredients, directions, and feedback |
+| `dietary_pref` | TEXT | Dietary filter (e.g. "All", "High Protein", "Budget Saver", "Low Carb", "Quick & Easy", "Mediterranean") |
+| `servings` | INTEGER | Servings per meal (default `5` for family profile) |
+| `notes` | TEXT | Optional custom notes or dietary instructions |
+
+### `site_suggestions`
+| Column | Type | Description |
+|---|---|---|
+| `id` | TEXT PRIMARY KEY | Suggestion UUID |
+| `user_id` | TEXT | Foreign key referencing `users.id` |
+| `author` | TEXT | Person submitting suggestion (e.g. "Wife", "Dom") |
+| `page` | TEXT | Target page / area (e.g. "Dashboard", "Meal Planner", "General") |
+| `title` | TEXT | Short summary / title of suggested edit |
+| `description` | TEXT | Detailed feedback, tweak, or feature request |
+| `priority` | TEXT | `'improvement'`, `'idea'`, `'fix'`, or `'high'` |
+| `status` | TEXT | `'open'` or `'completed'` (soft-archived and removed from active view once updated) |
+| `created_at` | TEXT | ISO creation timestamp |
+| `updated_at` | TEXT | ISO last updated timestamp |
+
+### Database Indexes
+For fast sub-millisecond query performance on multi-user and large datasets, the following indexes are maintained in `init_db()`:
+- `idx_events_user_status_date` on `events(user_id, status, date)`
+- `idx_email_acc_user` on `email_accounts(user_id)`
+- `idx_pe_user_date` on `processed_emails_v2(user_id, date DESC)`
+- `idx_gs_user` on `grocery_stores(user_id)`
+- `idx_gs_user_valid_to` on `grocery_stores(user_id, valid_to)`
+- `idx_gl_user` on `grocery_lists(user_id)`
+- `idx_gli_list_user` on `grocery_list_items(list_id, user_id)`
+- `idx_mp_user_date` on `meal_plans(user_id, start_date DESC)`
+- `idx_sug_user_status` on `site_suggestions(user_id, status, created_at DESC)`
+
+---
+
+## 5. Core Processing & Architecture
+
+### 1. Authentication, Roles & Navigation Architecture
+- **Password Security**: Salted PBKDF2-HMAC-SHA256 password hashing with 100,000 iterations and 16-byte cryptographically secure random salts.
+- **Backward Compatibility**: Transparently verifies and upgrades legacy unsalted SHA-256 password hashes to salted PBKDF2 upon next successful login using constant-time comparison (`secrets.compare_digest`).
+- **Session Tokens**: Cookie-based authentication using 64-character hex `session_token` with automatic purging of expired sessions.
+- **Role-Based Access Control (RBAC)**: Supports `'admin'` and `'user'` roles. The initial account created during setup is automatically assigned the `'admin'` role. Admin endpoints (`/api/users`, user create/delete, role assignment, `/api/logs`) are strictly gated by the `verify_admin` FastAPI dependency (returning HTTP 403 Forbidden for non-admins).
+- **Portalarr Navigation Tree Shell**: The UI features a Portalarr-style left navigation sidebar tree:
+  - **Brand Header**: App name, version tag (`v2.5`), and subtitle.
+  - **User Status Card**: Displays username, avatar initial, and glowing role badge (`🛡️ Administrator` or `👤 Member`).
+  - **Main Workspace Tree**: Standard user paths (`Dashboard`, `Email History`, `Deals & Groceries`).
+  - **Administration Tree**: Restricted paths (`Users & Access`, `System Settings`, `Live Logs`), dynamically hidden from non-admin accounts and client-side guarded in `openTab`.
+  - **Quick Action & Session Controls**: Instant `Fetch New Emails` trigger with active spinner state and danger-highlighted `Log Out` button.
+  - **Mobile Responsive Drawer**: On viewports <= 850px, collapses into a sticky top navigation bar with a hamburger toggle and touch-friendly slide-over drawer.
+
+### 2. Email Ingestion (`process_user_emails`)
+- Loops through all configured `email_accounts` for a user with per-account fault isolation. If one account fails (e.g. invalid credentials or IMAP timeout), remaining accounts continue processing and warnings are surfaced non-destructively.
+- Safe connection cleanup guaranteed by top-level `try...finally` database closure.
+- Connects via IMAP (`MailBox.login`).
+- Reads user-configured `lookback_days` (default 7 days) and `email_fetch_limit` (default 20 per account).
+- **Inbox Safety & Unread Preservation**: Messages are fetched with `mark_seen=False` (using IMAP `BODY.PEEK[]` per RFC 3501), ensuring analyzed emails remain untouched and unread in the user's inbox by default (configurable via `keep_emails_unread`).
+- Fetches messages (`AND(date_gte=...)`, reverse order).
+- Checks `processed_emails_v2` to skip already-analyzed emails.
+- Webview Announcement Scraper: Automatically resolves and fetches full linked school/portal announcement text using resilient SSL contexts.
+- Persists `last_scan_time` in user settings upon scan completion.
+
+### 3. AI Extraction & Reasoning (`extract_event`)
+- Formulates a structured prompt including custom user instructions (if configured).
+- Requests a JSON response with:
+  - `events`: Array of objects (`title`, `date`, `description`, `location`).
+  - `reason`: Explanation of why events were extracted or why the email was skipped (e.g. newsletter, past event, custom grade filter, receipt).
+- Fallback parsers handle raw JSON, markdown-wrapped JSON (```` ```json ````), legacy arrays, or `NO_EVENT`.
+- Automatically enforces Gemini rate limits (4.1s sleep per request for free-tier compatibility).
+
+### 4. Calendar Sync & Deduplication Engine
+- When events are detected, they are inserted into the `events` table with status `'pending'`.
+- **Intelligent Calendar Deduplication**: Employs normalized string tokenization (`normalize_event_title`), emoji/routine prefix stripping (e.g. "Reminder:", "Notice:", "Invitation:"), and token overlap evaluation (`are_events_duplicate`) across both the SQLite database and Google Calendar (+/- 14 hour window). Checks `find_existing_event_in_db` before database insertion to prevent duplicate event rows.
+- Robust ISO 8601 parsing (`parse_flexible_iso_datetime`) supports standard ISO strings, date-only formats (`YYYY-MM-DD` defaulting to 9:00 AM), space-delimited timestamps, and common colloquial formats.
+- Dashboard queries filter by beginning of today (`today_start`) so events occurring earlier in the day remain visible.
+- If Google Calendar is connected (`token_<user_id>.json` exists), events are auto-synced to Google Calendar with duplicate checks and updated to status `'added'`.
+- If not connected, users can manually sync or click manual add links on the Dashboard.
+
+### 5. Email Processing History
+- Stores complete email content (`body`), sender, subject, date, AI reason, and status in `processed_emails_v2`.
+- The History tab in `static/index.html` provides:
+  - Interactive click-to-expand card view with full email body and formatted headers.
+  - Clear AI decision boxes explaining why events were or were not added to the calendar.
+  - Live search across subjects, senders, reasons, and email bodies.
+  - Category filters: **All**, **Events Added**, and **No Events**.
+  - Single and bulk deletion of memory items (to allow re-processing if needed).
+
+### 6. Background Worker & Job Scheduling (`scheduled_email_fetch`)
+- An `asyncio` background task polls every 30 seconds to check if any user is due for an automated email scan.
+- Each user can customize:
+  - **Auto-Fetch Frequency**: Every 15m, 30m, 1h (default), 2h, 4h, 8h, 12h, 24h, custom minutes, or disabled (manual only).
+  - **Lookback Window**: Past 1, 3, 7 (default), 14, or 30 days.
+  - **Batch Limit**: Max 10, 20 (default), 50, or 100 emails per account per run.
+- Real-time status badge and next-run countdown display in the Settings tab.
+
+### 7. Local Deals & Smart Grocery Lists (`/api/groceries/*`)
+- **Automated Zip-Code Discovery**: Ingests complete weekly circulars and deals automatically across all local supermarkets (HEB, Kroger, Tom Thumb, Albertsons, Sprouts, Whole Foods, Walmart, Target, ALDI, Costco, Sam's Club, Publix, Safeway, Central Market, Food Lion, Meijer, Hy-Vee, Wegmans, Lidl, Jewel-Osco, Vons, Ralphs, Smith's, Fry's, King Soopers, Harris Teeter, Giant Food, etc.) via backend Flipp aggregation without requiring manual URLs.
+- **Product Images & Transparent Cutouts**: Extracts high-res product packshots and transparent cutout images from Flipp circulars and displays them in grocery lists and deal cards, with emoji avatar fallbacks.
+- **Cross-Store Price Comparison Engine**: Cross-references items and prices across all configured local stores:
+  - 🟢 **Green Badge**: Best price or cheaper than competitor (e.g. `✓ Best Price! Save $2.00/lb vs Tom Thumb ($7.99/lb)`).
+  - 🔴 **Red Badge**: Cheaper price available at another store (e.g. `⚠️ Cheaper at H-E-B ($4.99/lb) — Save $1.00/lb`).
+- **Stemming & Cent Price Accuracy**: English noun plural stemming (`stem_word`) normalizes plural/singular variations (e.g. `apples` vs `apple`, `berries` vs `berry`) for cross-store deal comparison. Accurately parses cent pricing (`99¢/lb` or `79c ea` into `$0.99/lb` and `$0.79 ea`).
+- **Historical Price Trend Tracking & Lowest Price Flagging**: Automatically tracks and indexes historical unit prices for items over time across stores. Flags when a deal is an all-time low (e.g. `🔥 Best Price in 2 months! Save $1.00/lb vs prev low ($10.99/lb at Tom Thumb)`), matching low, or below average.
+- **Beef Grade Isolation & Quality Protection**: Detects and isolates USDA Beef Quality Grades (`prime`, `choice`, `select`, `wagyu`, `angus`, `none`). Prevents misleading price comparisons where lower quality grades (e.g., Select at $6.99/lb) would override or be compared against higher quality grades (e.g., Prime at $9.99/lb).
+- **Personalized "🔥 My Deals" Feed**: Scores and ranks live circular deals based on user preferences.
+- **Preference Tuning & Feedback**: Users can click 👍 "More like this", 👎 "Less like this", or 🚫 "Hide category" on deals, or customize favorite/ignored departments and liked/disliked keywords with a dedicated **Meat & Essentials Family Preset**.
+- **Store Ads & Circulars**: Users can configure local store ad URLs or use automated zip discovery.
+- **AI Ad Scraping & Browsing**: Scrapes web circulars using clean HTML text extraction, parses structured deals by category, and provides a full interactive deal browser with search and department filtering.
+- **Price Query & Deal Comparison**: Natural language prompt query allows users to ask for best prices, ingredient comparisons, and budget recommendations across stores.
+- **Automatic Deal Expiration Tracking & Continuous Freshness Engine**: Tracks `valid_from` and `valid_to` date boundaries for every store circular. When a flyer expires (e.g. running 9/1 to 9/8, expiring at midnight on 9/8), the engine automatically flags the store as expired on 9/9, and proactive background polling (every 30 minutes) + reactive just-in-time checks immediately ingest the new active weekly deals (e.g. 9/9 to 9/15) from Flipp and local sources, replacing expired deals without requiring manual user intervention. Filtered search enrichment also validates individual item expiration dates to prevent expired promotions from leaking into active feeds.
+- **Interactive Grocery Lists**: Create custom lists, group items by category or store, check off bought items, clear checked items, copy markdown/plain text lists to clipboard, and 1-click add deals directly to any list with pictures.
+- **AI Meal-Prep List Generator**: Generates full recipe-based grocery lists with assigned stores, circular deal images, and estimated pricing based on user dietary or meal planning prompts.
+
+### 8. Smart Meal Planner Engine (`/api/meals/*`)
+- **Sale-Matched Recipe Planning**: Plans cohesive dinner schedules for the week (7 days) or month (28 days / 4 weeks) explicitly centered around what is currently on sale at the user's local supermarkets (from `grocery_stores.cached_deals`).
+- **On-Sale Highlight Tags**: Each meal card prominently highlights which ingredients are currently on sale and at which supermarket (e.g. `🟢 New York Strip Steaks ($16.99 at Costco • Save $2.97)`).
+- **Calendar Meal Conflict Avoidance**: Automatically detects existing meal and food events on the user's calendar (`is_food_or_meal_title` and `find_existing_meal_or_food_on_calendar`). Automatically reserves that day during plan generation with status `is_calendar_reserved=True` and $0.00 cost, preventing duplicate meal schedules.
+- **Configurable Day-of-Week Routine & Skip Rules (`/api/meals/rules`)**:
+  - **Skip Days / Family Gatherings**: Configurable days where home cooking is not needed (pre-seeded with **Sunday Dinner with Family**), generating clean cards with $0 cost and no ingredient clutter.
+  - **Themed Routines**: Configurable recurring theme nights (pre-seeded with **Friday Family Pizza Night**), automatically querying active circulars for frozen pizzas (Red Baron, Freschetta, DiGiorno) and extra toppings (mozzarella cheese, pepperoni, bell peppers).
+  - **Effort Levels by Weekday**: Configurable effort per day (`easy` < 25m, `standard` 30-40m, `involved` 45-75m). The planner automatically prioritizes quick dinners on busy weekdays and more involved/gourmet meals on weekends.
+  - **Routine & Skip Days Modal**: In `static/index.html`, users can configure every day of the week with 1-click presets (`👨‍👩‍👧 Sunday Family Dinner`, `🍕 Friday Pizza Night`, `🌮 Taco Tuesday`, `⚡ Fast Week & Gourmet Weekend`, `🔄 Reset Defaults`).
+- **Family Profile & Scientific Portion Sizing (`/api/meals/family_profile`)**:
+  - Direct 5-person family sizing (and scalable to any household roster) taking into account member ages, gender, and appetites.
+  - Calculates USDA Dietary Reference Intake (DRI) ratios and real batch quantities for dinner preparation: recommended raw meat/protein (~2.5 lbs), fresh produce (~1.8 lbs), starches (~1.5 lbs), and dinner batch calories (~3,100 kcal).
+- **Bulk Ingredient Synergy Engine**:
+  - Automatically identifies ingredient overlap across dinners in the week (e.g. pairing Monday Lemon Chicken Piccata with Thursday Sheet Pan Fajitas to purchase a 5 lb family pack of chicken breasts; or Tuesday Pork Chops with Wednesday Pork Tenderloin).
+  - Reduces food waste and leverages family bulk packaging at Costco, Sam's Club, and H-E-B to lower grocery bills by $4.50–$6.50/week.
+- **Nutritional Macro Tracking**:
+  - Tracks and displays calories, protein (g), carbohydrates (g), healthy fats (g), and dietary fiber (g) per serving and for the whole family batch on meal cards and synced calendar events.
+- **Interactive Preference Learning (👍 / 👎 Feedback)**: Users can give thumbs up or thumbs down to individual meals. Feedback is permanently stored in `users.settings.meal_preferences` (`liked_cuisines`, `disliked_cuisines`, `liked_ingredients`, `disliked_ingredients`, `liked_meals`, `disliked_meals`) and continuously shapes future plan generations and single-meal recipe swaps.
+- **Instant Single-Meal Swapping (🔄)**: Replaces any individual dinner with an alternative on-sale recipe respecting the user's dietary preferences without altering the rest of the week's or month's schedule.
+- **1-Click Google Calendar Synchronization**: Push individual meals or the entire plan (`/api/meals/{plan_id}/calendar_all`) to the calendar with duplicate prevention. Automatically creates detailed dinner events (6:30 PM) populated with recipe descriptions, on-sale ingredient notes, macro breakdown, and numbered step-by-step cooking directions.
+- **Store-by-Store Lowest-Price Grocery Export**: Batch exports all recipe ingredients into `grocery_lists` / `grocery_list_items`. Each ingredient is automatically mapped to the specific supermarket offering the lowest price (e.g. Ribeye -> Albertsons, Asparagus -> Sprouts, Butter -> ALDI) with high-res packaging/cutout product photos and discount notes.
+
+### 9. Universal Site Suggestions & Wife Edit Request Engine (`/api/suggestions/*`)
+- **Universal "💡 Suggest Edit" Button**: Floating, non-intrusive action button accessible across every page and tab of the application, alongside quick triggers in the navigation sidebar and mobile drawer.
+- **Context-Aware Submissions**: Automatically detects the active page (e.g., Dashboard, Meal Planner, Deals & Groceries) and allows the wife or family members to log suggestions, tweaks, and bug reports.
+- **Persistent Storage & Lifecycle**:
+  - Saved to `site_suggestions` SQLite table.
+  - Open suggestions are listed with live notification badges on the floating button.
+  - Features a 1-click **"✓ Mark Done & Remove"** button so completed updates are soft-resolved and archived out of the active view.
+
+### 10. Mobile Onboarding Setup Wizard & Google OAuth Integration (`/api/onboarding/*`)
+- **Mobile-First Step-by-Step Stepper**: Automatically activates on first user login/registration (or on-demand via navigation bar, mobile header, or settings banner) to guide users through 4 easy steps:
+  1. **Welcome**: Quick visual intro to email event scanning, Google Calendar sync, and grocery circular deal matching.
+  2. **Google Calendar Authorization**: 1-click Google OAuth flow. Passes `from_wizard=1` to redirect back directly into Step 3 upon successful authorization.
+  3. **Email Connection**: Segmented provider tabs for **Gmail** (with 1-tap deep links to Google App Passwords), **iCloud**, **Outlook**, and **Other**. Extracts the user's Google email from the OAuth token to auto-populate the field. Features live connection testing (`/api/accounts/test`) and automatic space stripping for pasted 16-character passwords.
+  4. **Household & Preferences**: Configures local zip code (for circular ads), family servings (default 5 people), scan frequency, and lookback window.
+  5. **Completion & Immediate First Scan**: Congratulates user and offers instant 1-click trigger to fetch their first batch of emails.
+
+### 11. Family Profile & Smart Event Parsing Rules Engine (`/api/settings/parsing_rules`)
+- **Unified Household Roster**: Synchronized between the AI Event Parser and the Meal Planner. Manages all family members with roles (`self`, `spouse`, `child`), grades (e.g. 2nd, 6th, 9th), school affiliations (e.g. "Liberty Christian School"), sports (e.g. Cross Country, Soccer, Track, Softball), gender, and ages. Pre-seeded with Dominic's exact family configuration:
+  - **Dominic**: Self, High School Class of 2006. Default assignee for personal/family events not tied to a specific child.
+  - **Wife**: Spouse.
+  - **Gia**: 9th Grade (High School), Softball.
+  - **Ellie**: 6th Grade (Middle School), Cross Country (XC), Soccer, Track.
+  - **Leo**: 2nd Grade (Elementary School).
+- **Double-Layer Defense Architecture**:
+  1. **Layer 1: Intelligent Prompt Compilation (`build_parsing_prompt_instructions`)**:
+     - Systematically builds structured, numbered negative constraints and positive extraction rules injected into Gemini and OpenAI prompts.
+     - Instructs the AI to only extract events for enrolled child grades (2nd, 6th MS, 9th HS) from school emails, map teacher communications to household children, expand `"Liberty"` to `"Liberty Christian School, Argyle, Texas"`, abbreviate Cross Country as `"XC"`, append child names (or Dominic) to titles while excluding grade labels, and reject unconfirmed camps or registration solicitations.
+  2. **Layer 2: Deterministic Python Post-Processing (`post_process_extracted_event`)**:
+     - Guarantees 100% adherence through programmatic regex and keyword filters even if an LLM hallucinates or slips up.
+     - **School Camp & Solicitation Blocker**: Rejects events matching registration solicitations (e.g. `"cost: $"`, `"register here"`, `"registration closes"`, `"enrichment opportunities"`).
+     - **Bill & Payment Privacy**: Automatically strips dollar amounts (e.g. `$145.20`) from event titles when `bill_amounts_in_calendar` is disabled, retaining clean reminders (e.g. `Electric Bill Due - Dominic`).
+     - **Noise & Commercial Event Discarder**: Discards delivery tracking, shipping confirmations, promotional webinars, and marketing flash sales (e.g. Atmos Rewards, Daily Drop Pro, Fidelity Career Day).
+     - **Relative Month-End Parser**: Resolves colloquial time expressions such as `"end of MM/YYYY"` (e.g. `"end of 08/2026"`) to All Day events on the exact final calendar day of the month (`2026-08-31`).
+     - **Sport & Location Normalization**: Replaces any variations of "Cross Country" with `"XC"` and expands `"liberty"` to `"Liberty Christian School, Argyle, Texas"`.
+     - **Child & Self Attribution**: Enforces the title suffix pattern: appends `- ChildName` (or `- Dominic`), stripping any accidental grade prefixes.
+- **Granular Configurable Checkbox Settings UI**:
+  - Live toggles for school grade filtering, teacher email assumption, sports tracking, camp solicitation rejection, bill reminders, bill dollar amount hiding, invite reminders, inbox unread preservation (`keep_emails_unread`), delivery filtering, and promotion/travel noise suppression.
+  - **Live AI Prompt Preview**: Expandable accordion in the Settings tab allowing users to inspect the exact prompt compiled from their active rules in real time.
+
+---
+
+## 6. API Route Reference
+
+| Method | Endpoint | Description | Auth Required |
+|---|---|---|---|
+| `GET` | `/health` / `/api/health` | Container and system healthcheck | No |
+| `GET` | `/api/auth/status` | Check authentication & first-time setup status | No |
+| `POST` | `/api/auth/login` | Log in user | No |
+| `POST` | `/api/auth/register` | Register new user | No |
+| `POST` | `/api/auth/logout` | Log out user and clear cookie | No |
+| `GET` | `/api/users` | List all users | Yes |
+| `POST` | `/api/users` | Create a user | Yes |
+| `PUT` | `/api/users/{id}` | Update username/password | Yes |
+| `DELETE` | `/api/users/{id}` | Delete user and all associated data | Yes |
+| `GET` | `/api/settings` | Read user settings and connected accounts | Yes |
+| `POST` | `/api/settings/ai` | Save AI configuration & custom prompt | Yes |
+| `GET` | `/api/settings/parsing_rules` | Get active smart parsing rules, family roster, and compiled prompt preview | Yes |
+| `POST` | `/api/settings/parsing_rules` | Save smart parsing rules and family profile roster | Yes |
+| `POST` | `/api/accounts` | Add or update an IMAP account | Yes |
+| `DELETE` | `/api/accounts/{id}` | Delete an IMAP account | Yes |
+| `GET` | `/api/events` | Fetch active calendar events (pending & added) | Yes |
+| `POST` | `/api/events/{id}/sync` | Manually sync event to Google Calendar | Yes |
+| `POST` | `/api/events/bulk_sync` | Bulk sync multiple events to Google Calendar | Yes |
+| `DELETE` | `/api/events/{id}` | Dismiss an event | Yes |
+| `POST` | `/api/events/bulk_dismiss`| Bulk dismiss events | Yes |
+| `GET` | `/api/fetch_emails` | Trigger manual email fetching & AI parsing | Yes |
+| `GET` | `/api/history` | Retrieve up to 100 processed email records | Yes |
+| `POST` | `/api/history/{account}/{uid}/sync` | Push specific email event(s) to Google Calendar | Yes |
+| `POST` | `/api/history/bulk_sync` | Bulk push selected history email events to Google Calendar | Yes |
+| `DELETE` | `/api/history/{account}/{uid}` | Remove specific email from memory | Yes |
+| `POST` | `/api/history/bulk_delete` | Bulk remove emails from memory | Yes |
+| `DELETE` | `/api/settings/reset_history` | Wipe all email processing memory | Yes |
+| `GET` | `/api/auth/google/url` | Generate Google OAuth authorization URL | Yes |
+| `GET` | `/api/auth/google/callback` | Google OAuth callback handler | No |
+| `DELETE` | `/api/auth/google/token` | Disconnect Google Calendar OAuth token | Yes |
+| `POST` | `/api/upload_client_secret` | Upload Google OAuth `client_secret.json` | Yes |
+| `POST` | `/api/models` | List available models from Gemini or OpenAI | Yes |
+| `GET` | `/api/logs` | View recent application logs (tail 1MB) | Yes |
+| `GET` | `/api/groceries/stores` | List all configured grocery stores and ads | Yes |
+| `POST` | `/api/groceries/stores` | Add or update a grocery store | Yes |
+| `DELETE` | `/api/groceries/stores/{id}` | Delete a grocery store | Yes |
+| `POST` | `/api/groceries/stores/{id}/scan` | Scan store circular URL with AI or Flipp | Yes |
+| `POST` | `/api/groceries/stores/scan_all` | Scan all store circular URLs with AI or Flipp | Yes |
+| `POST` | `/api/groceries/auto_fetch` | Auto-discover & ingest all local circular deals by zip code | Yes |
+| `POST` | `/api/groceries/query_deals` | AI price comparison and deals query | Yes |
+| `GET` | `/api/groceries/preferences` | Get user food & deal feed preferences | Yes |
+| `POST` | `/api/groceries/preferences` | Save food & deal feed preferences | Yes |
+| `POST` | `/api/groceries/preferences/feedback` | Submit feedback (more / less / hide category) | Yes |
+| `GET` | `/api/groceries/feed` | Get ranked, personalized deal feed with cross-store badges | Yes |
+| `GET` | `/api/groceries/price_history` | Get historical recorded price points for an item | Yes |
+| `GET` | `/api/groceries/lists` | List all grocery lists for user | Yes |
+| `POST` | `/api/groceries/lists` | Create or update a grocery list | Yes |
+| `DELETE` | `/api/groceries/lists/{id}` | Delete a grocery list and its items | Yes |
+| `GET` | `/api/groceries/lists/{id}/items` | List items in a grocery list with images and comparison | Yes |
+| `POST` | `/api/groceries/lists/{id}/items` | Add single item to grocery list with image | Yes |
+| `POST` | `/api/groceries/lists/{id}/batch_items` | Batch add multiple items to grocery list with images | Yes |
+| `PUT` | `/api/groceries/items/{id}` | Update grocery item (check off, edit) | Yes |
+| `DELETE` | `/api/groceries/items/{id}` | Delete item from grocery list | Yes |
+| `POST` | `/api/groceries/lists/{id}/clear_checked` | Remove all checked items from a list | Yes |
+| `POST` | `/api/groceries/ai_generate_list` | Generate meal-prep grocery list with AI | Yes |
+| `GET` | `/api/meals/current` | Get active meal plan, preferences, and stores count | Yes |
+| `GET` | `/api/meals/plans` | List historical meal plans for user | Yes |
+| `GET` | `/api/meals/plans/{id}` | Get specific meal plan with full meals data | Yes |
+| `POST` | `/api/meals/generate` | Generate weekly or monthly meal plan based on circular sales | Yes |
+| `POST` | `/api/meals/{plan_id}/meal/{meal_id}/feedback` | Submit 👍 / 👎 feedback and learn meal preferences | Yes |
+| `POST` | `/api/meals/{plan_id}/meal/{meal_id}/swap` | Swap single meal with alternative on-sale recipe | Yes |
+| `POST` | `/api/meals/{plan_id}/meal/{meal_id}/calendar` | Sync single meal to Google Calendar / events | Yes |
+| `POST` | `/api/meals/{plan_id}/calendar_all` | Bulk sync all meals in plan to Calendar | Yes |
+| `POST` | `/api/meals/{plan_id}/export_grocery_list` | Batch export ingredients to grocery list with best store pricing | Yes |
+| `DELETE` | `/api/meals/{plan_id}` | Delete a meal plan | Yes |
+| `GET` | `/api/meals/rules` | Get day-of-week routine and skip rules (e.g. Sunday family dinner, Friday pizza night, effort levels) | Yes |
+| `POST` | `/api/meals/rules` | Update day-of-week routine and skip rules | Yes |
+| `GET` | `/api/meals/family_profile` | Get user family roster, ages, gender, appetites, and USDA nutrition metrics | Yes |
+| `POST` | `/api/meals/family_profile` | Update user family profile and scientific portion settings | Yes |
+| `GET` | `/api/suggestions` | List site edit suggestions and feature requests | Yes |
+| `POST` | `/api/suggestions` | Submit a new edit suggestion from wife / user | Yes |
+| `PUT` | `/api/suggestions/{id}` | Update suggestion status (e.g. mark completed & removed) | Yes |
+| `DELETE` | `/api/suggestions/{id}` | Delete a suggestion permanently | Yes |
+| `GET` | `/api/onboarding/status` | Check user onboarding completion, calendar connection, and account count | Yes |
+| `POST` | `/api/onboarding/complete` | Mark onboarding wizard as completed | Yes |
+| `POST` | `/api/onboarding/reset` | Reset onboarding status to trigger wizard again | Yes |
+| `POST` | `/api/accounts/test` | Test IMAP credentials with auto space stripping and helpful hints | Yes |
+| `GET` | `/api/command_center/briefing` | Unified Morning Briefing across family events, tonight's dinner, groceries, and FB Sniper | Yes |
+| `POST` | `/api/events/manual` | Quick-add a custom family calendar event with Google Calendar sync | Yes |
+| `GET` | `/api/facebook/overview` | Fetch Facebook Marketplace watchlists, verified local matches, and blocked garbage log | Yes |
+| `POST` | `/api/facebook/watchlists` | Create or update a Facebook Marketplace watchlist with 4-stage anti-garbage rules | Yes |
+| `DELETE` | `/api/facebook/watchlists/{id}` | Delete a Facebook watchlist and its cached listings | Yes |
+| `POST` | `/api/facebook/watchlists/{id}/scan` | Scan a specific Facebook watchlist and dispatch Email/Discord alerts | Yes |
+| `POST` | `/api/facebook/scan_all` | Scan all active Facebook watchlists | Yes |
+| `POST` | `/api/facebook/cookie` | Save authenticated Facebook session cookie (`c_user` + `xs` or Cookie-Editor JSON) | Yes |
+| `POST` | `/api/facebook/test_cookie` | Validate saved Facebook session cookie tokens | Yes |
+| `POST` | `/api/facebook/listings/{id}/action` | Star, dismiss, or dispatch immediate Email + Discord alert for a listing | Yes |
+| `POST` | `/api/facebook/inspect_listing` | Live test any listing title, price, and location against active anti-garbage rules | Yes |
+| `GET` | `/api/notifications/settings` | Get Discord webhook & SMTP email alert settings and notification history log | Yes |
+| `POST` | `/api/notifications/settings` | Save Discord webhook & email notification settings | Yes |
+| `POST` | `/api/notifications/test` | Send an immediate test Discord embed or HTML email alert | Yes |
+| `DELETE` | `/api/notifications/logs` | Clear sent notification history logs | Yes |
+
+---
+
+## 7. Guidelines for AI Agents Working on this Codebase
+
+1. **Database Changes**:
+   - Always update `init_db()` in `app.py` using `ALTER TABLE ... ADD COLUMN` inside `try...except sqlite3.OperationalError:` blocks to preserve existing databases without requiring destructive rebuilds.
+2. **Frontend UI Architecture**:
+   - The UI is self-contained within `static/index.html`. Do not introduce heavy frontend build tooling (e.g. Webpack, Vite, React) unless explicitly requested.
+   - Maintain dark theme CSS variables (`--bg-color`, `--card-bg`, `--accent`, `--border-color`).
+   - Always sanitize/escape dynamic user content using `escapeHtml()` before rendering into the DOM to prevent XSS vulnerabilities.
+3. **AI Provider Compatibility**:
+   - Ensure prompts and JSON parsers work reliably with both Google Gemini and OpenAI models.
+   - Preserve rate limit safeguards (e.g. delay between requests for Gemini free tier).
+4. **Data Privacy & Secrets**:
+   - Never hardcode or commit API keys, passwords, or credentials into the repository.
+   - Keep user-specific OAuth credentials and session tokens isolated in the `data/` volume.
+5. **Testing & Verification**:
+   - Compile Python code (`python -m py_compile app.py`) after making edits.
+   - Verify that new or modified endpoints return valid JSON structures compatible with `static/index.html`.
+6. **Push to GitHub**:
+   - Always push verified changes to GitHub (`git push origin main`) as the final step of the build and verification cycle.
+   - Pushing to `main` automatically triggers the GitHub Actions workflow (`.github/workflows/docker.yml`), which builds and publishes the updated container image to GitHub Container Registry (`ghcr.io`).
+
+---
+
+## 8. Portalarr Multi-Tier Gemini Subagent Orchestration & Skill Catalog
+
+All skills, operational protocols, and architectural reference guides from **Portalarr** (`C:\Users\Dom\Documents\GitHub\portalarr`) are synchronized directly into this repository under `.agents/skills/`, `docs/portalarr/`, and `.vscode/tasks.json`.
+
+### 🧠🤖 Multi-Tier Gemini Subagent Orchestration Architecture (`gemini-orchestration`)
+1. **Default Root Session (Gemini 3.8 Flash High)**:
+   - Primary orchestrator runs on **Gemini 3.8 Flash** (`gemini-3.8-flash-high`) by default for fast response times and quota efficiency.
+   - **Strict Model Standard**: Only Google Gemini models (`gemini-4-argon-high`, `gemini-3.8-flash-high`, and `gemini-3.5-flash-lite`) are used for orchestration.
+2. **The 4-Layer Subagent Hierarchy**:
+   - **Layer 1: Deep Architect (`deep-architect`, `Model: "pro"`)**: Gemini 4 Argon / Pro with automatic quota fallback to Gemini 3.8 Flash (`Model: "flash"`). Invoked only for complex system architecture, multi-table schema design, security models, or intricate algorithmic puzzles.
+   - **Layer 2: Fast Parallel Researchers (`repo-researcher`, `Model: "flash"` | `"flash_lite"`)**: Can launch 2–3 in parallel safely for read-only codebase audits, tracing imports, and inspecting documentation.
+   - **Layer 3: Autonomous Execution Worker (`execution-worker` / `pinky`, `Model: "flash"`)**: **Strictly 1 worker at a time** for active coding and test runs to prevent SQLite write locks (`SQLITE_BUSY`) and file collisions. Runs `python -m py_compile app.py` and verifies endpoints before returning.
+   - **Layer 4: Quality & Route Security Verifier (`qa-verifier`, `Model: "flash_lite"` | `"flash"`)**: Audits route authentication (`Depends(verify_auth)` / `Depends(verify_admin)`), checks `git status` to ensure `data/` secrets are never tracked, and verifies SemVer/commit compliance.
+3. **🔔 Proactive User Model-Switching Notification Rule (Mandatory)**:
+   - **When to Recommend Switching TO Argon 4.0**: If the session is on Flash and the user requests a brand-new subsystem architecture, multi-table database redesign, or complex algorithmic puzzle, tell the user: *"🔔 **Switch to Argon 4.0**: Please switch your model dropdown to **Gemini 4 Argon** so we can architect the foundation."*
+   - **When to Recommend Switching BACK to Flash 3.8**: As soon as the Argon 4.0 architectural foundation, database schema, and core backend logic are complete—and before high-volume UI styling or test loops—tell the user: *"🔔 **Switch Back to Flash 3.8**: The Argon 4.0 foundation is complete! Switch your model dropdown back to **Gemini 3.8 Flash** now to save your 4.0 quota while we build the UI and run verification."*
+
+### 📚 Synchronized `.agents/skills/` Catalog (11 Expert Skills)
+Before modifying UI components, Discord webhooks, or homelab integrations, always call `read_file` on the relevant `.agents/skills/<skill>/SKILL.md`:
+1. [`portalarr-ui`](file:///C:/Users/Dom/Documents/GitHub/AI_Helper/.agents/skills/portalarr-ui/SKILL.md) (+ 5 references in `references/`): Comprehensive UI/UX design system, dark mode tokens, Bento grids, launchpads, modals, cards, and responsive drawer patterns.
+2. [`gemini-orchestration`](file:///C:/Users/Dom/Documents/GitHub/AI_Helper/.agents/skills/gemini-orchestration/SKILL.md): 4-layer Gemini subagent hierarchy, quota fallback, and task completion protocol.
+3. [`discord-expert`](file:///C:/Users/Dom/Documents/GitHub/AI_Helper/.agents/skills/discord-expert/SKILL.md): Discord webhook & bot embed standards, role blueprints, and notification formatting.
+4. [`plex-api-expert`](file:///C:/Users/Dom/Documents/GitHub/AI_Helper/.agents/skills/plex-api-expert/SKILL.md) (+ 2 references): Plex Media Server REST API, token auth, library sections, and stream session diagnostics.
+5. [`iptv-expert`](file:///C:/Users/Dom/Documents/GitHub/AI_Helper/.agents/skills/iptv-expert/SKILL.md): IPTV, Threadfin, Dispatcharr, M3U playlists, XMLTV EPG, and HDHomeRun tuner emulation.
+6. [`agregarr-expert`](file:///C:/Users/Dom/Documents/GitHub/AI_Helper/.agents/skills/agregarr-expert/SKILL.md) (+ 3 references): Collection aggregator, smart hubs, placeholder stubs, and poster styling.
+7. [`kometa-expert`](file:///C:/Users/Dom/Documents/GitHub/AI_Helper/.agents/skills/kometa-expert/SKILL.md) (+ 2 references): Automated poster overlays, collection builders, and YAML configuration.
+8. [`maintainerr-expert`](file:///C:/Users/Dom/Documents/GitHub/AI_Helper/.agents/skills/maintainerr-expert/SKILL.md) (+ 2 references): Media library retention rules, "Leaving Soon" staging, and storage reclamation.
+9. [`radarr-expert`](file:///C:/Users/Dom/Documents/GitHub/AI_Helper/.agents/skills/radarr-expert/SKILL.md) (+ 2 references): Radarr v3 API, movie models, indexers, and custom format scoring.
+10. [`sonarr-expert`](file:///C:/Users/Dom/Documents/GitHub/AI_Helper/.agents/skills/sonarr-expert/SKILL.md) (+ 2 references): Sonarr v3/v5 API, episode parsing, and season pack management.
+11. [`seerr-expert`](file:///C:/Users/Dom/Documents/GitHub/AI_Helper/.agents/skills/seerr-expert/SKILL.md) (+ 2 references): Overseerr / Jellyseerr media request management, quotas, and Servarr dispatch.
+
+### 📖 Synchronized Portalarr Reference Documentation (`docs/portalarr/`)
+- [`docs/portalarr/PORTALARR_GEMINI.md`](file:///C:/Users/Dom/Documents/GitHub/AI_Helper/docs/portalarr/PORTALARR_GEMINI.md): Complete 121 KB Portalarr architecture, feature specification, and operational bible.
+- [`docs/portalarr/DEV_ROADMAP.md`](file:///C:/Users/Dom/Documents/GitHub/AI_Helper/docs/portalarr/DEV_ROADMAP.md): Portalarr multi-phase engineering roadmap.
+- [`docs/portalarr/IPTV_ON_DEMAND_ARCHITECTURE.md`](file:///C:/Users/Dom/Documents/GitHub/AI_Helper/docs/portalarr/IPTV_ON_DEMAND_ARCHITECTURE.md): On-demand IPTV proxy and stream lifecycle architecture.
+- [`docs/portalarr/DISCORD_LIVE_SERVER.md`](file:///C:/Users/Dom/Documents/GitHub/AI_Helper/docs/portalarr/DISCORD_LIVE_SERVER.md) & [`docs/portalarr/DISCORD_TEST_SERVER.md`](file:///C:/Users/Dom/Documents/GitHub/AI_Helper/docs/portalarr/DISCORD_TEST_SERVER.md): Complete Discord server channel, role, and webhook blueprints.
+- [`docs/portalarr/USER_GUIDE.md`](file:///C:/Users/Dom/Documents/GitHub/AI_Helper/docs/portalarr/USER_GUIDE.md) & [`docs/portalarr/user_guide_ebooks.md`](file:///C:/Users/Dom/Documents/GitHub/AI_Helper/docs/portalarr/user_guide_ebooks.md): End-user homelab and ebook/audiobook guides.

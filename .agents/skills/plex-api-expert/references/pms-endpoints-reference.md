@@ -29,6 +29,20 @@ Reference source:
   ```
   Returns metadata including TMDb/IMDb/TVDb GUIDs, file paths, editions, labels, and stream specs.
 
+- **TV Show Hierarchy Navigation (Show -> Season -> Episode)**:
+  ```http
+  GET /library/metadata/{showRatingKey}/children
+  ```
+  Returns seasons container with `index` (season number) and `ratingKey`.
+  ```http
+  GET /library/metadata/{seasonRatingKey}/children
+  ```
+  Returns episode container with `index` (episode number) and `ratingKey`.
+  ```http
+  GET /library/metadata/{episodeRatingKey}
+  ```
+  Returns full episode metadata including `Media` container, physical disk file `Part` paths, audio streams, and subtitle streams.
+
 ---
 
 ## 2. Active Playback Sessions & Stream Control
