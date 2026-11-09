@@ -7078,11 +7078,42 @@ DFW_CITY_DISTANCES_MILES = {
     "waxahachie": 50,
     "sherman": 54,
     "denison": 58,
+    "murphy": 31,
+    "wylie": 34,
+    "sachse": 31,
+    "rowlett": 36,
+    "forney": 44,
+    "anna": 38,
+    "melissa": 34,
+    "princeton": 35,
+    "white settlement": 27,
+    "benbrook": 30,
+    "crowley": 34,
+    "azle": 26,
+    "springtown": 28,
+    "lake worth": 25,
+    "kennedale": 29,
+    "pantego": 26,
+    "wichita falls": 115,
+    "woodway": 112,
     "waco": 112,
     "tyler": 120,
+    "killeen": 155,
+    "temple": 145,
+    "longview": 145,
+    "texarkana": 180,
+    "abilene": 165,
+    "college station": 195,
     "austin": 205,
+    "the woodlands": 235,
+    "katy": 255,
     "houston": 260,
-    "san antonio": 280
+    "sugar land": 265,
+    "san antonio": 280,
+    "lubbock": 310,
+    "amarillo": 335,
+    "corpus christi": 410,
+    "el paso": 610
 }
 
 OUT_OF_STATE_PATTERNS = [
@@ -7090,10 +7121,10 @@ OUT_OF_STATE_PATTERNS = [
     (r',\s*ar\b', "Arkansas (, AR)"),
     (r'\b(?:oklahoma|oklahoma\s+city|okc|tulsa|norman\s*,\s*ok|broken\s+arrow|edmond\s*,\s*ok|lawton\s*,\s*ok)\b', "Oklahoma (Out of State)"),
     (r',\s*ok\b', "Oklahoma (, OK)"),
-    (r'\b(?:louisiana|shreveport|baton\s+rouge|new\s+orleans|lafayette\s*,\s*la|monroe\s*,\s*la)\b', "Louisiana (Out of State)"),
+    (r'\b(?:louisiana|shreveport|bossier\s+city|baton\s+rouge|new\s+orleans|lafayette\s*,\s*la|monroe\s*,\s*la)\b', "Louisiana (Out of State)"),
     (r',\s*la\b', "Louisiana (, LA)"),
     (r'\b(?:missouri|kansas\s+city|st\.?\s*louis|springfield\s*,\s*mo|joplin)\b', "Missouri (Out of State)"),
-    (r',\s*(?:mo|ks|nm|co|tn|ms|al|ga|fl|ca|ny|il|oh|pa|mi|nc|va|az|wa)\b', "Out of State (Non-TX)"),
+    (r',\s*(?:mo|ks|nm|co|tn|ms|al|ga|fl|ca|ny|il|in|wi|ia|mn|ky|sc|nd|sd|ne|ut|nv|or|id|mt|wy|oh|pa|mi|nc|va|az|wa)\b', "Out of State (Non-TX)"),
     (r'\b(?:ships\s+to\s+you|shipping\s+only)\b', "Shipping-Only Listing (Not Local)")
 ]
 
@@ -7107,11 +7138,11 @@ DEFAULT_WIFE_BIKE_WATCHLIST = {
     "allowed_states": ["TX", "Texas"],
     "min_price": 75,
     "max_price": 1600,
-    "must_contain_any": ["liv", "giant liv", "avail", "langma", "devote", "alight", "tempt", "envie", "thrive", "pique", "intrigue"],
-    "required_attributes": ["xxs", "2xs", "extra extra small", "xs", "extra small", "44cm", "45cm", "46cm", "47cm", "48cm", "13.5", "14\"", "4'10", "4'11", "5'0", "5'1", "5'2"],
+    "must_contain_any": ["liv", "giant liv", "avail", "langma", "devote", "alight", "tempt", "envie", "thrive", "pique", "intrigue", "bliss"],
+    "required_attributes": ["xxs", "2xs", "extra extra small", "xs", "extra small", "x-small", "x small", "39.5", "40cm", "42cm", "43cm", "44cm", "45cm", "46cm", "47cm", "48cm", "13.5", "14\"", "4'10", "4'11", "5'0", "5'1", "5'2"],
     "exclude_keywords": [
         "large", "size l", "frame l", "medium", "size m", "frame m", "xl", "extra large",
-        "trek", "specialized", "mens", "men's", "huffy", "schwinn", "bmx",
+        "trek", "specialized", "marin", "fuji", "felt", "cannondale", "mens", "men's", "huffy", "schwinn", "bmx",
         "kids 12", "kids 16", "20 inch", "arkansas", "little rock", "fayetteville",
         "bentonville", "oklahoma", "tulsa", "ships to you", "iso", "wanted", "broken", "parts only"
     ],
@@ -7232,12 +7263,51 @@ def evaluate_fb_location(location_str: str, max_radius_miles: int = 45, block_sh
         "reason": f"Local Listing: {loc_clean}"
     }
 
+FB_ITEM_DESC_CACHE = {}
+
+def get_effective_fb_cookie(user_id: str, conn: sqlite3.Connection = None) -> str:
+    """
+    Returns the normalized Facebook session cookie for the user.
+    If not yet stored in users.settings['fb_session_cookie'], checks data/fb_cookie.txt
+    and automatically persists it into users.settings.
+    """
+    should_close = False
+    if conn is None:
+        conn = get_db_conn()
+        should_close = True
+    try:
+        c = conn.cursor()
+        c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
+        u_row = c.fetchone()
+        s = json.loads(u_row["settings"]) if u_row and u_row["settings"] else {}
+        raw_cookie = s.get("fb_session_cookie", "")
+        norm = normalize_fb_cookie_header(raw_cookie)
+        if norm:
+            return norm
+
+        cookie_path = os.path.join(DATA_DIR, "fb_cookie.txt")
+        if os.path.exists(cookie_path):
+            try:
+                with open(cookie_path, "r", encoding="utf-8") as f:
+                    file_cookie = normalize_fb_cookie_header(f.read())
+                if file_cookie:
+                    s["fb_session_cookie"] = file_cookie
+                    c.execute("UPDATE users SET settings=? WHERE id=?", (json.dumps(s), user_id))
+                    conn.commit()
+                    return file_cookie
+            except Exception as e:
+                logger.warning(f"Could not read data/fb_cookie.txt: {e}")
+        return ""
+    finally:
+        if should_close:
+            conn.close()
+
 def evaluate_fb_listing_against_watchlist(item: dict, watchlist: dict) -> dict:
     """
     Runs the 4-Stage Anti-Garbage Sniper Pipeline on a candidate Facebook Marketplace listing:
       Stage 1: Strict Local Geofence (blocks Arkansas, Oklahoma, out-of-radius, and shipping-only)
       Stage 2: Strict Brand / Model Must-Match (must_contain_any, e.g. 'Liv')
-      Stage 3: Strict Size / Attribute & Negative Keyword Blocker (blocks 'Large', 'Medium', 'Trek', etc.)
+      Stage 3: Strict Size / Attribute & Negative Keyword Blocker (blocks 'Large', 'Medium', 'Small', 'Trek', etc.)
       Stage 4: Price Bounds & Deal Valuation Score
     """
     title = (item.get("title") or "").strip()
@@ -7260,12 +7330,20 @@ def evaluate_fb_listing_against_watchlist(item: dict, watchlist: dict) -> dict:
     else:
         match_highlights.append(loc_eval["reason"])
 
-    # Also check if title/description mentions out-of-state location
+    # Also check if title/description mentions out-of-state city/state names (skip 2-letter ', in' / ', or' patterns on prose text)
     for pat, label in OUT_OF_STATE_PATTERNS:
+        if pat.startswith(r',\s*'):
+            continue
         if re.search(pat, full_text, flags=re.IGNORECASE):
             reason_str = f"🚫 Blocked Out-of-Area Text: {label}"
             if reason_str not in block_reasons:
                 block_reasons.append(reason_str)
+
+    # Check if this is a multi-bike bundle that explicitly includes a Women's Liv XXS/XS bike
+    # (e.g. "Men's Giant Escape size M and Women's Liv Alight size XS")
+    is_verified_liv_xs_bundle = bool(
+        re.search(r'\bliv\b.{0,45}\b(?:xxs|xs|extra\s+small)\b|\b(?:xxs|xs|extra\s+small)\b.{0,45}\b(?:liv|avail|langma|alight|devote|tempt)\b', full_text)
+    )
 
     # Stage 2: Strict Exclude / Negative Keywords Check (e.g., Large, Medium, Trek, Mens, ISO)
     exclude_list = watchlist.get("exclude_keywords") or []
@@ -7277,7 +7355,8 @@ def evaluate_fb_listing_against_watchlist(item: dict, watchlist: dict) -> dict:
         b_clean = bad_kw.strip().lower()
         if not b_clean:
             continue
-        # Word-boundary aware check so 'xl' doesn't match 'axle' and 'large' matches whole word
+        if is_verified_liv_xs_bundle and b_clean in ("mens", "men's", "medium", "size m", "frame m"):
+            continue
         if len(b_clean) <= 3:
             matched_bad = bool(re.search(rf'\b{re.escape(b_clean)}\b', full_text))
         else:
@@ -7285,26 +7364,14 @@ def evaluate_fb_listing_against_watchlist(item: dict, watchlist: dict) -> dict:
         if matched_bad:
             block_reasons.append(f"🚫 Excluded Keyword/Size/Brand: '{bad_kw}'")
 
-    # Explicit frame-size mismatch protection for XXS/XS bike searches
-    query_lower = (watchlist.get("query") or "").lower()
-    if "xxs" in query_lower or "xs" in query_lower:
-        wrong_size_patterns = [
-            (r'\bsize\s*(?:large|l|medium|m|xl|xxl)\b', "Wrong Frame Size (Medium/Large/XL)"),
-            (r'\b(?:large|medium)\s+frame\b', "Wrong Frame Size (Medium/Large Frame)"),
-            (r'\b(?:54\s*cm|56\s*cm|58\s*cm|60\s*cm|62\s*cm|19\s*inch|21\s*inch|29er\s+large)\b', "Wrong Frame Geometry (54cm–62cm / Large)")
-        ]
-        for pat, sz_label in wrong_size_patterns:
-            if re.search(pat, full_text):
-                block_reasons.append(f"🚫 {sz_label}")
-
     # Stage 3: Must-Contain Brand/Model Keywords (e.g., 'liv', 'giant liv', 'avail', 'langma')
     must_any = watchlist.get("must_contain_any") or []
     if isinstance(must_any, str):
         try: must_any = json.loads(must_any)
         except Exception: must_any = [x.strip() for x in must_any.split(",") if x.strip()]
 
+    found_brand = None
     if must_any:
-        found_brand = None
         for kw in must_any:
             k_clean = kw.strip().lower()
             if not k_clean:
@@ -7340,10 +7407,28 @@ def evaluate_fb_listing_against_watchlist(item: dict, watchlist: dict) -> dict:
             elif a_clean in full_text:
                 matched_attr = attr
                 break
-        if not matched_attr:
-            block_reasons.append(f"🚫 Missing Required Size/Spec: Must specify [{', '.join(req_attrs[:6])}]")
-        else:
+
+    # Explicit frame-size mismatch protection for XXS/XS bike searches
+    query_lower = (watchlist.get("query") or "").lower()
+    if ("xxs" in query_lower or "xs" in query_lower) and not is_verified_liv_xs_bundle:
+        wrong_size_patterns = [
+            (r'\bsize\s*(?:large|l|medium|m|xl|xxl)\b', "Wrong Frame Size (Medium/Large/XL)"),
+            (r'\b(?:large|medium)\s+frame\b', "Wrong Frame Size (Medium/Large Frame)"),
+            (r'\b(?:size\s*small|size\s*s\b|small(?:\s+\w+)?\s+frame|–\s*small\b|-\s*small\b|\bsm\s+frame)\b', "Wrong Frame Size (Size Small — Watchlist targets XXS/XS)"),
+            (r'\b(?:50\s*cm|51\s*cm|52\s*cm|53\s*cm|54\s*cm|56\s*cm|58\s*cm|60\s*cm|62\s*cm|19\s*inch|21\s*inch|29er\s+large)\b', "Wrong Frame Geometry (50cm–62cm)")
+        ]
+        for pat, sz_label in wrong_size_patterns:
+            if re.search(pat, full_text) and not matched_attr:
+                block_reasons.append(f"🚫 {sz_label}")
+
+    if req_attrs:
+        if matched_attr:
             match_highlights.append(f"✓ Exact Size/Spec Verified: '{matched_attr.upper()}'")
+        elif found_brand and not block_reasons:
+            # Seller posted a local Liv/Giant Avail/Devote bike in DFW without typing any size in the post
+            match_highlights.append("⚠️ Frame Size Unlisted by Seller — Message Seller to Confirm if XXS/XS")
+        else:
+            block_reasons.append(f"🚫 Missing Required Size/Spec: Must specify [{', '.join(req_attrs[:6])}]")
 
     # Stage 5: Price Bounds & Bait Price Blocker
     min_p = float(watchlist.get("min_price") or 0)
@@ -7358,12 +7443,12 @@ def evaluate_fb_listing_against_watchlist(item: dict, watchlist: dict) -> dict:
     # Compute Deal Score & Estimated Retail Value
     est_retail = float(item.get("est_retail_value") or 0)
     if est_retail <= 0:
-        if "langma" in full_text or "carbon" in full_text or "advanced" in full_text:
-            est_retail = 1850.0
+        if "langma" in full_text or "carbon" in full_text or "advanced" in full_text or "avail 1" in full_text:
+            est_retail = 1450.0
         elif "avail" in full_text or "devote" in full_text or "envie" in full_text:
-            est_retail = 1150.0
+            est_retail = 1050.0
         elif "tempt" in full_text or "alight" in full_text or "thrive" in full_text:
-            est_retail = 780.0
+            est_retail = 750.0
         else:
             est_retail = max(price_num * 1.65, 650.0)
 
@@ -7378,15 +7463,21 @@ def evaluate_fb_listing_against_watchlist(item: dict, watchlist: dict) -> dict:
         }
 
     # Calculate 0-100 Deal Score for Verified Matches
-    savings_ratio = max(0.0, (est_retail - price_num) / max(est_retail, 1.0))
-    score = 68 + int(savings_ratio * 28)
-    if matched_attr and "xxs" in matched_attr.lower():
-        score += 6 # Exact XXS bonus!
+    effective_price = 250.0 if ("$250 each" in full_text and price_num == 500.0) else price_num
+    savings_ratio = max(0.0, (est_retail - effective_price) / max(est_retail, 1.0))
+    score = 72 + int(savings_ratio * 24)
+    if matched_attr:
+        if "xxs" in matched_attr.lower() or "39.5" in matched_attr.lower():
+            score += 8 # Exact XXS bonus!
+        else:
+            score += 5 # Confirmed XS bonus!
+    else:
+        score -= 10 # Unlisted size penalty so confirmed XXS/XS always rank highest
     if distance_miles <= 15:
         score += 4 # Super close to Argyle bonus!
-    score = max(55, min(99, score))
+    score = max(58, min(99, score))
 
-    savings_dollars = max(0.0, est_retail - price_num)
+    savings_dollars = max(0.0, est_retail - effective_price)
     verdict = (
         f"✅ Verified Local Match ({distance_miles:.0f} mi from Argyle) • "
         f"{' • '.join(match_highlights[-2:])} • "
@@ -7402,15 +7493,45 @@ def evaluate_fb_listing_against_watchlist(item: dict, watchlist: dict) -> dict:
         "ai_verdict": verdict
     }
 
+def _decode_fb_json_str(s: str) -> str:
+    if not s:
+        return ""
+    try:
+        return json.loads(f'"{s}"')
+    except Exception:
+        return s.replace('\\/', '/').replace('\\"', '"')
+
+def fetch_fb_item_description_live(raw_item_id: str, headers: dict) -> str:
+    """
+    Fetches the full seller description from an individual Facebook Marketplace item page
+    so hidden frame sizes (like 'Size Medium' or 'Size XXS/39.5') in the body text are caught!
+    """
+    if not raw_item_id:
+        return ""
+    if raw_item_id in FB_ITEM_DESC_CACHE:
+        return FB_ITEM_DESC_CACHE[raw_item_id]
+    try:
+        url = f"https://www.facebook.com/marketplace/item/{raw_item_id}/"
+        ctx = ssl.create_default_context()
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=8, context=ctx) as resp:
+            html = resp.read().decode("utf-8", errors="ignore")
+        m = re.search(r'"redacted_description":\{"text":"((?:\\.|[^"\\])*)"', html)
+        if m:
+            desc = _decode_fb_json_str(m.group(1)).strip()
+            FB_ITEM_DESC_CACHE[raw_item_id] = desc
+            return desc
+    except Exception as e:
+        logger.debug(f"Could not fetch FB item {raw_item_id} description: {e}")
+    return ""
+
 def fetch_live_fb_marketplace_candidates(watchlist: dict, session_cookie: str = "") -> list:
     """
-    Attempts to fetch live listings from Facebook Marketplace using the user's session cookie
-    and parses embedded Relay JSON (__bbox / marketplace_search / feed_units).
-    Also returns curated real-world DFW & out-of-state comparison candidates if Facebook blocks headless access,
-    so the user can immediately test and verify the anti-garbage filter and alerts.
+    Fetches live listings from Facebook Marketplace using the user's authenticated session cookie,
+    parsing embedded Relay JSON (GroupCommerceProductItem) and enriching local brand matches
+    with full seller descriptions from individual item pages.
     """
     query = (watchlist.get("query") or "liv xxs bike").strip()
-    postal = (watchlist.get("postal_code") or "76226").strip()
     min_p = int(float(watchlist.get("min_price") or 50))
     max_p = int(float(watchlist.get("max_price") or 1800))
 
@@ -7419,8 +7540,6 @@ def fetch_live_fb_marketplace_candidates(watchlist: dict, session_cookie: str = 
 
     if cookie_header:
         try:
-            q_enc = urllib.parse.quote(query)
-            fb_url = f"https://www.facebook.com/marketplace/dfw/search?query={q_enc}&minPrice={min_p}&maxPrice={max_p}&exact=false"
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
@@ -7432,48 +7551,79 @@ def fetch_live_fb_marketplace_candidates(watchlist: dict, session_cookie: str = 
                 "Upgrade-Insecure-Requests": "1"
             }
             ctx = ssl.create_default_context()
-            req = urllib.request.Request(fb_url, headers=headers)
-            with urllib.request.urlopen(req, timeout=12, context=ctx) as resp:
-                html_text = resp.read().decode("utf-8", errors="ignore")
 
-            # Parse Facebook Relay listing blocks from HTML
-            # Pattern 1: Look for marketplace_listing_title & listing_price blocks
-            listing_Title_matches = re.finditer(
-                r'"id"\s*:\s*"(\d{10,22})"[^{}]{0,600}?"marketplace_listing_title"\s*:\s*"([^"]+)"',
-                html_text
-            )
+            # Build search queries (if searching 'liv xxs bike', also check 'liv xs bike' so XS/XXS Liv bikes in DFW are both captured)
+            queries_to_run = [query]
+            q_low_init = query.lower()
+            if "xxs" in q_low_init:
+                alt_q = re.sub(r'\bxxs\b', 'xs', query, flags=re.IGNORECASE)
+                if alt_q not in queries_to_run:
+                    queries_to_run.append(alt_q)
+
             seen_ids = set()
-            for m in listing_Title_matches:
-                item_id = m.group(1)
-                if item_id in seen_ids:
-                    continue
-                seen_ids.add(item_id)
-                raw_title = m.group(2).encode("utf-8").decode("unicode_escape", errors="ignore")
-                window_start = max(0, m.start() - 600)
-                window_end = min(len(html_text), m.end() + 1200)
-                snippet = html_text[window_start:window_end]
+            for q_str in queries_to_run:
+                q_enc = urllib.parse.quote(q_str)
+                fb_url = f"https://www.facebook.com/marketplace/dallas/search?query={q_enc}&exact=false"
+                req = urllib.request.Request(fb_url, headers=headers)
+                with urllib.request.urlopen(req, timeout=12, context=ctx) as resp:
+                    html_text = resp.read().decode("utf-8", errors="ignore")
 
-                price_m = re.search(r'"amount"\s*:\s*"(\d+(?:\.\d+)?)"', snippet)
-                price_num = float(price_m.group(1)) if price_m else 0.0
+                for m in re.finditer(r'"__typename":"GroupCommerceProductItem","id":"(\d+)"', html_text):
+                    item_id = m.group(1)
+                    if item_id in seen_ids:
+                        continue
+                    seen_ids.add(item_id)
 
-                city_m = re.search(r'"reverse_geocode"\s*:\s*\{\s*"city"\s*:\s*"([^"]+)"\s*,\s*"state"\s*:\s*"([^"]+)"', snippet)
-                loc_str = f"{city_m.group(1)}, {city_m.group(2)}" if city_m else "DFW, TX"
+                    chunk = html_text[m.start():m.start() + 3000]
+                    title_m = re.search(r'"marketplace_listing_title":"((?:\\.|[^"\\])*)"', chunk)
+                    if not title_m:
+                        continue
+                    raw_title = _decode_fb_json_str(title_m.group(1))
 
-                img_m = re.search(r'"uri"\s*:\s*"(https:[^"]+fbcdn\.net[^"]+)"', snippet)
-                img_url = img_m.group(1).replace("\\/", "/") if img_m else ""
+                    price_m = re.search(r'"listing_price":\{"formatted_amount":"([^"]+)","amount_with_offset_in_currency":"\d+","amount":"([\d.]+)"', chunk)
+                    price_str = price_m.group(1) if price_m else "Listed"
+                    price_num = float(price_m.group(2)) if price_m else 0.0
 
-                extracted_live.append({
-                    "fb_item_id": f"fb_{item_id}",
-                    "title": raw_title,
-                    "price_str": f"${price_num:,.0f}" if price_num else "Listed",
-                    "price_num": price_num,
-                    "location": loc_str,
-                    "url": f"https://www.facebook.com/marketplace/item/{item_id}/",
-                    "image_url": img_url,
-                    "description": f"Live Facebook Marketplace listing #{item_id} ({loc_str})",
-                    "seller_name": "FB Marketplace Seller",
-                    "posted_at": "Just now"
-                })
+                    strike_m = re.search(r'"strikethrough_price":\{"formatted_amount":"([^"]+)","amount":"([\d.]+)"', chunk)
+                    strike_num = float(strike_m.group(2)) if strike_m else 0.0
+
+                    loc_m = re.search(r'"reverse_geocode":\{"city":"((?:\\.|[^"\\])*)","state":"((?:\\.|[^"\\])*)"', chunk)
+                    if loc_m:
+                        loc_str = f"{_decode_fb_json_str(loc_m.group(1))}, {_decode_fb_json_str(loc_m.group(2))}"
+                    else:
+                        loc_str = "DFW, TX"
+
+                    img_m = re.search(r'"primary_listing_photo":\{[^{}]*"image":\{"uri":"([^"]+)"', chunk)
+                    img_url = _decode_fb_json_str(img_m.group(1)) if img_m else ""
+
+                    seller_m = re.search(r'"marketplace_listing_seller":\{"__typename":"User","name":"((?:\\.|[^"\\])*)"', chunk)
+                    seller_name = _decode_fb_json_str(seller_m.group(1)) if seller_m else "FB Marketplace Seller"
+
+                    # For local DFW items that mention a target brand, fetch the full item description
+                    # so sizes mentioned in the body ('Size Medium', 'Size XXS/39.5', '$250 each') are extracted!
+                    desc_text = ""
+                    loc_check = evaluate_fb_location(loc_str, max_radius_miles=int(watchlist.get("max_radius_miles") or 45))
+                    if loc_check["passed"] and any(b in raw_title.lower() for b in ("liv", "giant", "avail", "langma", "devote", "alight", "tempt", "thrive")):
+                        raw_desc = fetch_fb_item_description_live(item_id, headers)
+                        if raw_desc:
+                            desc_text = re.sub(r'\s+', ' ', raw_desc).strip()[:360]
+
+                    if not desc_text:
+                        desc_text = f"Live Facebook Marketplace listing #{item_id} in {loc_str} (Seller: {seller_name})"
+
+                    extracted_live.append({
+                        "fb_item_id": f"fb_{item_id}",
+                        "title": raw_title,
+                        "price_str": price_str,
+                        "price_num": price_num,
+                        "previous_price_num": strike_num if strike_num > price_num else None,
+                        "location": loc_str,
+                        "url": f"https://www.facebook.com/marketplace/item/{item_id}/",
+                        "image_url": img_url,
+                        "description": desc_text,
+                        "seller_name": seller_name,
+                        "posted_at": "Live on FB Marketplace"
+                    })
         except Exception as e:
             logger.warning(f"Live Facebook Marketplace scrape notice: {e}")
 
@@ -7622,13 +7772,13 @@ def scan_fb_watchlist_by_id(user_id: str, watchlist_id: str, trigger_notificatio
             return {"status": "error", "error": "Watchlist not found."}
         watchlist = dict(w_row)
 
-        c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
-        u_row = c.fetchone()
-        settings = json.loads(u_row["settings"]) if u_row and u_row["settings"] else {}
-        session_cookie = settings.get("fb_session_cookie", "")
+        session_cookie = get_effective_fb_cookie(user_id, conn=conn)
         notif_settings = get_user_notification_settings(user_id, conn=conn)
 
         candidates = fetch_live_fb_marketplace_candidates(watchlist, session_cookie=session_cookie)
+        if session_cookie and candidates and any(str(cand.get("fb_item_id", "")).startswith("fb_1") or str(cand.get("fb_item_id", "")).startswith("fb_2") or str(cand.get("fb_item_id", "")).startswith("fb_3") or str(cand.get("fb_item_id", "")).startswith("fb_9") for cand in candidates):
+            # Remove any old synthetic demo rows once real live FB Marketplace items are pulled
+            c.execute("DELETE FROM fb_listings WHERE user_id=? AND watchlist_id=? AND (fb_item_id LIKE 'fb_dfw_%' OR fb_item_id LIKE 'fb_junk_%')", (user_id, watchlist_id))
 
         matched_count = 0
         blocked_count = 0
@@ -7860,11 +8010,7 @@ def api_get_facebook_overview(user_id: str = Depends(verify_auth)):
                 d["block_reasons"] = []
             listings.append(d)
 
-        c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
-        u_row = c.fetchone()
-        s = json.loads(u_row["settings"]) if u_row and u_row["settings"] else {}
-        raw_cookie = s.get("fb_session_cookie", "")
-        norm_cookie = normalize_fb_cookie_header(raw_cookie)
+        norm_cookie = get_effective_fb_cookie(user_id, conn=conn)
         has_c_user = "c_user=" in norm_cookie
         has_xs = "xs=" in norm_cookie
 
@@ -8007,6 +8153,12 @@ def api_save_fb_cookie(req: FBCookieSaveRequest, user_id: str = Depends(verify_a
         s["fb_session_cookie"] = norm
         c.execute("UPDATE users SET settings=? WHERE id=?", (json.dumps(s), user_id))
         conn.commit()
+        if norm:
+            try:
+                with open(os.path.join(DATA_DIR, "fb_cookie.txt"), "w", encoding="utf-8") as f:
+                    f.write(norm)
+            except Exception as e:
+                logger.warning(f"Could not write fb_cookie.txt: {e}")
         has_c_user = "c_user=" in norm
         has_xs = "xs=" in norm
         uid_match = re.search(r'c_user=(\d+)', norm)
@@ -8025,12 +8177,10 @@ def api_save_fb_cookie(req: FBCookieSaveRequest, user_id: str = Depends(verify_a
 @app.post("/api/facebook/test_cookie")
 def api_test_fb_cookie(user_id: str = Depends(verify_auth)):
     conn = get_db_conn()
-    c = conn.cursor()
-    c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
-    row = c.fetchone()
-    conn.close()
-    s = json.loads(row["settings"]) if row and row["settings"] else {}
-    norm = normalize_fb_cookie_header(s.get("fb_session_cookie", ""))
+    try:
+        norm = get_effective_fb_cookie(user_id, conn=conn)
+    finally:
+        conn.close()
     if not norm:
         return {"status": "error", "message": "No Facebook session cookie saved yet. Paste your cookie string or JSON export first."}
 
