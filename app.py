@@ -8185,7 +8185,8 @@ DEFAULT_WIFE_BIKE_WATCHLIST = {
         "large", "size l", "frame l", "medium", "size m", "frame m", "xl", "extra large",
         "trek", "specialized", "marin", "fuji", "felt", "cannondale", "mens", "men's", "huffy", "schwinn", "bmx",
         "kids 12", "kids 16", "20 inch", "24 inch", "24\"", "enchant", "arkansas", "little rock", "fayetteville",
-        "bentonville", "oklahoma", "tulsa", "ships to you", "iso", "wanted", "broken", "parts only"
+        "bentonville", "oklahoma", "tulsa", "ships to you", "iso", "wanted", "broken", "parts only",
+        "49cm", "50cm", "51cm", "52cm", "53cm", "54cm", "55cm", "56cm", "57cm", "58cm", "59cm", "60cm", "61cm", "62cm"
     ],
     "visual_targets": [
         "Adult Women's Road / Endurance / Gravel / Fitness frame (Reject 20\"/24\" kids/youth bikes like Liv Enchant with RevoShift twist shifters or kickstands)",
@@ -8498,17 +8499,28 @@ Examine the attached bike photo(s) carefully and return ONLY a valid JSON object
     # Deterministic spec extraction fallback when listing is not in pre-verified set and no live LLM key ran
     full_t = f"{item.get('title', '')} {item.get('description', '')}".lower()
     is_youth = bool(re.search(r'\b(?:enchant|24\s*inch|24"|20\s*inch|20"|daughter|kids|youth|girls\s+bike)\b', full_t))
-    has_xxs_xs = bool(re.search(r'\b(?:xxs|xs|extra\s+small|39\.5|43\s*cm|44\s*cm)\b', full_t))
+    has_xxs_xs = bool(re.search(r'\b(?:xxs|xs|extra\s+extra\s+small|extra\s+small|39\.5|40\s*cm|42\s*cm|43\s*cm|44\s*cm)\b', full_t))
+    has_wrong_size = bool(re.search(
+        r'\b(?:50\s*cm|51\s*cm|52\s*cm|53\s*cm|54\s*cm|55\s*cm|56\s*cm|57\s*cm|58\s*cm|60\s*cm|62\s*cm|64\s*cm|'
+        r'medium(?:\s+sized)?(?:\s+frame)?|large(?:\s+sized)?(?:\s+frame)?|size\s*(?:medium|m\b|large|l\b|xl\b)|frame\s*(?:size\s*)?(?:medium|m\b|large|l\b))\b',
+        full_t
+    ))
     is_disc = "disc" in full_t or "devote" in full_t or "langma advanced disc" in full_t
     is_carbon = "carbon" in full_t or "advanced" in full_t or "langma" in full_t
 
     fallback_res = {
         "identified_model": item.get("title") or "Liv / Giant Bicycle",
         "bike_category": "Youth / Kids Bike" if is_youth else "Adult Road / Fitness Bicycle",
-        "photo_frame_size": "Youth 24\" Size" if is_youth else ("Confirmed XXS/XS" if has_xxs_xs else "Unverified in Listing Text"),
-        "photo_size_confirmed": bool(has_xxs_xs and not is_youth),
+        "photo_frame_size": (
+            "Youth 24\" Size" if is_youth else (
+                "Confirmed XXS/XS" if has_xxs_xs else (
+                    "Wrong Size in Text (50cm+ / Medium / Large)" if has_wrong_size else "Unverified in Listing Text"
+                )
+            )
+        ),
+        "photo_size_confirmed": bool(has_xxs_xs and not is_youth and not has_wrong_size),
         "is_youth_or_wrong_category": is_youth,
-        "is_wrong_adult_size": False,
+        "is_wrong_adult_size": bool(has_wrong_size and not is_youth),
         "frame_material": "Carbon Composite" if is_carbon else "ALUXX Aluminum Alloy",
         "brake_type": "Disc Brakes" if is_disc else "Rim Caliper / Linear-Pull Brakes",
         "drivetrain": "Shimano Road / Fitness Groupset",
@@ -8517,8 +8529,11 @@ Examine the attached bike photo(s) carefully and return ONLY a valid JSON object
         "verdict_summary": (
             "🚫 AI Photo Vision Blocked: Listing matches youth/kids bike profile."
             if is_youth else (
-                "🔬 Spec & Photo Check: Confirmed XXS/XS adult bike profile."
-                if has_xxs_xs else "⚠️ Spec & Photo Check: Frame size not explicitly stamped in text; verify seat-tube decal."
+                "🚫 AI Spec X-Ray Blocked: Wrong adult size (50cm+ / Medium / Large frame geometry)."
+                if has_wrong_size else (
+                    "🔬 Spec & Photo Check: Confirmed XXS/XS adult bike profile."
+                    if has_xxs_xs else "⚠️ Spec & Photo Check: Frame size not explicitly stamped in text; verify seat-tube decal."
+                )
             )
         )
     }
@@ -8609,7 +8624,12 @@ def evaluate_fb_listing_against_watchlist(item: dict, watchlist: dict) -> dict:
     exclude_list = watchlist.get("exclude_keywords") or []
     if isinstance(exclude_list, str):
         try: exclude_list = json.loads(exclude_list)
-        except Exception: exclude_list = [x.strip() for x in exclude_list.split(",") if x.strip()]
+        except Exception: exclude_list = [x.strip().strip('.').strip() for x in re.split(r'[,;\n\r]+|\.\s+', exclude_list) if x.strip()]
+    if isinstance(exclude_list, list):
+        cleaned_excl = []
+        for el in exclude_list:
+            cleaned_excl.extend([x.strip().strip('.').strip() for x in re.split(r'[,;\n\r]+|\.\s+', str(el)) if x.strip()])
+        exclude_list = cleaned_excl
 
     for bad_kw in exclude_list:
         b_clean = bad_kw.strip().lower()
@@ -8617,10 +8637,24 @@ def evaluate_fb_listing_against_watchlist(item: dict, watchlist: dict) -> dict:
             continue
         if is_verified_liv_xs_bundle and b_clean in ("mens", "men's", "medium", "size m", "frame m"):
             continue
-        if len(b_clean) <= 3:
+        
+        cm_match = re.match(r'^(\d+)\s*cm$', b_clean)
+        if cm_match:
+            cm_num = cm_match.group(1)
+            matched_bad = bool(re.search(rf'\b{cm_num}\s*cm\b', full_text))
+        elif len(b_clean) <= 3:
             matched_bad = bool(re.search(rf'\b{re.escape(b_clean)}\b', full_text))
         else:
-            matched_bad = (b_clean in full_text)
+            if b_clean in ("frame m", "medium frame"):
+                matched_bad = bool(re.search(r'\b(?:medium|m)(?:\s+(?:sized|size))?\s+frame\b|\bframe\s*(?:size\s*)?(?:medium|m)\b', full_text))
+            elif b_clean in ("size m", "size medium"):
+                matched_bad = bool(re.search(r'\bsize\s*(?:medium|m)\b|\b(?:medium|m)\s*size\b', full_text))
+            elif b_clean in ("frame l", "large frame"):
+                matched_bad = bool(re.search(r'\b(?:large|l)(?:\s+(?:sized|size))?\s+frame\b|\bframe\s*(?:size\s*)?(?:large|l)\b', full_text))
+            elif b_clean in ("size l", "size large"):
+                matched_bad = bool(re.search(r'\bsize\s*(?:large|l)\b|\b(?:large|l)\s*size\b', full_text))
+            else:
+                matched_bad = (b_clean in full_text)
         if matched_bad:
             block_reasons.append(f"🚫 Excluded Keyword/Size/Brand: '{bad_kw}'")
 
@@ -8628,7 +8662,7 @@ def evaluate_fb_listing_against_watchlist(item: dict, watchlist: dict) -> dict:
     must_any = watchlist.get("must_contain_any") or []
     if isinstance(must_any, str):
         try: must_any = json.loads(must_any)
-        except Exception: must_any = [x.strip() for x in must_any.split(",") if x.strip()]
+        except Exception: must_any = [x.strip() for x in re.split(r'[,;\n\r]+', must_any) if x.strip()]
 
     found_brand = None
     if must_any:
@@ -8652,7 +8686,7 @@ def evaluate_fb_listing_against_watchlist(item: dict, watchlist: dict) -> dict:
     req_attrs = watchlist.get("required_attributes") or []
     if isinstance(req_attrs, str):
         try: req_attrs = json.loads(req_attrs)
-        except Exception: req_attrs = [x.strip() for x in req_attrs.split(",") if x.strip()]
+        except Exception: req_attrs = [x.strip() for x in re.split(r'[,;\n\r]+', req_attrs) if x.strip()]
 
     matched_attr = None
     if req_attrs:
@@ -8670,12 +8704,18 @@ def evaluate_fb_listing_against_watchlist(item: dict, watchlist: dict) -> dict:
 
     # Explicit frame-size mismatch protection for XXS/XS bike searches
     query_lower = (watchlist.get("query") or "").lower()
-    if ("xxs" in query_lower or "xs" in query_lower) and not is_verified_liv_xs_bundle:
+    name_lower = (watchlist.get("name") or "").lower()
+    targets_small_size = (
+        "xxs" in query_lower or "xs" in query_lower or
+        "xxs" in name_lower or "xs" in name_lower or
+        any(re.search(r'\b(?:xxs|xs|extra\s*small|44\s*cm|47\s*cm|48\s*cm)\b', str(a).lower()) for a in req_attrs)
+    )
+    if targets_small_size and not is_verified_liv_xs_bundle:
         wrong_size_patterns = [
-            (r'\bsize\s*(?:large|l|medium|m|xl|xxl)\b', "Wrong Frame Size (Medium/Large/XL)"),
-            (r'\b(?:large|medium)\s+frame\b', "Wrong Frame Size (Medium/Large Frame)"),
+            (r'\bsize\s*(?:large|l|medium|m|xl|xxl)\b|\b(?:large|medium|xl)\s*(?:sized|size)\b', "Wrong Frame Size (Medium/Large/XL)"),
+            (r'\b(?:large|medium)(?:\s+(?:sized|size))?\s+frame\b|\bframe\s*(?:size\s*)?(?:medium|large|xl|m|l)\b', "Wrong Frame Size (Medium/Large Frame)"),
             (r'\b(?:size\s*small|size\s*s\b|small(?:\s+\w+)?\s+frame|–\s*small\b|-\s*small\b|\bsm\s+frame)\b', "Wrong Frame Size (Size Small — Watchlist targets XXS/XS)"),
-            (r'\b(?:50\s*cm|51\s*cm|52\s*cm|53\s*cm|54\s*cm|56\s*cm|58\s*cm|60\s*cm|62\s*cm|19\s*inch|21\s*inch|29er\s+large)\b', "Wrong Frame Geometry (50cm–62cm)")
+            (r'\b(?:50\s*cm|51\s*cm|52\s*cm|53\s*cm|54\s*cm|55\s*cm|56\s*cm|57\s*cm|58\s*cm|60\s*cm|62\s*cm|64\s*cm|19\s*inch|21\s*inch|29er\s+large)\b', "Wrong Frame Geometry (50cm–64cm)")
         ]
         for pat, sz_label in wrong_size_patterns:
             if re.search(pat, full_text) and not matched_attr:
@@ -8696,6 +8736,8 @@ def evaluate_fb_listing_against_watchlist(item: dict, watchlist: dict) -> dict:
     if isinstance(vision_analysis, dict) and vision_analysis:
         if vision_analysis.get("is_youth_or_wrong_category"):
             block_reasons.append(vision_analysis.get("verdict_summary") or "🚫 AI Photo Vision Blocked: Youth / Kids 24\" Bike")
+        elif vision_analysis.get("is_wrong_adult_size"):
+            block_reasons.append(vision_analysis.get("verdict_summary") or "🚫 Wrong Adult Size: Geometry/Text indicates Medium, Large, or 50cm+ frame (Watchlist targets XXS/XS)")
         elif vision_analysis.get("photo_size_confirmed") and not matched_attr:
             matched_attr = vision_analysis.get("photo_frame_size") or "XXS/XS (Photo Verified)"
 
@@ -8706,10 +8748,13 @@ def evaluate_fb_listing_against_watchlist(item: dict, watchlist: dict) -> dict:
             else:
                 match_highlights.append(f"✓ Exact Size/Spec Verified: '{matched_attr.upper()}'")
         elif found_brand and not block_reasons:
-            if isinstance(vision_analysis, dict) and vision_analysis.get("is_wrong_adult_size"):
-                match_highlights.append(vision_analysis.get("verdict_summary") or "⚠️ AI Photo Geometry Warning: Head-tube gap indicates Size S or M")
-            else:
+            is_compact_line = (
+                "liv" in full_text or "avail" in full_text or "langma" in full_text or "devote" in full_text or "alight" in full_text
+            )
+            if is_compact_line and ("xxs" in query_lower or "xs" in query_lower):
                 match_highlights.append("⚠️ Frame Size Unlisted by Seller — Message Seller to Confirm if XXS/XS")
+            else:
+                block_reasons.append(f"🚫 Missing Required Size/Spec: Must specify [{', '.join(req_attrs[:6])}]")
         else:
             block_reasons.append(f"🚫 Missing Required Size/Spec: Must specify [{', '.join(req_attrs[:6])}]")
 
@@ -8824,9 +8869,23 @@ def fetch_fb_item_details_live(raw_item_id: str, headers: dict) -> dict:
         req = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
             html = resp.read().decode("utf-8", errors="ignore")
-        m = re.search(r'"redacted_description":\{"text":"((?:\\.|[^"\\])*)"', html)
-        if m:
-            desc = _decode_fb_json_str(m.group(1)).strip()
+        desc_patterns = [
+            r'"redacted_description":\{"text":"((?:\\.|[^"\\])*)"',
+            r'"marketplace_listing_details":\{[^{}]*"description":\{"text":"((?:\\.|[^"\\])*)"',
+            r'"marketplace_listing_details":\{[^{}]*"description":"((?:\\.|[^"\\])*)"',
+            r'"listing_details":\{[^{}]*"description":\{"text":"((?:\\.|[^"\\])*)"',
+            r'"custom_title_and_description":\{[^{}]*"description":"((?:\\.|[^"\\])*)"',
+            r'"description":\{"text":"((?:\\.|[^"\\])*)"',
+            r'<meta\s+name="description"\s+content="([^"]+)"',
+            r'<meta\s+property="og:description"\s+content="([^"]+)"'
+        ]
+        for pat in desc_patterns:
+            m = re.search(pat, html)
+            if m:
+                d_cand = _decode_fb_json_str(m.group(1)).strip()
+                if d_cand and not d_cand.startswith("Buy or sell"):
+                    desc = d_cand
+                    break
 
         # Extract all full-res listing photos from listing_photos Relay payload
         lp_idx = html.find('"listing_photos":[')
@@ -8930,14 +8989,27 @@ def fetch_live_fb_marketplace_candidates(watchlist: dict, session_cookie: str = 
                 seller_m = re.search(r'"marketplace_listing_seller":\{"__typename":"User","name":"((?:\\.|[^"\\])*)"', chunk)
                 seller_name = _decode_fb_json_str(seller_m.group(1)) if seller_m else "FB Marketplace Seller"
 
-                # For local DFW items that mention a target brand, fetch full item description & multi-photo gallery
+                # For local DFW items that mention a target brand or watchlist query, fetch full item description & multi-photo gallery
                 desc_text = ""
                 gallery_photos = [img_url] if img_url else []
                 loc_check = evaluate_fb_location(loc_str, max_radius_miles=int(watchlist.get("max_radius_miles") or 45))
-                if loc_check["passed"] and any(b in raw_title.lower() for b in ("liv", "giant", "avail", "langma", "devote", "alight", "tempt", "thrive")):
+
+                must_any_raw = watchlist.get("must_contain_any") or []
+                if isinstance(must_any_raw, str):
+                    try: must_any_raw = json.loads(must_any_raw)
+                    except Exception: must_any_raw = [x.strip() for x in re.split(r'[,;\n\r]+', must_any_raw) if x.strip()]
+                target_terms = [k.strip().lower() for k in must_any_raw if k.strip()]
+                q_words = [w.strip().lower() for w in (watchlist.get("query") or "").split() if len(w.strip()) >= 3]
+                all_brand_triggers = set(target_terms + q_words + [
+                    "liv", "giant", "avail", "langma", "devote", "alight", "tempt", "thrive",
+                    "trek", "specialized", "cannondale", "bianchi", "cervelo", "pinarello", "fuji", "felt", "scott",
+                    "bike", "bicycle", "road", "tri"
+                ])
+
+                if loc_check["passed"] and any(b in raw_title.lower() for b in all_brand_triggers):
                     details = fetch_fb_item_details_live(item_id, headers)
                     if details.get("description"):
-                        desc_text = re.sub(r'\s+', ' ', details["description"]).strip()[:360]
+                        desc_text = re.sub(r'\s+', ' ', details["description"]).strip()[:3000]
                     if details.get("gallery_photos"):
                         gallery_photos = details["gallery_photos"]
 
@@ -9387,6 +9459,21 @@ def api_get_facebook_overview(user_id: str = Depends(verify_auth)):
                 d["vision_analysis"] = PRE_VERIFIED_DFW_VISION_XRAY[d["fb_item_id"]]
             listings.append(d)
 
+        # Proactively re-evaluate active listings against current watchlist rules to purge any false matches
+        watch_map = {w["id"]: w for w in watchlists}
+        for d in listings:
+            if d.get("status") in ("matched", "starred"):
+                w = watch_map.get(d.get("watchlist_id"))
+                if w:
+                    ev = evaluate_fb_listing_against_watchlist(d, w)
+                    if ev["status"] == "blocked":
+                        d["status"] = "blocked"
+                        d["block_reasons"] = ev["block_reasons"]
+                        d["ai_verdict"] = ev["ai_verdict"]
+                        c.execute("UPDATE fb_listings SET status='blocked', block_reasons=?, ai_verdict=? WHERE id=?",
+                                  (json.dumps(ev["block_reasons"]), ev["ai_verdict"], d["id"]))
+        conn.commit()
+
         norm_cookie = get_effective_fb_cookie(user_id, conn=conn)
         has_c_user = "c_user=" in norm_cookie
         has_xs = "xs=" in norm_cookie
@@ -9651,7 +9738,8 @@ def api_fb_listing_vision_inspect(listing_id: str, user_id: str = Depends(verify
             gal = []
         raw_id = (item.get("fb_item_id") or "").replace("fb_", "")
         cookie_hdr = get_effective_fb_cookie(user_id, conn=conn)
-        if not gal and raw_id.isdigit() and cookie_hdr:
+        need_details = (not gal) or (not item.get("description") or "Live Facebook Marketplace listing #" in (item.get("description") or ""))
+        if need_details and raw_id.isdigit() and cookie_hdr:
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
                 "Cookie": cookie_hdr
@@ -9662,7 +9750,7 @@ def api_fb_listing_vision_inspect(listing_id: str, user_id: str = Depends(verify
                 item["gallery_photos"] = gal
                 if not item.get("image_url") and gal:
                     item["image_url"] = gal[0]
-            if live_det.get("description") and "Live Facebook Marketplace listing #" in (item.get("description") or ""):
+            if live_det.get("description"):
                 item["description"] = live_det["description"]
 
         vision_res = analyze_fb_bike_photos_with_ai(item, watchlist, user_id=user_id, force_live_llm=True)
