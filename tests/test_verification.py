@@ -31,23 +31,23 @@ class TestVerificationSuite(unittest.TestCase):
 
     def test_01_version_and_build(self):
         """Verify version and build number are correctly exposed across app and health APIs."""
-        self.assertEqual(__version__, "3.1.2")
-        self.assertEqual(__build__, "20261110.3")
+        self.assertEqual(__version__, "3.1.3")
+        self.assertEqual(__build__, "20261110.4")
 
         # Verify /health
         res_h = client.get("/health")
         self.assertEqual(res_h.status_code, 200)
         data_h = res_h.json()
         self.assertEqual(data_h["status"], "healthy")
-        self.assertEqual(data_h["version"], "3.1.2")
-        self.assertEqual(data_h["build"], "20261110.3")
+        self.assertEqual(data_h["version"], "3.1.3")
+        self.assertEqual(data_h["build"], "20261110.4")
 
         # Verify /api/version
         res_v = client.get("/api/version")
         self.assertEqual(res_v.status_code, 200)
         data_v = res_v.json()
-        self.assertEqual(data_v["version"], "3.1.2")
-        self.assertEqual(data_v["build"], "20261110.3")
+        self.assertEqual(data_v["version"], "3.1.3")
+        self.assertEqual(data_v["build"], "20261110.4")
 
         # Verify UI version tags in static/index.html
         with open(os.path.join(ROOT_DIR, "static", "index.html"), "r", encoding="utf-8") as f:
@@ -332,6 +332,66 @@ class TestVerificationSuite(unittest.TestCase):
         res_m = evaluate_fb_listing_against_watchlist(item_marlin, houston_wl)
         self.assertEqual(res_m["status"], "blocked")
         self.assertTrue(any("Mountain" in r or "mountain" in r.lower() for r in res_m["block_reasons"]))
+
+    def test_11_email_fetch_unique_constraint_and_concurrency_lock(self):
+        """Verify processed_emails_v2 handles duplicate UIDs idempotently and user scan lock blocks concurrent scans."""
+        from app import get_db_conn, process_user_emails, USER_SCANNING_IN_PROGRESS, USER_SCAN_LOCK
+
+        conn = get_db_conn()
+        c = conn.cursor()
+        test_uid = "msg_test_unique_constraint_999"
+        test_user = "user_test_unique_constraint"
+        test_acc = "dominicmjuliano@gmail.com"
+
+        # Clean up any leftover test data
+        c.execute("DELETE FROM processed_emails_v2 WHERE id=? AND user_id=? AND account=?", (test_uid, test_user, test_acc))
+        conn.commit()
+
+        # 1. First insertion
+        c.execute("""
+            INSERT OR REPLACE INTO processed_emails_v2 
+            (id, user_id, account, subject, date, body, sender, reason, status) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (test_uid, test_user, test_acc, "Test Subject 1", "2026-11-10T14:00:00", "Body 1", "sender@test.com", "Reason 1", "added"))
+        conn.commit()
+
+        # 2. Second insertion of the EXACT SAME primary key (id, user_id, account)
+        # Previously raised: sqlite3.IntegrityError: UNIQUE constraint failed
+        # With INSERT OR REPLACE, it MUST succeed idempotently!
+        try:
+            c.execute("""
+                INSERT OR REPLACE INTO processed_emails_v2 
+                (id, user_id, account, subject, date, body, sender, reason, status) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (test_uid, test_user, test_acc, "Test Subject 2 Updated", "2026-11-10T14:05:00", "Body 2", "sender@test.com", "Reason 2", "added"))
+            conn.commit()
+            success = True
+        except sqlite3.IntegrityError:
+            success = False
+
+        self.assertTrue(success, "INSERT OR REPLACE INTO processed_emails_v2 should NEVER fail on unique constraint!")
+
+        # Verify the record was cleanly updated
+        c.execute("SELECT subject FROM processed_emails_v2 WHERE id=? AND user_id=? AND account=?", (test_uid, test_user, test_acc))
+        row = c.fetchone()
+        self.assertEqual(row["subject"], "Test Subject 2 Updated")
+
+        # Clean up
+        c.execute("DELETE FROM processed_emails_v2 WHERE id=? AND user_id=? AND account=?", (test_uid, test_user, test_acc))
+        conn.commit()
+        conn.close()
+
+        # 3. Verify user scan concurrency guard
+        with USER_SCAN_LOCK:
+            USER_SCANNING_IN_PROGRESS.add(test_user)
+
+        try:
+            res_concurrent = process_user_emails(test_user)
+            self.assertEqual(res_concurrent.get("status"), "in_progress")
+            self.assertEqual(res_concurrent.get("new_events"), 0)
+        finally:
+            with USER_SCAN_LOCK:
+                USER_SCANNING_IN_PROGRESS.discard(test_user)
 
 if __name__ == "__main__":
     unittest.main()

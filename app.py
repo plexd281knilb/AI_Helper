@@ -1,5 +1,6 @@
 import os
 import math
+import threading
 import json
 import sqlite3
 import uuid
@@ -32,8 +33,8 @@ import calendar
 
 load_dotenv()
 
-__version__ = "3.1.2"
-__build__ = "20261110.3"
+__version__ = "3.1.3"
+__build__ = "20261110.4"
 
 app = FastAPI(
     title="AI Helper",
@@ -2083,7 +2084,16 @@ def remove_event_from_gcal(service, title: str, date_str: str, gcal_event_id: st
         logger.warning(f"Error removing event '{title}' from Google Calendar: {e}")
     return False
 
+USER_SCAN_LOCK = threading.Lock()
+USER_SCANNING_IN_PROGRESS = set()
+
 def process_user_emails(user_id: str):
+    with USER_SCAN_LOCK:
+        if user_id in USER_SCANNING_IN_PROGRESS:
+            logger.info(f"Scan already actively in progress for user {user_id}. Skipping duplicate concurrent scan.")
+            return {"status": "in_progress", "new_events": 0, "warnings": []}
+        USER_SCANNING_IN_PROGRESS.add(user_id)
+
     conn = get_db_conn()
     try:
         c = conn.cursor()
@@ -2129,7 +2139,11 @@ def process_user_emails(user_id: str):
                     messages = list(mailbox.fetch(AND(date_gte=since_date), limit=email_fetch_limit, reverse=True, mark_seen=mark_seen_flag))
                     logger.info(f"Retrieved {len(messages)} messages for {email_user} (unread status preserved: {not mark_seen_flag}).")
                     
+                    seen_uids_in_batch = set()
                     for msg in messages:
+                        if msg.uid in seen_uids_in_batch:
+                            continue
+                        seen_uids_in_batch.add(msg.uid)
                         c.execute("SELECT id FROM processed_emails_v2 WHERE id=? AND user_id=? AND account=?", (msg.uid, user_id, email_user))
                         if c.fetchone(): continue
                             
@@ -2247,7 +2261,7 @@ def process_user_emails(user_id: str):
                             email_status = "no_event"
                             final_reason = "Email content was empty or too short to contain calendar events."
                         
-                        c.execute("INSERT INTO processed_emails_v2 (id, user_id, account, subject, date, body, sender, reason, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", 
+                        c.execute("INSERT OR REPLACE INTO processed_emails_v2 (id, user_id, account, subject, date, body, sender, reason, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", 
                             (msg.uid, user_id, email_user, subject_str, date_iso, text_content, sender, final_reason, email_status))
                         conn.commit()
             except Exception as e:
@@ -2271,6 +2285,8 @@ def process_user_emails(user_id: str):
         return result
     finally:
         conn.close()
+        with USER_SCAN_LOCK:
+            USER_SCANNING_IN_PROGRESS.discard(user_id)
 
 # In-memory timestamp tracking for user job runs
 USER_LAST_SCAN = {}
