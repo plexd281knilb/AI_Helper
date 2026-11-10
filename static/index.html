@@ -2914,7 +2914,7 @@
                             <div>
                                 <div style="font-size: 13.5px; font-weight: 700; color: #f8fafc;">🛡️ 4-Stage Anti-Garbage Sniper Pipeline Active</div>
                                 <div style="font-size: 12.5px; color: #cbd5e1;" id="fb-cookie-banner-status">
-                                    Geofenced to Argyle / DFW, TX (76226 • &le; 45 mi) • Auto-blocking Arkansas, Oklahoma, Large/Medium sizes &amp; non-Liv brands.
+                                    Geofencing and strict 4-stage anti-garbage filters active for your local area.
                                 </div>
                             </div>
                         </div>
@@ -10422,7 +10422,15 @@
                     const cookieBadge = st.cookie_authenticated
                         ? `<span style="color:#34d399; font-weight:700;">🍪 Session Cookie Authenticated</span>`
                         : `<span style="color:#fbbf24; font-weight:700; cursor:pointer; text-decoration:underline;" onclick="switchFbSubTab('cookie')">🍪 Add Session Cookie for Live Deep Search</span>`;
-                    cookieBanner.innerHTML = `${cookieBadge} &bull; Geofenced to Argyle / DFW, TX (76226 &le; 45 mi) &bull; Blocking Arkansas/Oklahoma &amp; Large/Medium Treks.`;
+                    const activeW = (fbOverviewData.watchlists || []).find(w => w.is_active) || (fbOverviewData.watchlists || [])[0];
+                    let geofenceStr = "Geofenced to Local Area";
+                    if (activeW) {
+                        const locName = activeW.location_name || "Argyle / DFW, TX";
+                        const zipCode = activeW.postal_code || "76226";
+                        const rad = activeW.max_radius_miles || 45;
+                        geofenceStr = `Geofenced to ${escapeHtml(locName)} (${escapeHtml(zipCode)} &le; ${rad} mi)`;
+                    }
+                    cookieBanner.innerHTML = `${cookieBadge} &bull; ${geofenceStr} &bull; Blocking Out-of-State &amp; Wrong Sizes.`;
                 }
 
                 renderFbMatches(fbOverviewData.matched_listings || []);
