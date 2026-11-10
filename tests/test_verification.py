@@ -18,6 +18,7 @@ from app import (
     parse_flexible_iso_datetime,
     evaluate_fb_listing_against_watchlist,
     evaluate_fb_location,
+    resolve_watchlist_geo,
     init_db
 )
 
@@ -30,23 +31,23 @@ class TestVerificationSuite(unittest.TestCase):
 
     def test_01_version_and_build(self):
         """Verify version and build number are correctly exposed across app and health APIs."""
-        self.assertEqual(__version__, "3.1.0")
-        self.assertEqual(__build__, "20261110.1")
+        self.assertEqual(__version__, "3.1.1")
+        self.assertEqual(__build__, "20261110.2")
 
         # Verify /health
         res_h = client.get("/health")
         self.assertEqual(res_h.status_code, 200)
         data_h = res_h.json()
         self.assertEqual(data_h["status"], "healthy")
-        self.assertEqual(data_h["version"], "3.1.0")
-        self.assertEqual(data_h["build"], "20261110.1")
+        self.assertEqual(data_h["version"], "3.1.1")
+        self.assertEqual(data_h["build"], "20261110.2")
 
         # Verify /api/version
         res_v = client.get("/api/version")
         self.assertEqual(res_v.status_code, 200)
         data_v = res_v.json()
-        self.assertEqual(data_v["version"], "3.1.0")
-        self.assertEqual(data_v["build"], "20261110.1")
+        self.assertEqual(data_v["version"], "3.1.1")
+        self.assertEqual(data_v["build"], "20261110.2")
 
         # Verify UI version tags in static/index.html
         with open(os.path.join(ROOT_DIR, "static", "index.html"), "r", encoding="utf-8") as f:
@@ -185,6 +186,100 @@ class TestVerificationSuite(unittest.TestCase):
         for path in ("/api/events", "/api/history", "/api/groceries/stores", "/api/groceries/feed", "/api/meals/current", "/api/facebook/overview"):
             res = client.get(path)
             self.assertIn(res.status_code, (401, 403), f"Route {path} should be protected by verify_auth")
+
+    def test_09_houston_regional_geofence_and_search_resolution(self):
+        """Verify multi-region geofencing accurately resolves Houston watchlists and filters listings."""
+        houston_wl = {
+            "name": "🚲 Wife's Bike (Houston Local Only)",
+            "query": "bike",
+            "postal_code": "77002",
+            "location_name": "Houston, TX",
+            "max_radius_miles": 100,
+            "min_price": 75,
+            "max_price": 1300,
+            "must_contain_any": ["liv", "giant liv", "avail", "langma", "devote", "alight", "tempt", "envie", "thrive", "Trek", "beliv", "domane", "giant"],
+            "required_attributes": ["xxs", "2xs", "extra extra small", "xs", "extra small", "43cm", "44cm", "45cm", "46cm", "47cm", "4'10", "4'11", "5'0", "5'1", "5'2", "extra-small"],
+            "exclude_keywords": [
+                "large", "mountain", "size l", "frame l", "medium", "size m", "frame m", "xl", "extra large",
+                "mens", "men's", "huffy", "schwinn", "bmx", "kids 12", "kids 16", "20 inch", "arkansas",
+                "little rock", "fayetteville", "bentonville", "oklahoma", "tulsa", "ships to you", "iso", "wanted", "broken",
+                "48cm", "49cm", "50cm", "51cm", "52cm", "53cm", "54cm", "55cm", "56cm", "57cm", "58cm", "59cm", "60cm", "61cm", "62cm"
+            ]
+        }
+
+        # 1. Geo slug resolution
+        geo_houston = resolve_watchlist_geo(houston_wl)
+        self.assertEqual(geo_houston["city_slug"], "houston")
+        self.assertEqual(geo_houston["metro_name"], "Houston, TX")
+        self.assertAlmostEqual(geo_houston["lat"], 29.7604, places=3)
+
+        # Austin & DFW resolution
+        self.assertEqual(resolve_watchlist_geo({"postal_code": "78701"})["city_slug"], "austin")
+        self.assertEqual(resolve_watchlist_geo({"postal_code": "76226"})["city_slug"], "dallas")
+
+        # 2. Location evaluations from Houston center
+        loc_h = evaluate_fb_location("Houston, TX", max_radius_miles=100, watchlist=houston_wl)
+        self.assertTrue(loc_h["passed"])
+        self.assertAlmostEqual(loc_h["distance_miles"], 0.0, delta=1.0)
+
+        loc_katy = evaluate_fb_location("Katy, TX", max_radius_miles=100, watchlist=houston_wl)
+        self.assertTrue(loc_katy["passed"])
+        self.assertAlmostEqual(loc_katy["distance_miles"], 27.3, delta=2.0)
+
+        loc_woodlands = evaluate_fb_location("The Woodlands, TX", max_radius_miles=100, watchlist=houston_wl)
+        self.assertTrue(loc_woodlands["passed"])
+        self.assertAlmostEqual(loc_woodlands["distance_miles"], 28.5, delta=2.0)
+
+        loc_sugar = evaluate_fb_location("Sugar Land, TX", max_radius_miles=100, watchlist=houston_wl)
+        self.assertTrue(loc_sugar["passed"])
+        self.assertAlmostEqual(loc_sugar["distance_miles"], 18.6, delta=2.0)
+
+        # Dallas is ~225 miles from Houston -> strictly blocked by 100 mi radius
+        loc_dallas = evaluate_fb_location("Dallas, TX", max_radius_miles=100, watchlist=houston_wl)
+        self.assertFalse(loc_dallas["passed"])
+        self.assertIn("Outside 100 mi Radius", loc_dallas["reason"])
+        self.assertIn("Houston, TX", loc_dallas["reason"])
+
+        # Keller, TX is ~237 miles from Houston -> strictly blocked
+        loc_keller = evaluate_fb_location("Keller, TX", max_radius_miles=100, watchlist=houston_wl)
+        self.assertFalse(loc_keller["passed"])
+        self.assertIn("Outside 100 mi Radius", loc_keller["reason"])
+
+        # 3. Listing evaluations against Houston Watchlist
+        # Valid Houston XS bike:
+        item_houston_xs = {
+            "title": "2024 Liv Thrive GX XS – Like New",
+            "price_num": 1000.0,
+            "location": "Sugar Land, TX",
+            "description": "2024 Liv Thrive GX XS in Sugar Land, TX. Shimano groupset, disc brakes, size XS.",
+            "gallery_photos": []
+        }
+        res_xs = evaluate_fb_listing_against_watchlist(item_houston_xs, houston_wl)
+        self.assertEqual(res_xs["status"], "matched")
+
+        # Wrong frame size in Houston (54cm Medium Trek in Woodlands):
+        item_woodlands_med = {
+            "title": "Trek Domane AL 2 Road Bike - 54cm Frame",
+            "price_num": 450.0,
+            "location": "The Woodlands, TX",
+            "description": "Trek Domane AL 2 road bike in The Woodlands. 54cm Medium frame size.",
+            "gallery_photos": []
+        }
+        res_med = evaluate_fb_listing_against_watchlist(item_woodlands_med, houston_wl)
+        self.assertEqual(res_med["status"], "blocked")
+        self.assertTrue(any("54cm" in r or "medium" in r.lower() for r in res_med["block_reasons"]))
+
+        # Out-of-radius listing (DFW bike evaluated against Houston watchlist):
+        item_dfw = {
+            "title": "Liv Avail AR 4 Women's Road Bike (Size XS)",
+            "price_num": 625.0,
+            "location": "Keller, TX",
+            "description": "Liv Avail AR 4 Women's Road Bike (Size XS) in Keller, TX",
+            "gallery_photos": []
+        }
+        res_dfw = evaluate_fb_listing_against_watchlist(item_dfw, houston_wl)
+        self.assertEqual(res_dfw["status"], "blocked")
+        self.assertIn("Outside 100 mi Radius", " ".join(res_dfw["block_reasons"]))
 
 if __name__ == "__main__":
     unittest.main()

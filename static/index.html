@@ -2974,7 +2974,7 @@
                                 <input type="text" id="fbw-query" value="liv xxs bike" style="width: 100%; box-sizing: border-box; padding: 10px; background: #0d1117; border: 1px solid #334155; border-radius: 6px; color: #fff;">
                             </div>
                             <div>
-                                <label style="font-size: 12px; color: #cbd5e1; display: block; margin-bottom: 4px; font-weight: 600;">Center Zip Code (Argyle/DFW)</label>
+                                <label style="font-size: 12px; color: #cbd5e1; display: block; margin-bottom: 4px; font-weight: 600;">Center Zip Code (e.g. 77002 Houston, 76226 DFW, 78701 Austin)</label>
                                 <input type="text" id="fbw-zip" value="76226" style="width: 100%; box-sizing: border-box; padding: 10px; background: #0d1117; border: 1px solid #334155; border-radius: 6px; color: #fff;">
                             </div>
                             <div>
@@ -10780,15 +10780,37 @@
             }
         }
 
+        function resolveMetroFromZip(zip, name) {
+            const z = String(zip || '').trim();
+            const n = String(name || '').toLowerCase();
+            if (z.startsWith('770') || z.startsWith('771') || z.startsWith('772') || z.startsWith('773') || z.startsWith('774') || z.startsWith('775') || n.includes('houston')) {
+                return 'Houston, TX';
+            }
+            if (z.startsWith('786') || z.startsWith('787') || n.includes('austin')) {
+                return 'Austin, TX';
+            }
+            if (z.startsWith('780') || z.startsWith('781') || z.startsWith('782') || z.startsWith('788') || n.includes('san antonio')) {
+                return 'San Antonio, TX';
+            }
+            if (['76226', '76262', '76201', '76205', '76207', '76208', '76209', '76210', '76249', '76258', '76259'].includes(z) || n.includes('argyle')) {
+                return 'Argyle / DFW, TX';
+            }
+            return 'Dallas / Fort Worth, TX';
+        }
+
         async function saveFacebookWatchlist() {
             const splitClean = (str) => (str || '').split(',').map(s => s.trim()).filter(Boolean);
             const editId = document.getElementById('fbw-id').value || null;
             const visEl = document.getElementById('fbw-visual-targets');
+            const nameVal = document.getElementById('fbw-name').value || "Custom Watchlist";
+            const zipVal = document.getElementById('fbw-zip').value || "76226";
+            const locName = resolveMetroFromZip(zipVal, nameVal);
             const payload = {
                 id: editId,
-                name: document.getElementById('fbw-name').value || "Custom Watchlist",
+                name: nameVal,
                 query: document.getElementById('fbw-query').value || "liv xxs bike",
-                postal_code: document.getElementById('fbw-zip').value || "76226",
+                postal_code: zipVal,
+                location_name: locName,
                 max_radius_miles: parseInt(document.getElementById('fbw-radius').value) || 45,
                 min_price: parseFloat(document.getElementById('fbw-min-price').value) || 50,
                 max_price: parseFloat(document.getElementById('fbw-max-price').value) || 1800,
@@ -10814,7 +10836,7 @@
                 await loadFacebookOverview();
                 switchFbSubTab('matches');
                 if (msgBox) {
-                    msgBox.innerHTML = `<div class="success">✓ Watchlist ${editId ? 'updated' : 'saved'} and scanned! Showing verified local DFW matches with AI Photo Vision X-Ray.</div>`;
+                    msgBox.innerHTML = `<div class="success">✓ Watchlist ${editId ? 'updated' : 'saved'} and scanned! Showing verified local ${escapeHtml(locName)} matches with AI Photo Vision X-Ray.</div>`;
                     setTimeout(() => msgBox.innerHTML = '', 5000);
                 }
             } catch (e) {

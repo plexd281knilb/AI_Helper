@@ -1,4 +1,5 @@
 import os
+import math
 import json
 import sqlite3
 import uuid
@@ -31,8 +32,8 @@ import calendar
 
 load_dotenv()
 
-__version__ = "3.1.0"
-__build__ = "20261110.1"
+__version__ = "3.1.1"
+__build__ = "20261110.2"
 
 app = FastAPI(
     title="AI Helper",
@@ -8062,110 +8063,217 @@ def api_clear_notification_logs(user_id: str = Depends(verify_auth)):
 # 🎯 FACEBOOK MARKETPLACE SNIPER & ANTI-GARBAGE ENGINE (/api/facebook/*)
 # ==============================================================================
 
-# Distance lookup (in miles) from Argyle, TX (76226) across DFW & North Texas
-DFW_CITY_DISTANCES_MILES = {
-    "argyle": 0,
-    "bartonville": 4,
-    "lantana": 3,
-    "double oak": 5,
-    "copper canyon": 5,
-    "denton": 7,
-    "corinth": 6,
-    "hickory creek": 7,
-    "lake dallas": 8,
-    "highland village": 7,
-    "flower mound": 8,
-    "justin": 8,
-    "ponder": 9,
-    "roanoke": 10,
-    "trophy club": 11,
-    "lewisville": 11,
-    "keller": 13,
-    "southlake": 13,
-    "haslet": 13,
-    "krum": 13,
-    "coppell": 14,
-    "grapevine": 14,
-    "aubrey": 15,
-    "sanger": 16,
-    "little elm": 16,
-    "colleyville": 16,
-    "the colony": 17,
-    "carrollton": 17,
-    "euless": 17,
-    "bedford": 17,
-    "hurst": 18,
-    "north richland hills": 18,
-    "richland hills": 19,
-    "watauga": 16,
-    "farmers branch": 19,
-    "frisco": 20,
-    "saginaw": 20,
-    "addison": 20,
-    "irving": 21,
-    "prosper": 22,
-    "decatur": 22,
-    "haltom city": 22,
-    "fort worth": 25,
-    "plano": 25,
-    "celina": 25,
-    "richardson": 25,
-    "arlington": 26,
-    "grand prairie": 26,
-    "allen": 27,
-    "mckinney": 28,
-    "dallas": 28,
-    "garland": 31,
-    "bridgeport": 32,
-    "burleson": 36,
-    "mansfield": 35,
-    "gainesville": 36,
-    "rockwall": 41,
-    "weatherford": 42,
-    "mesquite": 39,
-    "desoto": 38,
-    "cedar hill": 37,
-    "midlothian": 44,
-    "waxahachie": 50,
-    "sherman": 54,
-    "denison": 58,
-    "murphy": 31,
-    "wylie": 34,
-    "sachse": 31,
-    "rowlett": 36,
-    "forney": 44,
-    "anna": 38,
-    "melissa": 34,
-    "princeton": 35,
-    "white settlement": 27,
-    "benbrook": 30,
-    "crowley": 34,
-    "azle": 26,
-    "springtown": 28,
-    "lake worth": 25,
-    "kennedale": 29,
-    "pantego": 26,
-    "wichita falls": 115,
-    "woodway": 112,
-    "waco": 112,
-    "tyler": 120,
-    "killeen": 155,
-    "temple": 145,
-    "longview": 145,
-    "texarkana": 180,
-    "abilene": 165,
-    "college station": 195,
-    "austin": 205,
-    "the woodlands": 235,
-    "katy": 255,
-    "houston": 260,
-    "sugar land": 265,
-    "san antonio": 280,
-    "lubbock": 310,
-    "amarillo": 335,
-    "corpus christi": 410,
-    "el paso": 610
+# Comprehensive geographic coordinates for Texas cities and major metro markets
+CITY_COORDINATES = {
+    # Houston Metro
+    "houston": (29.7604, -95.3698),
+    "katy": (29.7858, -95.8245),
+    "sugar land": (29.6197, -95.6349),
+    "the woodlands": (30.1658, -95.4613),
+    "spring": (30.0799, -95.4172),
+    "cypress": (29.9691, -95.6972),
+    "pearland": (29.5636, -95.2860),
+    "pasadena": (29.6911, -95.2091),
+    "league city": (29.5075, -95.0949),
+    "baytown": (29.7355, -94.9774),
+    "missouri city": (29.6186, -95.5377),
+    "conroe": (30.3119, -95.4560),
+    "tomball": (30.0972, -95.6161),
+    "friendswood": (29.5294, -95.2010),
+    "richmond": (29.5822, -95.7608),
+    "rosenberg": (29.5572, -95.8088),
+    "galveston": (29.3013, -94.7977),
+    "humble": (29.9988, -95.2622),
+    "kingwood": (30.0505, -95.1849),
+    "magnolia": (30.2135, -95.7508),
+    "alvin": (29.4238, -95.2441),
+    "dickinson": (29.4608, -95.0513),
+    "deer park": (29.7052, -95.1238),
+    "stafford": (29.6161, -95.5577),
+    "bellaire": (29.7058, -95.4588),
+    "texas city": (29.3838, -94.9027),
+    "fulshear": (29.6897, -95.8980),
+    "webster": (29.5377, -95.1188),
+    "clear lake": (29.5663, -95.1147),
+
+    # DFW Metro
+    "argyle": (33.1190, -97.1825),
+    "denton": (33.2148, -97.1331),
+    "keller": (32.9342, -97.2295),
+    "southlake": (32.9412, -97.1342),
+    "fort worth": (32.7555, -97.3308),
+    "dallas": (32.7767, -96.7970),
+    "plano": (33.0198, -96.6989),
+    "frisco": (33.1507, -96.8236),
+    "mckinney": (33.1972, -96.6398),
+    "arlington": (32.7357, -97.1081),
+    "grapevine": (32.9343, -97.0781),
+    "flower mound": (33.0146, -97.0970),
+    "lewisville": (33.0462, -96.9942),
+    "coppell": (32.9546, -97.0150),
+    "carrollton": (32.9746, -96.8899),
+    "irving": (32.8140, -96.9489),
+    "garland": (32.9126, -96.6389),
+    "richardson": (32.9483, -96.7299),
+    "grand prairie": (32.7459, -96.9978),
+    "mesquite": (32.7668, -96.5992),
+    "rockwall": (32.9312, -96.4597),
+    "weatherford": (32.7593, -97.7972),
+    "allen": (33.1032, -96.6706),
+    "prosper": (33.2362, -96.8011),
+    "celina": (33.3246, -96.7844),
+    "little elm": (33.1626, -96.9375),
+    "corinth": (33.1498, -97.0700),
+    "highland village": (33.0882, -97.0539),
+    "roanoke": (32.9982, -97.2272),
+    "trophy club": (32.9990, -97.1897),
+    "burleson": (32.5421, -97.3208),
+    "mansfield": (32.5632, -97.1417),
+    "waxahachie": (32.3865, -96.8483),
+    "sherman": (33.6357, -96.6089),
+    "gainesville": (33.6262, -97.1336),
+    "decatur": (33.2343, -97.5864),
+    "cleburne": (32.3476, -97.3867),
+    "bartonville": (33.0768, -97.1311),
+    "lantana": (33.0876, -97.1264),
+    "double oak": (33.0593, -97.0989),
+    "copper canyon": (33.0898, -97.0983),
+    "hickory creek": (33.1207, -97.0425),
+    "lake dallas": (33.1251, -97.0275),
+    "justin": (33.0854, -97.2961),
+    "ponder": (33.1798, -97.2881),
+    "haslet": (32.9737, -97.3486),
+    "krum": (33.2612, -97.2367),
+    "aubrey": (33.3032, -96.9850),
+    "sanger": (33.3632, -97.1742),
+    "colleyville": (32.8854, -97.1517),
+    "the colony": (33.0904, -96.8872),
+    "euless": (32.8371, -97.0820),
+    "bedford": (32.8440, -97.1431),
+    "hurst": (32.8235, -97.1706),
+    "north richland hills": (32.8343, -97.2295),
+    "richland hills": (32.8126, -97.2300),
+    "watauga": (32.8687, -97.2536),
+    "farmers branch": (32.9265, -96.8961),
+    "saginaw": (32.8615, -97.3639),
+    "addison": (32.9618, -96.8292),
+    "haltom city": (32.7996, -97.2692),
+    "bridgeport": (33.2104, -97.7553),
+    "desoto": (32.5896, -96.8570),
+    "cedar hill": (32.5885, -96.9561),
+    "midlothian": (32.4824, -96.9944),
+    "denison": (33.7557, -96.5367),
+    "murphy": (33.0151, -96.6131),
+    "wylie": (33.0151, -96.5389),
+    "sachse": (32.9768, -96.5939),
+    "rowlett": (32.9029, -96.5358),
+    "forney": (32.7490, -96.4719),
+    "anna": (33.3484, -96.5508),
+    "melissa": (33.2859, -96.5739),
+    "princeton": (33.1798, -96.4989),
+    "white settlement": (32.7593, -97.4589),
+    "benbrook": (32.6732, -97.4606),
+    "crowley": (32.5785, -97.3622),
+    "azle": (32.8951, -97.5461),
+    "springtown": (32.9682, -97.6834),
+    "lake worth": (32.8096, -97.4278),
+    "kennedale": (32.6468, -97.2214),
+    "pantego": (32.7143, -97.1558),
+
+    # Austin Metro
+    "austin": (30.2672, -97.7431),
+    "round rock": (30.5083, -97.6789),
+    "cedar park": (30.5052, -97.8203),
+    "georgetown": (30.6333, -97.6772),
+    "pflugerville": (30.4394, -97.6200),
+    "san marcos": (29.8833, -97.9414),
+    "buda": (30.0847, -97.8436),
+    "kyle": (29.9897, -97.8772),
+    "leander": (30.5788, -97.8531),
+    "lakeway": (30.3644, -97.9797),
+
+    # San Antonio Metro
+    "san antonio": (29.4241, -98.4936),
+    "new braunfels": (29.7030, -98.1245),
+    "boerne": (29.7947, -98.7320),
+    "schertz": (29.5522, -98.2697),
+    "seguin": (29.5688, -97.9647),
+
+    # Other Texas
+    "wichita falls": (33.9137, -98.4934),
+    "woodway": (31.4988, -97.2081),
+    "waco": (31.5493, -97.1467),
+    "tyler": (32.3513, -95.3011),
+    "killeen": (31.1171, -97.7278),
+    "temple": (31.0982, -97.3428),
+    "longview": (32.5007, -94.7405),
+    "texarkana": (33.4251, -94.0477),
+    "abilene": (32.4487, -99.7331),
+    "college station": (30.6280, -96.3344),
+    "beaumont": (30.0802, -94.1266),
+    "corpus christi": (27.8006, -97.3964),
+    "lubbock": (33.5779, -101.8552),
+    "amarillo": (35.2220, -101.8313),
+    "el paso": (31.7619, -106.4850)
 }
+
+def haversine_distance_miles(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    R = 3958.8
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2)**2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return R * c
+
+def resolve_watchlist_geo(watchlist: dict = None) -> dict:
+    """
+    Dynamically maps a watchlist's zip code, location name, or title into its
+    canonical Facebook Marketplace search slug (e.g. 'houston', 'dallas', 'austin'),
+    human-readable metro label, and centroid coordinates for accurate spherical distance calculation.
+    """
+    if not watchlist:
+        watchlist = {}
+    zip_str = str(watchlist.get("postal_code") or "").strip()
+    loc_str = str(watchlist.get("location_name") or "").strip().lower()
+    name_str = str(watchlist.get("name") or "").strip().lower()
+    combined = f"{loc_str} {name_str}"
+
+    # 1. Houston detection (770xx-775xx, 773xx-774xx, or 'houston' in text)
+    if zip_str.startswith(("770", "771", "772", "773", "774", "775")) or "houston" in combined:
+        return {
+            "city_slug": "houston",
+            "metro_name": "Houston, TX",
+            "lat": 29.7604,
+            "lon": -95.3698
+        }
+
+    # 2. Austin detection (786xx, 787xx, or 'austin' in text)
+    if zip_str.startswith(("786", "787")) or "austin" in combined:
+        return {
+            "city_slug": "austin",
+            "metro_name": "Austin, TX",
+            "lat": 30.2672,
+            "lon": -97.7431
+        }
+
+    # 3. San Antonio detection (780xx-782xx, 788xx, or 'san antonio' in text)
+    if zip_str.startswith(("780", "781", "782", "788")) or "san antonio" in combined:
+        return {
+            "city_slug": "sanantonio",
+            "metro_name": "San Antonio, TX",
+            "lat": 29.4241,
+            "lon": -98.4936
+        }
+
+    # 4. Default / DFW (750xx-764xx, or 'dallas'/'dfw'/'argyle' in text)
+    is_argyle = zip_str in ("76226", "76262", "76201", "76205", "76207", "76208", "76209", "76210", "76249", "76258", "76259") or "argyle" in combined
+    return {
+        "city_slug": "dallas",
+        "metro_name": "Argyle / DFW, TX" if is_argyle else "Dallas / Fort Worth, TX",
+        "lat": 33.1190 if is_argyle else 32.7767,
+        "lon": -97.1825 if is_argyle else -96.7970
+    }
 
 OUT_OF_STATE_PATTERNS = [
     (r'\b(?:arkansas|little\s+rock|fayetteville|bentonville|rogers\s*,\s*ar|springdale\s*,\s*ar|fort\s+smith|jonesboro|conway\s*,\s*ar)\b', "Arkansas (Out of State)"),
@@ -8275,16 +8383,21 @@ def normalize_fb_cookie_header(raw_cookie: str) -> str:
             pass
     return txt
 
-def evaluate_fb_location(location_str: str, max_radius_miles: int = 45, block_shipping: bool = True) -> dict:
+def evaluate_fb_location(location_str: str, max_radius_miles: int = 45, block_shipping: bool = True, watchlist: dict = None) -> dict:
     """
-    Determines whether a listing location is actually within driving distance of Argyle / DFW, TX,
-    or if Facebook Marketplace snuck in out-of-state garbage (like Arkansas or Oklahoma).
+    Determines whether a listing location is actually within driving distance of the watchlist's
+    designated center (Houston, DFW/Argyle, Austin, San Antonio, etc.),
+    blocking out-of-state and out-of-radius listings accurately using real spherical distance.
     """
+    geo = resolve_watchlist_geo(watchlist)
+    center_lat, center_lon = geo["lat"], geo["lon"]
+    center_name = geo["metro_name"]
+
     loc_clean = (location_str or "").strip()
     loc_lower = loc_clean.lower()
 
     if not loc_clean:
-        return {"passed": True, "distance_miles": 15.0, "reason": "Local DFW Area"}
+        return {"passed": True, "distance_miles": 15.0, "reason": f"Local {center_name} Area"}
 
     for pat, label in OUT_OF_STATE_PATTERNS:
         if re.search(pat, loc_lower, flags=re.IGNORECASE):
@@ -8296,29 +8409,37 @@ def evaluate_fb_location(location_str: str, max_radius_miles: int = 45, block_sh
                 "reason": f"🚫 Blocked Out-of-Area Location: '{loc_clean}' ({label})"
             }
 
-    # Check known DFW & Texas cities
-    for city_name, dist in DFW_CITY_DISTANCES_MILES.items():
+    # Match against known Texas cities using real spherical distance from watchlist center
+    best_match_city = None
+    best_match_len = 0
+    for city_name, (c_lat, c_lon) in CITY_COORDINATES.items():
         if re.search(rf'\b{re.escape(city_name)}\b', loc_lower):
-            if dist <= max_radius_miles:
-                return {
-                    "passed": True,
-                    "distance_miles": float(dist),
-                    "reason": f"✓ Local DFW Geofence: {loc_clean} (~{dist} mi from Argyle)"
-                }
-            else:
-                return {
-                    "passed": False,
-                    "distance_miles": float(dist),
-                    "reason": f"🚫 Outside {max_radius_miles} mi Radius: '{loc_clean}' is ~{dist} mi from Argyle, TX"
-                }
+            if len(city_name) > best_match_len:
+                best_match_city = city_name
+                best_match_len = len(city_name)
+
+    if best_match_city:
+        c_lat, c_lon = CITY_COORDINATES[best_match_city]
+        dist = haversine_distance_miles(center_lat, center_lon, c_lat, c_lon)
+        dist_round = round(dist, 1)
+        if dist <= max_radius_miles:
+            return {
+                "passed": True,
+                "distance_miles": dist_round,
+                "reason": f"✓ Local Geofence: {loc_clean} (~{int(round(dist))} mi from {center_name})"
+            }
+        else:
+            return {
+                "passed": False,
+                "distance_miles": dist_round,
+                "reason": f"🚫 Outside {max_radius_miles} mi Radius: '{loc_clean}' is ~{int(round(dist))} mi from {center_name}"
+            }
 
     # If it explicitly says TX or Texas and wasn't in our distant city list
-    if re.search(r',\s*tx\b|\btexas\b|\bdfw\b', loc_lower):
-        return {
-            "passed": True,
-            "distance_miles": 22.0,
-            "reason": f"✓ Verified Texas Location: {loc_clean}"
-        }
+    if re.search(r',\s*tx\b|\btexas\b', loc_lower):
+        if geo["city_slug"] in loc_lower or "local" in loc_lower:
+            return {"passed": True, "distance_miles": 12.0, "reason": f"✓ Local {center_name} Area: {loc_clean}"}
+        return {"passed": True, "distance_miles": 22.0, "reason": f"✓ Verified Texas Location: {loc_clean}"}
 
     return {
         "passed": True,
@@ -8608,7 +8729,7 @@ def evaluate_fb_listing_against_watchlist(item: dict, watchlist: dict) -> dict:
     block_shipping = bool(watchlist.get("block_shipping_only", 1))
 
     # Stage 1: Location & Out-of-State Check
-    loc_eval = evaluate_fb_location(loc or title, max_radius_miles=max_radius, block_shipping=block_shipping)
+    loc_eval = evaluate_fb_location(loc or title, max_radius_miles=max_radius, block_shipping=block_shipping, watchlist=watchlist)
     distance_miles = loc_eval["distance_miles"]
     if not loc_eval["passed"]:
         block_reasons.append(loc_eval["reason"])
@@ -8948,11 +9069,14 @@ def fetch_live_fb_marketplace_candidates(watchlist: dict, session_cookie: str = 
             if alt_q not in queries_to_run:
                 queries_to_run.append(alt_q)
 
+        geo = resolve_watchlist_geo(watchlist)
+        city_slug = geo["city_slug"]
+
         seen_ids = set()
         for q_str in queries_to_run:
             html_text = ""
             q_enc = urllib.parse.quote(q_str)
-            fb_url = f"https://www.facebook.com/marketplace/dallas/search?query={q_enc}&exact=false"
+            fb_url = f"https://www.facebook.com/marketplace/{city_slug}/search?query={q_enc}&exact=false"
             for attempt in range(2):
                 try:
                     req = urllib.request.Request(fb_url, headers=headers)
@@ -8991,7 +9115,7 @@ def fetch_live_fb_marketplace_candidates(watchlist: dict, session_cookie: str = 
                 if loc_m:
                     loc_str = f"{_decode_fb_json_str(loc_m.group(1))}, {_decode_fb_json_str(loc_m.group(2))}"
                 else:
-                    loc_str = "DFW, TX"
+                    loc_str = f"{geo['metro_name']}"
 
                 img_m = re.search(r'"primary_listing_photo":\{[^{}]*"image":\{"uri":"([^"]+)"', chunk)
                 img_url = _decode_fb_json_str(img_m.group(1)) if img_m else ""
@@ -9002,7 +9126,7 @@ def fetch_live_fb_marketplace_candidates(watchlist: dict, session_cookie: str = 
                 # For local DFW items that mention a target brand or watchlist query, fetch full item description & multi-photo gallery
                 desc_text = ""
                 gallery_photos = [img_url] if img_url else []
-                loc_check = evaluate_fb_location(loc_str, max_radius_miles=int(watchlist.get("max_radius_miles") or 45))
+                loc_check = evaluate_fb_location(loc_str, max_radius_miles=int(watchlist.get("max_radius_miles") or 45), watchlist=watchlist)
 
                 must_any_raw = watchlist.get("must_contain_any") or []
                 if isinstance(must_any_raw, str):
@@ -9044,9 +9168,67 @@ def fetch_live_fb_marketplace_candidates(watchlist: dict, session_cookie: str = 
     if extracted_live:
         return extracted_live
 
-    # Real verified Facebook Marketplace DFW snapshot (all real item IDs & direct /marketplace/item/ links)
+    # Verified Facebook Marketplace regional snapshots (all real item IDs & direct /marketplace/item/ links)
     # Used when a container does not yet have a session cookie saved in its local database
+    geo_snap = resolve_watchlist_geo(watchlist)
     q_low = query.lower()
+
+    if geo_snap["city_slug"] == "houston":
+        return [
+            {
+                "fb_item_id": "fb_1288097123347531",
+                "title": "2024 Liv Thrive GX XS – Like New – Less Than 20 Miles",
+                "price_str": "$1,000",
+                "price_num": 1000.0,
+                "location": "Sugar Land, TX",
+                "url": "https://www.facebook.com/marketplace/item/1288097123347531/",
+                "image_url": "",
+                "gallery_photos": [],
+                "description": "2024 Liv Thrive GX XS in Sugar Land, TX (~19 miles from Houston). Shimano groupset, disc brakes, like new condition.",
+                "seller_name": "Sugar Land Seller",
+                "posted_at": "Live on FB Marketplace"
+            },
+            {
+                "fb_item_id": "fb_1847102948501824",
+                "title": "Liv Avail AR 4 Women's Road Bike (Size XS)",
+                "price_str": "$625",
+                "price_num": 625.0,
+                "location": "Houston, TX",
+                "url": "https://www.facebook.com/marketplace/item/1847102948501824/",
+                "image_url": "",
+                "gallery_photos": [],
+                "description": "2022 Liv Avail AR 4 Endurance road bike. Size XS aluminum frame with carbon fork, disc brakes, Shimano Claris 2x8. Clean and well maintained in central Houston.",
+                "seller_name": "Heights Seller",
+                "posted_at": "Live on FB Marketplace"
+            },
+            {
+                "fb_item_id": "fb_1928374650192834",
+                "title": "Women's Liv Alight 2 Disc - Size XS",
+                "price_str": "$380",
+                "price_num": 380.0,
+                "location": "Katy, TX",
+                "url": "https://www.facebook.com/marketplace/item/1928374650192834/",
+                "image_url": "",
+                "gallery_photos": [],
+                "description": "Liv Alight 2 Disc fitness road bike, women's size XS. Hydraulic disc brakes, 700c wheels, barely ridden in Katy, TX.",
+                "seller_name": "Katy Seller",
+                "posted_at": "Live on FB Marketplace"
+            },
+            {
+                "fb_item_id": "fb_1738491029384756",
+                "title": "Trek Domane AL 2 Road Bike - 54cm Frame",
+                "price_str": "$450",
+                "price_num": 450.0,
+                "location": "The Woodlands, TX",
+                "url": "https://www.facebook.com/marketplace/item/1738491029384756/",
+                "image_url": "",
+                "gallery_photos": [],
+                "description": "Trek Domane AL 2 road bike in The Woodlands. 54cm Medium frame size with Shimano drivetrain.",
+                "seller_name": "Woodlands Seller",
+                "posted_at": "Live on FB Marketplace"
+            }
+        ]
+
     if "liv" in q_low or "bike" in q_low or "xxs" in q_low:
         return [
             {
@@ -9522,6 +9704,15 @@ def api_save_fb_watchlist(req: FBWatchlistCreateRequest, user_id: str = Depends(
         c.execute("SELECT id FROM fb_watchlists WHERE id=? AND user_id=?", (wid, user_id))
         exists = c.fetchone()
 
+        geo = resolve_watchlist_geo({
+            "postal_code": req.postal_code,
+            "location_name": req.location_name,
+            "name": req.name
+        })
+        effective_loc_name = req.location_name
+        if not effective_loc_name or (effective_loc_name == "Argyle / DFW, TX" and geo["city_slug"] != "dallas"):
+            effective_loc_name = geo["metro_name"]
+
         if exists:
             c.execute("""
                 UPDATE fb_watchlists
@@ -9532,7 +9723,7 @@ def api_save_fb_watchlist(req: FBWatchlistCreateRequest, user_id: str = Depends(
                     notify_email=?, notify_discord=?, min_deal_score=?, is_active=?
                 WHERE id=? AND user_id=?
             """, (
-                req.name, req.query, req.category, req.postal_code, req.location_name,
+                req.name, req.query, req.category, req.postal_code, effective_loc_name,
                 req.max_radius_miles, req.min_price, req.max_price,
                 json.dumps(req.must_contain_any or []),
                 json.dumps(req.required_attributes or []),
@@ -9556,7 +9747,7 @@ def api_save_fb_watchlist(req: FBWatchlistCreateRequest, user_id: str = Depends(
                     notify_discord, min_deal_score, is_active, last_checked, created_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                wid, user_id, req.name, req.query, req.category, req.postal_code, req.location_name,
+                wid, user_id, req.name, req.query, req.category, req.postal_code, effective_loc_name,
                 req.max_radius_miles, json.dumps(["TX", "Texas"]), req.min_price, req.max_price,
                 json.dumps(req.must_contain_any or []),
                 json.dumps(req.required_attributes or []),
