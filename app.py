@@ -31,7 +31,14 @@ import calendar
 
 load_dotenv()
 
-app = FastAPI()
+__version__ = "3.1.0"
+__build__ = "20261110.1"
+
+app = FastAPI(
+    title="AI Helper",
+    version=__version__,
+    description="AI Helper - Multi-User Automated Calendar Sync, Meal Planner, Local Deals & Facebook Deal Sniper"
+)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 DATA_DIR = "data"
@@ -936,9 +943,12 @@ def verify_admin(current_user: str = Depends(verify_auth)):
 
 @app.get("/health")
 @app.get("/api/health")
+@app.get("/api/version")
 def health_check():
     return {
         "status": "healthy",
+        "version": __version__,
+        "build": __build__,
         "timestamp": datetime.now().isoformat(),
         "app": "AI Helper"
     }

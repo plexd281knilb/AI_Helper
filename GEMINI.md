@@ -207,7 +207,7 @@ For fast sub-millisecond query performance on multi-user and large datasets, the
 - **Session Tokens**: Cookie-based authentication using 64-character hex `session_token` with automatic purging of expired sessions.
 - **Role-Based Access Control (RBAC)**: Supports `'admin'` and `'user'` roles. The initial account created during setup is automatically assigned the `'admin'` role. Admin endpoints (`/api/users`, user create/delete, role assignment, `/api/logs`) are strictly gated by the `verify_admin` FastAPI dependency (returning HTTP 403 Forbidden for non-admins).
 - **Portalarr Navigation Tree Shell**: The UI features a Portalarr-style left navigation sidebar tree:
-  - **Brand Header**: App name, version tag (`v2.5`), and subtitle.
+  - **Brand Header**: App name, version tag (`v3.1`), and subtitle.
   - **User Status Card**: Displays username, avatar initial, and glowing role badge (`🛡️ Administrator` or `👤 Member`).
   - **Main Workspace Tree**: Standard user paths (`Dashboard`, `Email History`, `Deals & Groceries`).
   - **Administration Tree**: Restricted paths (`Users & Access`, `System Settings`, `Live Logs`), dynamically hidden from non-admin accounts and client-side guarded in `openTab`.
