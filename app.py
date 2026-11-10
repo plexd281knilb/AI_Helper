@@ -32,8 +32,8 @@ import calendar
 
 load_dotenv()
 
-__version__ = "3.1.1"
-__build__ = "20261110.2"
+__version__ = "3.1.2"
+__build__ = "20261110.3"
 
 app = FastAPI(
     title="AI Helper",
@@ -8282,7 +8282,7 @@ OUT_OF_STATE_PATTERNS = [
     (r',\s*ok\b', "Oklahoma (, OK)"),
     (r'\b(?:louisiana|shreveport|bossier\s+city|baton\s+rouge|new\s+orleans|lafayette\s*,\s*la|monroe\s*,\s*la)\b', "Louisiana (Out of State)"),
     (r',\s*la\b', "Louisiana (, LA)"),
-    (r'\b(?:missouri|kansas\s+city|st\.?\s*louis|springfield\s*,\s*mo|joplin)\b', "Missouri (Out of State)"),
+    (r'\b(?:missouri(?!\s+city)|kansas\s+city|st\.?\s*louis|springfield\s*,\s*mo|joplin)\b', "Missouri (Out of State)"),
     (r',\s*(?:mo|ks|nm|co|tn|ms|al|ga|fl|ca|ny|il|in|wi|ia|mn|ky|sc|nd|sd|ne|ut|nv|or|id|mt|wy|oh|pa|mi|nc|va|az|wa)\b', "Out of State (Non-TX)"),
     (r'\b(?:ships\s+to\s+you|shipping\s+only)\b', "Shipping-Only Listing (Not Local)")
 ]
@@ -8399,17 +8399,7 @@ def evaluate_fb_location(location_str: str, max_radius_miles: int = 45, block_sh
     if not loc_clean:
         return {"passed": True, "distance_miles": 15.0, "reason": f"Local {center_name} Area"}
 
-    for pat, label in OUT_OF_STATE_PATTERNS:
-        if re.search(pat, loc_lower, flags=re.IGNORECASE):
-            if "Shipping" in label and not block_shipping:
-                continue
-            return {
-                "passed": False,
-                "distance_miles": 320.0,
-                "reason": f"🚫 Blocked Out-of-Area Location: '{loc_clean}' ({label})"
-            }
-
-    # Match against known Texas cities using real spherical distance from watchlist center
+    # 1. Match against known Texas cities first using real spherical distance from watchlist center
     best_match_city = None
     best_match_len = 0
     for city_name, (c_lat, c_lon) in CITY_COORDINATES.items():
@@ -8433,6 +8423,17 @@ def evaluate_fb_location(location_str: str, max_radius_miles: int = 45, block_sh
                 "passed": False,
                 "distance_miles": dist_round,
                 "reason": f"🚫 Outside {max_radius_miles} mi Radius: '{loc_clean}' is ~{int(round(dist))} mi from {center_name}"
+            }
+
+    # 2. Check for explicit out-of-state markers (Arkansas, Oklahoma, Missouri, etc.)
+    for pat, label in OUT_OF_STATE_PATTERNS:
+        if re.search(pat, loc_lower, flags=re.IGNORECASE):
+            if "Shipping" in label and not block_shipping:
+                continue
+            return {
+                "passed": False,
+                "distance_miles": 320.0,
+                "reason": f"🚫 Blocked Out-of-Area Location: '{loc_clean}' ({label})"
             }
 
     # If it explicitly says TX or Texas and wasn't in our distant city list
@@ -8630,6 +8631,8 @@ Examine the attached bike photo(s) carefully and return ONLY a valid JSON object
     # Deterministic spec extraction fallback when listing is not in pre-verified set and no live LLM key ran
     full_t = f"{item.get('title', '')} {item.get('description', '')}".lower()
     is_youth = bool(re.search(r'\b(?:enchant|24\s*inch|24"|20\s*inch|20"|daughter|kids|youth|girls\s+bike)\b', full_t))
+    is_mtb = bool(re.search(r'\b(?:mountain|mtb|hardtail|full\s+suspension|marlin|revel|rockhopper|pitch|talon|atx)\b', full_t))
+    is_wrong_cat = is_youth or is_mtb
     has_xxs_xs = bool(re.search(r'\b(?:xxs|xs|extra\s+extra\s+small|extra\s+small|39\.5|40\s*cm|42\s*cm|43\s*cm|44\s*cm)\b', full_t))
     has_wrong_size = bool(re.search(
         r'\b(?:50\s*cm|51\s*cm|52\s*cm|53\s*cm|54\s*cm|55\s*cm|56\s*cm|57\s*cm|58\s*cm|60\s*cm|62\s*cm|64\s*cm|'
@@ -8641,7 +8644,7 @@ Examine the attached bike photo(s) carefully and return ONLY a valid JSON object
 
     fallback_res = {
         "identified_model": item.get("title") or "Liv / Giant Bicycle",
-        "bike_category": "Youth / Kids Bike" if is_youth else "Adult Road / Fitness Bicycle",
+        "bike_category": "Youth / Kids Bike" if is_youth else ("Adult Mountain Bike" if is_mtb else "Adult Road / Fitness Bicycle"),
         "photo_frame_size": (
             "Youth 24\" Size" if is_youth else (
                 "Confirmed XXS/XS" if has_xxs_xs else (
@@ -8649,8 +8652,8 @@ Examine the attached bike photo(s) carefully and return ONLY a valid JSON object
                 )
             )
         ),
-        "photo_size_confirmed": bool(has_xxs_xs and not is_youth and not has_wrong_size),
-        "is_youth_or_wrong_category": is_youth,
+        "photo_size_confirmed": bool(has_xxs_xs and not is_wrong_cat and not has_wrong_size),
+        "is_youth_or_wrong_category": is_wrong_cat,
         "is_wrong_adult_size": bool(has_wrong_size and not is_youth),
         "frame_material": "Carbon Composite" if is_carbon else "ALUXX Aluminum Alloy",
         "brake_type": "Disc Brakes" if is_disc else "Rim Caliper / Linear-Pull Brakes",
@@ -8769,25 +8772,62 @@ def evaluate_fb_listing_against_watchlist(item: dict, watchlist: dict) -> dict:
         if is_verified_liv_xs_bundle and b_clean in ("mens", "men's", "medium", "size m", "frame m"):
             continue
         
-        cm_match = re.match(r'^(\d+)\s*cm$', b_clean)
+        # Standardize apostrophes
+        b_clean_norm = b_clean.replace("’", "'")
+        full_text_norm = full_text.replace("’", "'")
+
+        cm_match = re.match(r'^(\d+)\s*cm$', b_clean_norm)
         if cm_match:
             cm_num = cm_match.group(1)
-            matched_bad = bool(re.search(rf'\b{cm_num}\s*cm\b', full_text))
-        elif len(b_clean) <= 3:
-            matched_bad = bool(re.search(rf'\b{re.escape(b_clean)}\b', full_text))
+            matched_bad = bool(re.search(rf'\b{cm_num}\s*cm\b', full_text_norm))
+        elif b_clean_norm in ("mens", "men's", "men"):
+            # Strict protection: "men's" or "mens" must NEVER match "women's" or "womens"
+            matched_bad = bool(re.search(r'(?<!\bwo)(?<!\bwomen)(?<!\bwoman)(?<!\w)men(?:\'s|s)?(?!\w)', full_text_norm))
+        elif b_clean_norm in ("frame m", "medium frame"):
+            matched_bad = bool(re.search(r'\b(?:medium|m)(?:\s+(?:sized|size))?\s+frame\b|\bframe\s*(?:size\s*)?(?:medium|m)\b', full_text_norm))
+        elif b_clean_norm in ("size m", "size medium"):
+            matched_bad = bool(re.search(r'\bsize\s*(?:medium|m)\b|\b(?:medium|m)\s*size\b', full_text_norm))
+        elif b_clean_norm in ("frame l", "large frame"):
+            matched_bad = bool(re.search(r'\b(?:large|l)(?:\s+(?:sized|size))?\s+frame\b|\bframe\s*(?:size\s*)?(?:large|l)\b', full_text_norm))
+        elif b_clean_norm in ("size l", "size large"):
+            matched_bad = bool(re.search(r'\bsize\s*(?:large|l)\b|\b(?:large|l)\s*size\b', full_text_norm))
         else:
-            if b_clean in ("frame m", "medium frame"):
-                matched_bad = bool(re.search(r'\b(?:medium|m)(?:\s+(?:sized|size))?\s+frame\b|\bframe\s*(?:size\s*)?(?:medium|m)\b', full_text))
-            elif b_clean in ("size m", "size medium"):
-                matched_bad = bool(re.search(r'\bsize\s*(?:medium|m)\b|\b(?:medium|m)\s*size\b', full_text))
-            elif b_clean in ("frame l", "large frame"):
-                matched_bad = bool(re.search(r'\b(?:large|l)(?:\s+(?:sized|size))?\s+frame\b|\bframe\s*(?:size\s*)?(?:large|l)\b', full_text))
-            elif b_clean in ("size l", "size large"):
-                matched_bad = bool(re.search(r'\bsize\s*(?:large|l)\b|\b(?:large|l)\s*size\b', full_text))
-            else:
-                matched_bad = (b_clean in full_text)
+            # Word-boundary matching to prevent subword false positives (e.g. 'iso' in 'isolation')
+            matched_bad = bool(re.search(rf'(?<!\w){re.escape(b_clean_norm)}(?!\w)', full_text_norm))
         if matched_bad:
             block_reasons.append(f"🚫 Excluded Keyword/Size/Brand: '{bad_kw}'")
+
+    # Stage 2.5: Road Bike vs Mountain Bike Enforcement
+    full_text_norm = full_text.replace("’", "'")
+    visual_targets = (watchlist.get("visual_targets") or "").strip()
+    wants_road_not_mtb = (
+        "not a mountain bike" in visual_targets.lower() or
+        "road bike and not a mountain" in (watchlist.get("name", "") + " " + visual_targets).lower() or
+        any("mountain" in str(k).lower() for k in exclude_list)
+    )
+    if wants_road_not_mtb:
+        # Mountain Bike model lines from Liv, Giant, Trek, Specialized that are NOT road bikes
+        mtb_models = [
+            "marlin", "revel", "rockhopper", "pitch", "hardrock", "talon", "atx",
+            "stumpjumper", "roscoe", "chisel", "fuel ex", "remedy", "slash", "embolden",
+            "intrigue", "stance", "trance", "reign", "fathom"
+        ]
+        mtb_indicators = [
+            "mountain", "mtb", "hardtail", "hard tail", "full suspension", "downhill",
+            "suspension fork", "rockshox", "knobby tires"
+        ]
+        found_mtb = None
+        for ind in mtb_indicators:
+            if re.search(rf'(?<!\w){re.escape(ind)}(?!\w)', full_text_norm):
+                found_mtb = ind
+                break
+        if not found_mtb:
+            for mod in mtb_models:
+                if re.search(rf'\b{re.escape(mod)}\b', full_text_norm):
+                    found_mtb = f"{mod.title()} (Mountain Bike Model)"
+                    break
+        if found_mtb and not any("Blocked Mountain Bike" in r for r in block_reasons):
+            block_reasons.append(f"🚫 Blocked Mountain Bike: '{found_mtb}' (Watchlist requires Road/Gravel/Endurance only)")
 
     # Stage 3: Must-Contain Brand/Model Keywords (e.g., 'liv', 'giant liv', 'avail', 'langma')
     must_any = watchlist.get("must_contain_any") or []

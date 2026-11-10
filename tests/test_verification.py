@@ -31,23 +31,23 @@ class TestVerificationSuite(unittest.TestCase):
 
     def test_01_version_and_build(self):
         """Verify version and build number are correctly exposed across app and health APIs."""
-        self.assertEqual(__version__, "3.1.1")
-        self.assertEqual(__build__, "20261110.2")
+        self.assertEqual(__version__, "3.1.2")
+        self.assertEqual(__build__, "20261110.3")
 
         # Verify /health
         res_h = client.get("/health")
         self.assertEqual(res_h.status_code, 200)
         data_h = res_h.json()
         self.assertEqual(data_h["status"], "healthy")
-        self.assertEqual(data_h["version"], "3.1.1")
-        self.assertEqual(data_h["build"], "20261110.2")
+        self.assertEqual(data_h["version"], "3.1.2")
+        self.assertEqual(data_h["build"], "20261110.3")
 
         # Verify /api/version
         res_v = client.get("/api/version")
         self.assertEqual(res_v.status_code, 200)
         data_v = res_v.json()
-        self.assertEqual(data_v["version"], "3.1.1")
-        self.assertEqual(data_v["build"], "20261110.2")
+        self.assertEqual(data_v["version"], "3.1.2")
+        self.assertEqual(data_v["build"], "20261110.3")
 
         # Verify UI version tags in static/index.html
         with open(os.path.join(ROOT_DIR, "static", "index.html"), "r", encoding="utf-8") as f:
@@ -280,6 +280,58 @@ class TestVerificationSuite(unittest.TestCase):
         res_dfw = evaluate_fb_listing_against_watchlist(item_dfw, houston_wl)
         self.assertEqual(res_dfw["status"], "blocked")
         self.assertIn("Outside 100 mi Radius", " ".join(res_dfw["block_reasons"]))
+
+    def test_10_anti_false_positive_and_mtb_enforcement(self):
+        """Verify Missouri City, TX passes local geofence, women's bikes are not blocked by 'men's', and MTBs are blocked."""
+        houston_wl = {
+            "name": "🚲 Wife's Bike (Houston Local Only)",
+            "query": "bike",
+            "postal_code": "77002",
+            "location_name": "Houston, TX",
+            "max_radius_miles": 100,
+            "min_price": 75,
+            "max_price": 1300,
+            "must_contain_any": ["liv", "giant liv", "avail", "langma", "devote", "alight", "tempt", "envie", "thrive", "Trek", "beliv", "domane", "giant"],
+            "required_attributes": ["xxs", "2xs", "extra extra small", "xs", "extra small", "43cm", "44cm", "45cm", "46cm", "47cm", "4'10", "4'11", "5'0", "5'1", "5'2", "extra-small"],
+            "exclude_keywords": [
+                "large", "mountain", "size l", "frame l", "medium", "size m", "frame m", "xl", "extra large",
+                "mens", "men's", "huffy", "schwinn", "bmx", "kids 12", "kids 16", "20 inch", "arkansas",
+                "little rock", "fayetteville", "bentonville", "oklahoma", "tulsa", "ships to you", "iso", "wanted", "broken",
+                "48cm", "49cm", "50cm", "51cm", "52cm", "53cm", "54cm", "55cm", "56cm", "57cm", "58cm", "59cm", "60cm", "61cm", "62cm"
+            ],
+            "visual_targets": "Inspect photos to identify exact model from frame decals, verify XXS/XS compact sloping top-tube geometry & seat-tube size stickers, check Carbon vs ALUXX welded aluminum, Disc vs Rim brakes, drivetrain tier, and block 20\"/24\" youth kids bikes (e.g. Liv Enchant). make sure it is a road bike and not a mountain bike."
+        }
+
+        # 1. Missouri City, TX is NOT flagged as Missouri (Out of State)
+        loc_mc = evaluate_fb_location("Missouri City, TX", max_radius_miles=100, watchlist=houston_wl)
+        self.assertTrue(loc_mc["passed"])
+        self.assertNotIn("Missouri (Out of State)", loc_mc["reason"])
+        self.assertAlmostEqual(loc_mc["distance_miles"], 18.0, delta=4.0)
+
+        # 2. Women's bike does NOT trigger Excluded Keyword: 'men's'
+        item_womens = {
+            "title": "Giant OCR3 women's road bike",
+            "price_num": 550.0,
+            "location": "Houston, TX",
+            "description": "Selling my Giant OCR3 women's road bike - lightweight, comfortable. Size XS.",
+            "gallery_photos": []
+        }
+        res_w = evaluate_fb_listing_against_watchlist(item_womens, houston_wl)
+        reasons_text = " ".join(res_w["block_reasons"])
+        self.assertNotIn("Excluded Keyword/Size/Brand: 'men's'", reasons_text)
+        self.assertNotIn("Excluded Keyword/Size/Brand: 'mens'", reasons_text)
+
+        # 3. Mountain bike is strictly blocked
+        item_marlin = {
+            "title": "Trek Marlin 5 Gen 3",
+            "price_num": 550.0,
+            "location": "Houston, TX",
+            "description": "7 gear Mountain Bike, XS frame.",
+            "gallery_photos": []
+        }
+        res_m = evaluate_fb_listing_against_watchlist(item_marlin, houston_wl)
+        self.assertEqual(res_m["status"], "blocked")
+        self.assertTrue(any("Mountain" in r or "mountain" in r.lower() for r in res_m["block_reasons"]))
 
 if __name__ == "__main__":
     unittest.main()

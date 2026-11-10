@@ -2939,7 +2939,15 @@
                 <!-- FB SUB-PANE 2: BLOCKED MARKETPLACE GARBAGE LOG -->
                 <div id="fb-pane-blocked" class="fb-sub-pane" style="display: none;">
                     <div class="account-box" style="margin-bottom: 16px;">
-                        <h3 style="margin: 0 0 6px 0; color: #f87171;">🗑️ Blocked Marketplace Garbage Log ("Why Facebook Results Were Rejected")</h3>
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 6px;">
+                            <h3 style="margin: 0; color: #f87171;">🗑️ Blocked Marketplace Garbage Log ("Why Facebook Results Were Rejected")</h3>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <label style="font-size: 12px; color: #cbd5e1; font-weight: 600;">Watchlist:</label>
+                                <select id="fb-blocked-watchlist-filter" onchange="filterFbBlockedListings()" style="background: #0d1117; color: #f8fafc; border: 1px solid #334155; border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer;">
+                                    <option value="all">All Watchlists (Houston &amp; DFW)</option>
+                                </select>
+                            </div>
+                        </div>
                         <p style="margin: 0; font-size: 13px; color: #94a3b8;">
                             Facebook's algorithm floods search results for <code>liv xxs bike</code> with Large Treks in Arkansas and shipping spam. Below is every listing our Sniper Engine intercepted and blocked so your notifications stay 100% signal, 0% noise.
                         </p>
@@ -10581,21 +10589,55 @@
             }).join('');
         }
 
+        function filterFbBlockedListings() {
+            if (fbOverviewData && fbOverviewData.blocked_listings) {
+                renderFbBlocked(fbOverviewData.blocked_listings);
+            }
+        }
+
         function renderFbBlocked(blocked) {
             const container = document.getElementById('fb-blocked-container');
             if (!container) return;
-            if (!blocked || blocked.length === 0) {
-                container.innerHTML = `<div style="color:#94a3b8; padding: 20px; text-align: center;">No garbage listings blocked yet.</div>`;
+
+            const watchlists = (fbOverviewData && fbOverviewData.watchlists) || [];
+            const wMap = {};
+            watchlists.forEach(w => { wMap[w.id] = w.name; });
+
+            // Sync watchlist filter dropdown
+            const filterEl = document.getElementById('fb-blocked-watchlist-filter');
+            if (filterEl) {
+                const currentVal = filterEl.value || 'all';
+                let optHtml = `<option value="all">All Watchlists (${blocked ? blocked.length : 0})</option>`;
+                watchlists.forEach(w => {
+                    const countForW = (blocked || []).filter(item => item.watchlist_id === w.id).length;
+                    optHtml += `<option value="${escapeHtml(w.id)}">${escapeHtml(w.name)} (${countForW})</option>`;
+                });
+                filterEl.innerHTML = optHtml;
+                if ([...filterEl.options].some(o => o.value === currentVal)) {
+                    filterEl.value = currentVal;
+                }
+            }
+
+            const selectedFilter = filterEl ? filterEl.value : 'all';
+            const displayList = (selectedFilter === 'all')
+                ? (blocked || [])
+                : (blocked || []).filter(item => item.watchlist_id === selectedFilter);
+
+            if (!displayList || displayList.length === 0) {
+                container.innerHTML = `<div style="color:#94a3b8; padding: 25px; text-align: center;">No garbage listings found for this watchlist filter.</div>`;
                 return;
             }
-            container.innerHTML = blocked.map(item => {
+
+            container.innerHTML = displayList.map(item => {
                 const reasons = Array.isArray(item.block_reasons) ? item.block_reasons : [item.ai_verdict || 'Blocked by Watchlist Filter'];
                 const va = (item.vision_analysis && typeof item.vision_analysis === 'object') ? item.vision_analysis : {};
+                const wName = wMap[item.watchlist_id] || '';
                 return `
                     <div class="fb-blocked-card">
                         <div style="flex: 1; min-width: 260px;">
-                            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 4px;">
+                            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 5px;">
                                 <span style="background: #ef4444; color: #fff; font-size: 11px; font-weight: 800; padding: 2px 7px; border-radius: 4px;">BLOCKED JUNK</span>
+                                ${wName ? `<span style="background: rgba(59,130,246,0.18); color: #93c5fd; border: 1px solid rgba(59,130,246,0.3); font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 4px;">🎯 ${escapeHtml(wName)}</span>` : ''}
                                 <strong style="color: #f8fafc; font-size: 14.5px; text-decoration: line-through; opacity: 0.85;">${escapeHtml(item.title)}</strong>
                                 <span style="color: #fca5a5; font-weight: 700; font-size: 13.5px;">${escapeHtml(item.price_str || '')}</span>
                                 <span style="color: #94a3b8; font-size: 12.5px;">📍 ${escapeHtml(item.location || 'Unknown')}</span>
