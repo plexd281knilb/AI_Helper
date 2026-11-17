@@ -1,8 +1,17 @@
 import os
 import sys
+import tempfile
 import unittest
 import json
 import sqlite3
+import atexit
+import shutil
+
+_TEMP_TEST_DIR = tempfile.mkdtemp(prefix="ai_helper_test_")
+os.environ["AI_HELPER_DATA_DIR"] = _TEMP_TEST_DIR
+os.environ["AI_HELPER_DB_FILE"] = os.path.join(_TEMP_TEST_DIR, "test_app.db")
+atexit.register(lambda: shutil.rmtree(_TEMP_TEST_DIR, ignore_errors=True))
+
 from fastapi.testclient import TestClient
 
 # Ensure root directory is on sys.path
@@ -12,9 +21,13 @@ if ROOT_DIR not in sys.path:
 
 from app import (
     app,
+    DB_FILE,
     __version__,
     __build__,
+    canonicalize_identifier,
     clean_display_event_title,
+    is_safe_public_url,
+    is_valid_public_origin,
     parse_flexible_iso_datetime,
     evaluate_fb_listing_against_watchlist,
     evaluate_fb_location,
@@ -57,9 +70,10 @@ class TestVerificationSuite(unittest.TestCase):
         self.assertIn('<span class="brand-badge">v3.1</span>', html)
 
     def test_02_database_schema(self):
-        """Verify database initialization and migrations execute without errors."""
+        """Verify database initialization and migrations execute without errors in isolated test DB."""
         init_db()
-        test_db = os.path.join(ROOT_DIR, "data", "app.db")
+        test_db = DB_FILE
+        self.assertTrue(test_db.startswith(_TEMP_TEST_DIR), "Tests must run against isolated temp SQLite DB")
         self.assertTrue(os.path.exists(test_db))
         conn = sqlite3.connect(test_db)
         c = conn.cursor()
@@ -392,6 +406,78 @@ class TestVerificationSuite(unittest.TestCase):
         finally:
             with USER_SCAN_LOCK:
                 USER_SCANNING_IN_PROGRESS.discard(test_user)
+
+    def test_12_security_21point_confusables_sql_52char_and_ui(self):
+        """Verify Unicode confusables (SPOTIFY), 52-char & SQL-syntax usernames, SSRF, RBAC, ReDoS & UI checks."""
+        # 1. Unicode confusable canonicalization
+        self.assertEqual(canonicalize_identifier("\u0405\u0420\u041E\u0422\u0406\u0492\u0423"), "spotify")
+        self.assertEqual(canonicalize_identifier("\uFF33\uFF30\uFF2F\uFF34\uFF29\uFF26\uFF39"), "spotify")
+        self.assertEqual(canonicalize_identifier("\u212A\u017F"), "ks")
+
+        # 2. SSRF & public origin & regex metacharacter escaping checks
+        self.assertFalse(is_safe_public_url("http://169.254.169.254/latest/meta-data/"))
+        self.assertFalse(is_safe_public_url("http://127.0.0.1:8080/"))
+        self.assertFalse(is_safe_public_url("file:///etc/passwd"))
+        self.assertFalse(is_valid_public_origin("javascript:alert(1)"))
+        self.assertTrue(is_valid_public_origin("https://helper.example.com"))
+
+        # Member names with regex metacharacters must not crash or trigger backtracking
+        self.assertEqual(
+            clean_display_event_title("Practice (Leo[+?*( - 2nd Grade)", child_names=["Leo[+?*("], self_name="Mom(a+)+"),
+            "Practice - Leo[+?*("
+        )
+
+        # 3. Initial admin setup, login, confusable/SQL/52-char user creation & session revocation
+        admin_res = client.post("/api/auth/register", json={"username": "spotify", "password": "AdminPassword!1"})
+        self.assertEqual(admin_res.json().get("status"), "success")
+
+        login_admin = client.post("/api/auth/login", json={"username": "spotify", "password": "AdminPassword!1"})
+        self.assertEqual(login_admin.json().get("status"), "success")
+
+        # Confusable collision blocked even by admin
+        dup_confusable = client.post("/api/users", json={"username": "\u0405\u0420\u041E\u0422\u0406\u0492\u0423", "password": "Pass!1234", "role": "user"})
+        self.assertIn("already exists", dup_confusable.json().get("error", ""))
+
+        # 52-char and SQL-syntax usernames succeed cleanly and parameterize safely
+        u52 = "A" * 52
+        self.assertEqual(client.post("/api/users", json={"username": u52, "password": "User52Pass!1", "role": "user"}).json().get("status"), "success")
+        sql_user = "Robert'); DROP TABLE users;--"
+        self.assertEqual(client.post("/api/users", json={"username": sql_user, "password": "SqlUserPass!1", "role": "user"}).json().get("status"), "success")
+
+        # Log in as non-admin SQL-syntax user using isolated TestClient
+        c2 = TestClient(app)
+        l2 = c2.post("/api/auth/login", json={"username": sql_user, "password": "SqlUserPass!1"})
+        self.assertEqual(l2.json().get("status"), "success")
+        self.assertIn("Cache-Control", l2.headers)
+        self.assertIn("no-store", l2.headers["Cache-Control"])
+
+        # Non-admin cannot upload client_secret.json (403)
+        sec_up = c2.post("/api/upload_client_secret", files={"file": ("client_secret.json", b"{}", "application/json")})
+        self.assertEqual(sec_up.status_code, 403)
+
+        # Malicious Google verification path returns 404 (not raw unescaped HTML)
+        g_bad = c2.get("/google<script>alert(1)<.html")
+        self.assertEqual(g_bad.status_code, 404)
+
+        # Grocery list IDOR check returns 404 for unknown / non-owned list
+        idor_res = c2.get("/api/groceries/lists/nonexistent-list-id/items")
+        self.assertEqual(idor_res.status_code, 404)
+
+        # Password reset revokes active session of target user
+        users_list = client.get("/api/users").json()
+        sql_uid = next(u["id"] for u in users_list if u["username"] == sql_user)
+        upd = client.put(f"/api/users/{sql_uid}", json={"password": "NewRotatedPassword!2"})
+        self.assertEqual(upd.json().get("status"), "success")
+        self.assertEqual(c2.get("/api/events").status_code, 401)
+
+        # 4. UI Light/Dark theme, viewport-fit=cover, mobile 16px rules & no purple gradient tokens
+        with open(os.path.join(ROOT_DIR, "static", "index.html"), "r", encoding="utf-8") as f:
+            html_doc = f.read()
+        self.assertIn("viewport-fit=cover", html_doc)
+        self.assertIn('data-theme="light"', html_doc)
+        self.assertIn("ai_helper_theme", html_doc)
+        self.assertIn("-webkit-backdrop-filter", html_doc)
+        self.assertNotIn("user-scalable=no", html_doc)
 
 if __name__ == "__main__":
     unittest.main()

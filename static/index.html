@@ -2,45 +2,132 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Calendar Helper</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#2563eb">
+    <title>AI Helper — Intelligent Scheduling, Meals &amp; Local Deals</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.ico">
     <style>
         :root {
+            color-scheme: dark;
             --bg-color: #0f1115;
             --container-bg: #1a1d24;
             --text-color: #e2e4e9;
             --nav-bg: #15181e;
-            --nav-active: #4285F4;
+            --nav-active: #2563eb;
             --border-color: #2a2e38;
             --input-bg: #222630;
             --card-bg: #1a1d24;
-            --accent: #4285F4;
-            --accent-hover: #357ae8;
+            --accent: #2563eb;
+            --accent-hover: #1d4ed8;
+            --amber-accent: #f59e0b;
             --radius-sm: 8px;
             --radius-md: 12px;
             --radius-lg: 16px;
             --shadow-sm: 0 2px 8px rgba(0,0,0,0.2);
             --shadow-md: 0 4px 16px rgba(0,0,0,0.3);
         }
+        [data-theme="light"] {
+            color-scheme: light;
+            --bg-color: #f8fafc;
+            --container-bg: #ffffff;
+            --text-color: #0f172a;
+            --nav-bg: #ffffff;
+            --border-color: #cbd5e1;
+            --input-bg: #f1f5f9;
+            --card-bg: #ffffff;
+            --shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.06);
+            --shadow-md: 0 4px 16px rgba(15, 23, 42, 0.09);
+        }
+        html[data-theme="light"] body,
+        body[data-theme="light"] {
+            background-color: #f8fafc !important;
+            color: #0f172a !important;
+        }
+        body[data-theme="light"] .app-sidebar,
+        body[data-theme="light"] .mobile-header {
+            background-color: #ffffff !important;
+            border-color: #e2e8f0 !important;
+            color: #0f172a !important;
+        }
+        body[data-theme="light"] .brand-title,
+        body[data-theme="light"] .mobile-title,
+        body[data-theme="light"] .sidebar-username,
+        body[data-theme="light"] .history-subject,
+        body[data-theme="light"] .meal-title,
+        body[data-theme="light"] .cmd-bento-metric,
+        body[data-theme="light"] h1,
+        body[data-theme="light"] h2,
+        body[data-theme="light"] h3,
+        body[data-theme="light"] h4 {
+            color: #0f172a !important;
+        }
+        body[data-theme="light"] .nav-tree-item {
+            color: #334155 !important;
+        }
+        body[data-theme="light"] .nav-tree-item.active {
+            background: rgba(37, 99, 235, 0.12) !important;
+            color: #1d4ed8 !important;
+        }
+        body[data-theme="light"] .cmd-bento-card,
+        body[data-theme="light"] .fb-listing-card,
+        body[data-theme="light"] .history-card,
+        body[data-theme="light"] .meal-card,
+        body[data-theme="light"] .account-box,
+        body[data-theme="light"] .auth-box,
+        body[data-theme="light"] .user-profile-card,
+        body[data-theme="light"] .cmd-palette-box {
+            background: #ffffff !important;
+            border-color: #cbd5e1 !important;
+            color: #0f172a !important;
+        }
+        body[data-theme="light"] #auth-overlay {
+            background: #f8fafc !important;
+            color: #0f172a !important;
+        }
+        body[data-theme="light"] #auth-overlay header {
+            background: rgba(255, 255, 255, 0.96) !important;
+            border-bottom-color: #cbd5e1 !important;
+        }
+        body[data-theme="light"] .cmd-bento-sub,
+        body[data-theme="light"] .meal-desc,
+        body[data-theme="light"] .history-meta {
+            color: #475569 !important;
+        }
+        body[data-theme="light"] input,
+        body[data-theme="light"] select,
+        body[data-theme="light"] textarea {
+            background-color: #ffffff !important;
+            color: #0f172a !important;
+            border-color: #cbd5e1 !important;
+        }
+        body[data-theme="light"] .family-filter-pill {
+            background: #f1f5f9 !important;
+            border-color: #cbd5e1 !important;
+            color: #1e293b !important;
+        }
+        body[data-theme="light"] .family-filter-pill.active {
+            background: rgba(37, 99, 235, 0.15) !important;
+            border-color: #2563eb !important;
+            color: #1d4ed8 !important;
+        }
         
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; background-color: var(--bg-color); color: var(--text-color); line-height: 1.5; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; background-color: var(--bg-color); color: var(--text-color); line-height: 1.5; overflow-x: hidden; }
         
         /* Auth Overlay Styles */
-        #auth-overlay { position: fixed; inset: 0; width: 100%; height: 100%; background: #0b0f19; z-index: 9999; overflow-y: auto; display: none; box-sizing: border-box; }
+        #auth-overlay { position: fixed; inset: 0; width: 100%; height: 100dvh; min-height: 100vh; background: #0b0f19; z-index: 9999; overflow-y: auto; display: none; box-sizing: border-box; }
         .auth-box { background: var(--card-bg); padding: 40px 30px; border-radius: var(--radius-lg); border: 1px solid var(--border-color); box-shadow: var(--shadow-md); width: 100%; max-width: 400px; text-align: center; box-sizing: border-box; }
         .auth-box h2 { margin-top: 0; margin-bottom: 25px; }
-        .auth-box input { width: 100%; padding: 14px; margin: 10px 0; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--input-bg); color: #fff; box-sizing: border-box; font-size: 16px; transition: border 0.2s; }
+        .auth-box input { width: 100%; padding: 14px; margin: 10px 0; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--input-bg); color: var(--text-color); box-sizing: border-box; font-size: 16px; transition: border 0.2s; }
         .auth-box input:focus { outline: none; border-color: var(--accent); }
-        .auth-box button { width: 100%; padding: 14px; background: var(--accent); color: white; border: none; border-radius: var(--radius-sm); cursor: pointer; font-size: 16px; font-weight: 600; margin-top: 15px; transition: background 0.2s; }
+        .auth-box button { width: 100%; padding: 14px; min-height: 44px; background: var(--accent); color: white; border: none; border-radius: var(--radius-sm); cursor: pointer; font-size: 16px; font-weight: 600; margin-top: 15px; transition: background 0.2s; }
         .auth-box button:hover { background: var(--accent-hover); }
         .auth-msg { color: #ff5252; margin-bottom: 15px; font-size: 14px; }
         .auth-toggle { background: none !important; color: var(--accent) !important; font-size: 14px !important; margin-top: 20px !important; font-weight: normal !important; padding: 0 !important; }
         .auth-toggle:hover { text-decoration: underline; background: none !important; }
         
-        /* Main App Styles & Portalarr Sidebar Architecture */
+        /* Main App Styles */
         #app-content { display: none; }
-        .app-layout { display: flex; min-height: 100vh; background-color: var(--bg-color); }
+        .app-layout { display: flex; min-height: 100vh; min-height: 100dvh; background-color: var(--bg-color); }
         
         .app-sidebar {
             width: 260px;
@@ -419,6 +506,7 @@
         /* Mobile Responsiveness */
         @media (max-width: 850px) {
             .mobile-header { display: flex; }
+            .mobile-menu-btn, .mobile-fetch-btn { min-height: 44px; min-width: 44px; display: inline-flex; align-items: center; justify-content: center; }
             .app-sidebar {
                 transform: translateX(-100%);
                 box-shadow: 0 0 30px rgba(0, 0, 0, 0.85);
@@ -432,11 +520,12 @@
             .main-content {
                 margin-left: 0;
             }
-            .container { padding: 0 16px; margin: 15px auto; }
+            .container { padding: 0 12px; margin: 15px auto; }
             .account-box { padding: 15px; }
-            .add-btn, .dismiss-btn { width: 100%; box-sizing: border-box; margin-left: 0; text-align: center; }
+            .add-btn, .dismiss-btn { width: 100%; box-sizing: border-box; margin-left: 0; text-align: center; min-height: 44px; }
             .account-actions { flex-direction: column; gap: 15px; }
-            .account-actions button { width: 100%; }
+            .account-actions button { width: 100%; min-height: 44px; }
+            input, select, textarea { font-size: 16px !important; }
             h1 { font-size: 24px; }
         }
         
@@ -2042,7 +2131,7 @@
         }
         .fb-match-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
             gap: 18px;
         }
         .fb-listing-card {
@@ -2173,7 +2262,7 @@
 <!-- Public Home Page & Auth Portal (Displayed to Unauthenticated Visitors & Reviewers) -->
     <div id="auth-overlay" style="display: none;">
         <!-- Top Public Navbar -->
-        <header style="background: rgba(13, 17, 23, 0.95); border-bottom: 1px solid #30363d; backdrop-filter: blur(8px); position: sticky; top: 0; z-index: 100; padding: 14px 24px;">
+        <header style="background: rgba(13, 17, 23, 0.95); border-bottom: 1px solid #30363d; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); position: sticky; top: 0; z-index: 100; padding: 14px 16px;">
             <div style="max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <span style="font-size: 24px;">⚡</span>
@@ -2182,22 +2271,23 @@
                         <span style="font-size: 11px; font-weight: 700; background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.4); padding: 2px 7px; border-radius: 9999px; margin-left: 6px;">v3.1</span>
                     </div>
                 </div>
-                <nav style="display: flex; align-items: center; gap: 20px; font-size: 14px; flex-wrap: wrap;">
+                <nav style="display: flex; align-items: center; gap: 14px; font-size: 14px; flex-wrap: wrap;">
                     <a href="#lp-overview" style="color: #cbd5e1; text-decoration: none; font-weight: 500;">Overview</a>
                     <a href="#lp-calendar" style="color: #cbd5e1; text-decoration: none; font-weight: 500;">Google Calendar Sync</a>
                     <a href="#lp-features" style="color: #cbd5e1; text-decoration: none; font-weight: 500;">Features</a>
                     <a href="/privacy" target="_blank" style="color: #60a5fa; text-decoration: none; font-weight: 600;">Privacy Policy</a>
                     <a href="/terms" target="_blank" style="color: #60a5fa; text-decoration: none; font-weight: 600;">Terms</a>
-                    <button type="button" onclick="scrollToSignIn()" style="background: #2563eb; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13.5px; transition: background 0.2s;">Sign In</button>
+                    <button type="button" onclick="toggleTheme()" class="theme-toggle-btn" style="background: rgba(255,255,255,0.08); color: #fbbf24; border: 1px solid #30363d; padding: 8px 12px; min-height: 40px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13px;">🌙 Dark</button>
+                    <button type="button" onclick="scrollToSignIn()" style="background: #2563eb; color: #fff; border: none; padding: 8px 16px; min-height: 40px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 13.5px; transition: background 0.2s;">Sign In</button>
                 </nav>
             </div>
         </header>
 
         <!-- Main Landing Body -->
-        <div style="max-width: 1200px; margin: 0 auto; padding: 40px 24px 80px 24px;">
+        <div style="max-width: 1200px; margin: 0 auto; padding: 32px 16px 80px 16px;">
             
             <!-- Hero Grid -->
-            <div id="lp-overview" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 40px; align-items: center; margin-bottom: 60px;">
+            <div id="lp-overview" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 32px; align-items: center; margin-bottom: 60px;">
                 <div>
                     <div style="display: inline-flex; align-items: center; gap: 6px; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.3); color: #34d399; font-size: 12.5px; font-weight: 700; padding: 4px 12px; border-radius: 9999px; margin-bottom: 16px;">
                         <span>🛡️</span> Google Calendar OAuth 2.0 Integration & Privacy-First Personal Assistant
@@ -2626,6 +2716,7 @@
                 </div>
             </div>
             <div style="display: flex; align-items: center; gap: 8px;">
+                <button class="mobile-menu-btn theme-toggle-btn" onclick="toggleTheme()" title="Toggle Light/Dark Theme" style="color: #fbbf24; border-color: rgba(245, 158, 11, 0.4); padding: 4px 8px; font-size: 14px;">🌙</button>
                 <button class="mobile-menu-btn" onclick="openOnboardingWizard(1)" title="Setup Wizard" style="color: #38bdf8; border-color: rgba(56, 189, 248, 0.4); padding: 4px 8px; font-size: 14px;">🚀</button>
                 <button class="mobile-menu-btn" onclick="openSuggestionModal()" title="Suggest Edit" style="color: #fbbf24; border-color: rgba(245, 158, 11, 0.4); padding: 4px 8px; font-size: 14px;">💡</button>
                 <button class="mobile-fetch-btn" onclick="fetchEmails()" title="Fetch New Emails">📥 Fetch</button>
@@ -2723,6 +2814,9 @@
             <div class="sidebar-footer">
                 <button class="sidebar-fetch-btn" id="sidebar-fetch-btn" onclick="fetchEmails()">
                     <span id="sidebar-fetch-icon">📥</span> Fetch New Emails
+                </button>
+                <button type="button" class="sidebar-logout-btn theme-toggle-btn" onclick="toggleTheme()" style="background: rgba(245, 158, 11, 0.12); color: #fbbf24; border-color: rgba(245, 158, 11, 0.35);">
+                    🌙 Dark
                 </button>
                 <button class="sidebar-logout-btn" onclick="logout()">
                     <span>🚪</span> Log Out
@@ -4771,6 +4865,26 @@
                 .replace(/'/g, "&#039;");
         }
 
+        function safeHttpUrl(url) {
+            const s = String(url || '').trim();
+            return /^https?:\/\//i.test(s) ? s : '#';
+        }
+
+        let currentTheme = localStorage.getItem('ai_helper_theme') || 'dark';
+        function applyTheme(theme) {
+            currentTheme = theme === 'light' ? 'light' : 'dark';
+            localStorage.setItem('ai_helper_theme', currentTheme);
+            document.documentElement.setAttribute('data-theme', currentTheme);
+            document.body.setAttribute('data-theme', currentTheme);
+            document.querySelectorAll('.theme-toggle-btn').forEach(btn => {
+                btn.textContent = currentTheme === 'light' ? (btn.classList.contains('mobile-menu-btn') ? '☀️' : '☀️ Light') : (btn.classList.contains('mobile-menu-btn') ? '🌙' : '🌙 Dark');
+            });
+        }
+        function toggleTheme() {
+            applyTheme(currentTheme === 'light' ? 'dark' : 'light');
+        }
+        applyTheme(currentTheme);
+
         async function loadHistory() {
             const container = document.getElementById('history-container');
             container.innerHTML = '<div style="color:#aaa; text-align:center; padding:20px;">Loading history...</div>';
@@ -5242,8 +5356,8 @@
                         </div>
                         <div id="user-msg-${u.id}" style="margin-top: 5px;"></div>
                         <div class="account-actions">
-                            <button class="save-btn" onclick="updateUser('${u.id}')" style="margin-top:0;">Update User</button>
-                            <button class="remove-btn" onclick="deleteUser('${u.id}')" style="margin-top:0;">Delete User</button>
+                            <button class="save-btn" data-uid="${escapeHtml(u.id)}" onclick="updateUser(this.dataset.uid)" style="margin-top:0;">Update User</button>
+                            <button class="remove-btn" data-uid="${escapeHtml(u.id)}" onclick="deleteUser(this.dataset.uid)" style="margin-top:0;">Delete User</button>
                         </div>
                     `;
                     container.appendChild(box);
@@ -5272,7 +5386,7 @@
                 await handleApiError(response);
                 const data = await response.json();
                 if (data.error) {
-                    msgBox.innerHTML = `<div class="error">${data.error}</div>`;
+                    msgBox.innerHTML = `<div class="error">${escapeHtml(data.error)}</div>`;
                 } else {
                     msgBox.innerHTML = '<div class="success">User created!</div>';
                     document.getElementById('new-user-name').value = '';
@@ -5307,7 +5421,7 @@
                 await handleApiError(response);
                 const data = await response.json();
                 if (data.error) {
-                    msgBox.innerHTML = `<span class="error">${data.error}</span>`;
+                    msgBox.innerHTML = `<span class="error">${escapeHtml(data.error)}</span>`;
                 } else {
                     msgBox.innerHTML = '<span class="success">Updated!</span>';
                     document.getElementById(`edit-user-pass-${id}`).value = '';
@@ -5432,11 +5546,11 @@
                         const dates = `${fmtDate(dateObj)}/${fmtDate(endDateObj)}`;
                         const gcalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(event.title || '')}&dates=${dates}&details=${encodeURIComponent(event.description || '')}`;
                         buttonsHtml = `
-                            <button onclick="syncEvent('${safeId}', this)" class="add-btn" style="background: #2563eb; font-weight: 600;">⚡ Push to Google Calendar</button>
-                            <a href="${escapeHtml(gcalUrl)}" target="_blank" class="add-btn" onclick="dismissEvent('${safeId}')" style="background: #475569;">📅 Manual Add</a>
+                            <button data-eid="${safeId}" onclick="syncEvent(this.dataset.eid, this)" class="add-btn" style="background: #2563eb; font-weight: 600;">⚡ Push to Google Calendar</button>
+                            <a href="${escapeHtml(safeHttpUrl(gcalUrl))}" target="_blank" rel="noopener noreferrer" class="add-btn" data-eid="${safeId}" onclick="dismissEvent(this.dataset.eid)" style="background: #475569;">📅 Manual Add</a>
                         `;
                     }
-                    buttonsHtml += `<button onclick="dismissEvent('${safeId}')" class="dismiss-btn">Dismiss</button>`;
+                    buttonsHtml += `<button data-eid="${safeId}" onclick="dismissEvent(this.dataset.eid)" class="dismiss-btn">Dismiss</button>`;
 
                     const locationHtml = event.location ? `<div style="color: #64B5F6; margin-bottom: 10px;">📍 ${escapeHtml(event.location)}</div>` : '';
                     card.innerHTML = `
@@ -5491,11 +5605,11 @@
                     renderLocalEvents();
                     setTimeout(() => msgBox.innerHTML = '', 4000);
                 } else {
-                    msgBox.innerHTML = `<div class="error">${data.error || 'Failed to sync events.'}</div>`;
+                    msgBox.innerHTML = `<div class="error">${escapeHtml(data.error || 'Failed to sync events.')}</div>`;
                 }
             } catch(e) {
                 if (e.message !== "Unauthorized") {
-                    msgBox.innerHTML = `<div class="error">${e.message || 'Error pushing events. Make sure Google Calendar is connected in Settings.'}</div>`;
+                    msgBox.innerHTML = `<div class="error">${escapeHtml(e.message || 'Error pushing events. Make sure Google Calendar is connected in Settings.')}</div>`;
                 }
             } finally {
                 if (btn) {
@@ -5652,7 +5766,7 @@
                 modelSelect.innerHTML = '';
                 
                 if (data.error) {
-                    modelSelect.innerHTML = `<option value="">Error: ${data.error}</option>`;
+                    modelSelect.innerHTML = `<option value="">Error: ${escapeHtml(data.error)}</option>`;
                     return;
                 }
                 
@@ -7178,25 +7292,25 @@
                                                     ${validityBadge}
                                                     ${store.notes && !validityBadge ? `<div style="font-size: 12px; color: #94a3b8; margin-top: 4px;">${escapeHtml(store.notes)}</div>` : ''}
                                                 </div>
-                                                <button class="remove-btn" onclick="deleteGroceryStore('${store.id}')" style="margin: 0; padding: 4px 8px; font-size: 12px;" title="Delete Store">🗑️</button>
+                                                <button class="remove-btn" data-sid="${escapeHtml(store.id)}" onclick="deleteGroceryStore(this.dataset.sid)" style="margin: 0; padding: 6px 10px; font-size: 12px;" title="Delete Store">🗑️</button>
                                             </div>
                                             <div style="font-size: 12.5px; color: #94a3b8; margin-bottom: 12px; word-break: break-all;">
-                                                ${store.ad_url ? `<a href="${escapeHtml(store.ad_url)}" target="_blank" rel="noopener noreferrer" style="color: #60a5fa; text-decoration: underline;">🔗 View Digital Circular</a>` : '<span style="color:#64748b;">No direct link</span>'}
+                                                ${store.ad_url ? `<a href="${escapeHtml(safeHttpUrl(store.ad_url))}" target="_blank" rel="noopener noreferrer" style="color: #60a5fa; text-decoration: underline;">🔗 View Digital Circular</a>` : '<span style="color:#64748b;">No direct link</span>'}
                                             </div>
                                             <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #aaa; margin-bottom: 12px; background: rgba(0,0,0,0.25); padding: 8px 10px; border-radius: 4px;">
                                                 <span>🏷️ Deals: <strong style="color: #34d399; font-size: 13px;">${dealsCount}</strong></span>
                                                 <span>🕒 ${escapeHtml(scannedStr)}</span>
                                             </div>
                                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
-                                                <button class="save-btn" onclick="scanGroceryStore('${store.id}', '${escapeHtml(store.name)}', this)" style="margin: 0; padding: 8px 10px; font-size: 12.5px; background: #2563eb;">
+                                                <button class="save-btn" data-sid="${escapeHtml(store.id)}" data-sname="${escapeHtml(store.name)}" onclick="scanGroceryStore(this.dataset.sid, this.dataset.sname, this)" style="margin: 0; padding: 8px 10px; font-size: 12.5px; background: #2563eb;">
                                                     🔄 Refresh
                                                 </button>
-                                                <button class="add-btn" onclick="openBrowseDealsModal('${store.id}')" style="margin: 0; padding: 8px 10px; font-size: 12.5px; background: #059669;" ${dealsCount === 0 ? 'disabled style="opacity:0.4; cursor:not-allowed;"' : ''}>
+                                                <button class="add-btn" data-sid="${escapeHtml(store.id)}" onclick="openBrowseDealsModal(this.dataset.sid)" style="margin: 0; padding: 8px 10px; font-size: 12.5px; background: #059669;" ${dealsCount === 0 ? 'disabled style="opacity:0.4; cursor:not-allowed;"' : ''}>
                                                     👁️ Deals (${dealsCount})
                                                 </button>
                                             </div>
                                             <div style="display: flex; gap: 8px;">
-                                                <button class="copy-btn" onclick="openPasteDealsModal('${store.id}', '${escapeHtml(store.name)}')" style="flex: 1; margin: 0; padding: 6px 10px; font-size: 11.5px; background: #374151; color: #e5e7eb;">
+                                                <button class="copy-btn" data-sid="${escapeHtml(store.id)}" data-sname="${escapeHtml(store.name)}" onclick="openPasteDealsModal(this.dataset.sid, this.dataset.sname)" style="flex: 1; margin: 0; padding: 6px 10px; font-size: 11.5px; background: #374151; color: #e5e7eb;">
                                                     📋 Paste Text
                                                 </button>
                                             </div>
@@ -7934,9 +8048,8 @@
                     const stEntries = Object.entries(storeStats).sort((a, b) => b[1].unchecked - a[1].unchecked);
                     tripCards.innerHTML = stEntries.map(([stName, stInfo]) => {
                         const isSelected = activeListStoreFilter === stName;
-                        const safeSt = escapeHtml(stName).replace(/'/g, "\\'");
                         return `
-                            <div onclick="filterGroceryListByStore(${isSelected ? 'null' : `'${safeSt}'`})" style="cursor: pointer; background: ${isSelected ? 'rgba(37,99,235,0.22)' : '#0d1117'}; border: 1px solid ${isSelected ? '#3b82f6' : '#21262d'}; border-radius: 8px; padding: 8px 12px; display: flex; align-items: center; gap: 10px; transition: all 0.15s;" title="Click to filter shopping list for ${escapeHtml(stName)}">
+                            <div data-store="${escapeHtml(stName)}" data-selected="${isSelected ? '1' : '0'}" onclick="filterGroceryListByStore(this.dataset.selected === '1' ? null : this.dataset.store)" style="cursor: pointer; background: ${isSelected ? 'rgba(37,99,235,0.22)' : '#0d1117'}; border: 1px solid ${isSelected ? '#3b82f6' : '#21262d'}; border-radius: 8px; padding: 8px 12px; display: flex; align-items: center; gap: 10px; transition: all 0.15s;" title="Click to filter shopping list for ${escapeHtml(stName)}">
                                 <span class="store-pill ${getStorePillClass(stName)}">${escapeHtml(stName)}</span>
                                 <div style="font-size: 12px; color: #e2e8f0;">
                                     <strong>${stInfo.unchecked}</strong> to buy <span style="color:#64748b;">(${stInfo.total} total)</span>
@@ -7985,10 +8098,8 @@
                                     if (comp.badge_type === 'green') {
                                         compPillHtml = `<span class="comp-pill comp-pill-green" style="font-size: 11px; padding: 2px 7px; margin-top: 0;" title="${escapeHtml(comp.summary || '')}">🟢 ${escapeHtml(comp.summary || 'Best Local Price')}</span>`;
                                     } else if (comp.badge_type === 'red') {
-                                        const safeBestStore = escapeHtml(comp.best_store || '').replace(/'/g, "\\'");
-                                        const safeBestPrice = escapeHtml(comp.best_price || '').replace(/'/g, "\\'");
                                         compPillHtml = `
-                                            <span class="comp-pill comp-pill-red" style="font-size: 11px; padding: 2px 7px; margin-top: 0; cursor: pointer;" onclick="switchListItemToCheaperStore('${item.id}', '${safeBestStore}', '${safeBestPrice}')" title="Click to switch this item to ${escapeHtml(comp.best_store || 'cheaper store')} (${escapeHtml(comp.best_price || '')})">
+                                            <span class="comp-pill comp-pill-red" style="font-size: 11px; padding: 2px 7px; margin-top: 0; cursor: pointer;" data-iid="${escapeHtml(item.id)}" data-bstore="${escapeHtml(comp.best_store || '')}" data-bprice="${escapeHtml(comp.best_price || '')}" onclick="switchListItemToCheaperStore(this.dataset.iid, this.dataset.bstore, this.dataset.bprice)" title="Click to switch this item to ${escapeHtml(comp.best_store || 'cheaper store')} (${escapeHtml(comp.best_price || '')})">
                                                 🔴 ${escapeHtml(comp.summary || 'Cheaper elsewhere')} &bull; <u>Switch</u>
                                             </span>
                                         `;
@@ -8782,7 +8893,7 @@
                 }
 
                 return `
-                    <div style="background: #0d1117; border: 1px solid ${isNoMeal ? '#9333ea' : (isThemed ? '#d97706' : '#30363d')}; border-radius: 8px; padding: 12px 16px;">
+                    <div style="background: #0d1117; border: 1px solid ${isNoMeal ? '#0284c7' : (isThemed ? '#d97706' : '#30363d')}; border-radius: 8px; padding: 12px 16px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <strong style="font-size: 14px; color: #f8fafc;">${day}</strong>
@@ -10518,8 +10629,9 @@
                 const galleryThumbsHtml = gallery.length > 1 ? `
                     <div style="display: flex; gap: 6px; padding: 8px 14px; background: rgba(0,0,0,0.45); border-bottom: 1px solid rgba(255,255,255,0.06); overflow-x: auto;">
                         ${gallery.map((gUrl, gIdx) => `
-                            <img src="${escapeHtml(gUrl)}" alt="Photo ${gIdx + 1}"
-                                onclick="swapFbCardPhoto('${item.id}', '${escapeHtml(gUrl)}', this)"
+                            <img src="${escapeHtml(safeHttpUrl(gUrl))}" alt="Photo ${gIdx + 1}"
+                                data-fid="${escapeHtml(item.id)}" data-gurl="${escapeHtml(safeHttpUrl(gUrl))}"
+                                onclick="swapFbCardPhoto(this.dataset.fid, this.dataset.gurl, this)"
                                 style="width: 48px; height: 42px; object-fit: cover; border-radius: 6px; cursor: pointer; border: 2px solid ${gIdx === 0 ? '#38bdf8' : 'rgba(255,255,255,0.18)'}; opacity: ${gIdx === 0 ? '1' : '0.72'}; flex-shrink: 0; transition: all 0.15s;"
                                 onerror="this.style.display='none'">
                         `).join('')}
@@ -10576,13 +10688,13 @@
                             </div>
                         </div>
                         <div style="padding: 12px 16px; background: rgba(0,0,0,0.25); border-top: 1px solid rgba(255,255,255,0.06); display: flex; justify-content: space-between; align-items: center; gap: 6px; flex-wrap: wrap;">
-                            <a href="${escapeHtml(item.url || 'https://www.facebook.com/marketplace')}" target="_blank" rel="noopener noreferrer" class="add-btn" style="padding: 7px 11px; font-size: 12px; background: #2563eb; flex: 1; text-align: center;">
+                            <a href="${escapeHtml(safeHttpUrl(item.url || 'https://www.facebook.com/marketplace'))}" target="_blank" rel="noopener noreferrer" class="add-btn" style="padding: 7px 11px; font-size: 12px; background: #2563eb; flex: 1; text-align: center;">
                                 🔗 Open on FB ↗
                             </a>
-                            <button type="button" class="btn-meal-action" onclick="runFbListingVisionInspect('${item.id}', this)" title="Run Deep AI Photo Vision & Spec X-Ray on listing images" style="color: #c084fc; border-color: rgba(192,132,252,0.4);">🔬 AI X-Ray</button>
-                            <button type="button" class="btn-meal-action" onclick="fbListingAction('${item.id}', 'notify', this)" title="Send Email + Discord Alert for this listing">🔔 Alert</button>
-                            <button type="button" class="btn-meal-action" onclick="fbListingAction('${item.id}', 'star', this)" style="${isStarred ? 'color:#fbbf24; border-color:#f59e0b;' : ''}">${isStarred ? '⭐' : '☆'}</button>
-                            <button type="button" class="btn-meal-action" onclick="fbListingAction('${item.id}', 'dismiss', this)" title="Dismiss listing" style="color: #f87171;">✕</button>
+                            <button type="button" class="btn-meal-action" data-fid="${escapeHtml(item.id)}" onclick="runFbListingVisionInspect(this.dataset.fid, this)" title="Run Deep AI Photo Vision & Spec X-Ray on listing images" style="color: #fbbf24; border-color: rgba(245,158,11,0.45);">🔬 AI X-Ray</button>
+                            <button type="button" class="btn-meal-action" data-fid="${escapeHtml(item.id)}" onclick="fbListingAction(this.dataset.fid, 'notify', this)" title="Send Email + Discord Alert for this listing">🔔 Alert</button>
+                            <button type="button" class="btn-meal-action" data-fid="${escapeHtml(item.id)}" onclick="fbListingAction(this.dataset.fid, 'star', this)" style="${isStarred ? 'color:#fbbf24; border-color:#f59e0b;' : ''}">${isStarred ? '⭐' : '☆'}</button>
+                            <button type="button" class="btn-meal-action" data-fid="${escapeHtml(item.id)}" onclick="fbListingAction(this.dataset.fid, 'dismiss', this)" title="Dismiss listing" style="color: #f87171;">✕</button>
                         </div>
                     </div>
                 `;

@@ -6,6 +6,11 @@ import sqlite3
 import uuid
 import secrets
 import hashlib
+import hmac
+import html as _html_mod
+import ipaddress
+import socket
+import unicodedata
 import logging
 import re
 import ssl
@@ -27,6 +32,8 @@ import openai
 from dotenv import load_dotenv
 from google_auth_oauthlib.flow import Flow
 from google.oauth2.credentials import Credentials
+from google.oauth2 import id_token as google_id_token
+from google.auth.transport import requests as google_auth_requests
 from googleapiclient.discovery import build
 import asyncio
 import calendar
@@ -43,14 +50,154 @@ app = FastAPI(
 )
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-DATA_DIR = "data"
+DATA_DIR = os.environ.get("AI_HELPER_DATA_DIR") or "data"
 os.makedirs(DATA_DIR, exist_ok=True)
 
-DB_FILE = os.path.join(DATA_DIR, "app.db")
+DB_FILE = os.environ.get("AI_HELPER_DB_FILE") or os.path.join(DATA_DIR, "app.db")
+os.makedirs(os.path.dirname(DB_FILE) or DATA_DIR, exist_ok=True)
 CLIENT_SECRETS_FILE = os.path.join(DATA_DIR, "client_secret.json")
 LOG_FILE = os.path.join(DATA_DIR, "app.log")
 CALENDAR_SCOPES = ['https://www.googleapis.com/auth/calendar']
 SCOPES = ['https://www.googleapis.com/auth/calendar', 'https://www.googleapis.com/auth/userinfo.email', 'openid']
+
+_INVISIBLE_CTRL_RE = re.compile(r"[\x00-\x1f\x7f-\x9f\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]")
+_CONFUSABLE_MAP = {
+    "\u212A": "k", "\u017F": "s", "\u0131": "i", "\u0130": "i",
+    "\u00DF": "ss", "\u1E9E": "ss",
+    "\u0410": "a", "\u0430": "a", "\u0412": "b", "\u0432": "b",
+    "\u0415": "e", "\u0435": "e", "\u0401": "e", "\u0451": "e",
+    "\u0404": "e", "\u0454": "e", "\u041A": "k", "\u043A": "k",
+    "\u041C": "m", "\u043C": "m", "\u041D": "h", "\u043D": "h",
+    "\u041E": "o", "\u043E": "o", "\u0420": "p", "\u0440": "p",
+    "\u0421": "c", "\u0441": "c", "\u0422": "t", "\u0442": "t",
+    "\u0423": "y", "\u0443": "y", "\u0425": "x", "\u0445": "x",
+    "\u0406": "i", "\u0456": "i", "\u0408": "j", "\u0458": "j",
+    "\u0405": "s", "\u0455": "s", "\u0492": "f", "\u0493": "f",
+    "\u04AE": "y", "\u04AF": "y", "\u04CF": "l",
+    "\u0391": "a", "\u03B1": "a", "\u0392": "b", "\u03B2": "b",
+    "\u0395": "e", "\u03B5": "e", "\u0396": "z", "\u03B6": "z",
+    "\u0397": "n", "\u03B7": "n", "\u0399": "i", "\u03B9": "i",
+    "\u039A": "k", "\u03BA": "k", "\u039C": "m", "\u03BC": "m",
+    "\u039D": "v", "\u03BD": "v", "\u039F": "o", "\u03BF": "o",
+    "\u03A1": "p", "\u03C1": "p", "\u03A4": "t", "\u03C4": "t",
+    "\u03A5": "y", "\u03C5": "u", "\u03A7": "x", "\u03C7": "x",
+    "\u03DC": "f", "\u03DD": "f",
+}
+_RATE_LOCK = threading.Lock()
+_RATE_BUCKETS: dict[str, list[float]] = {}
+
+def canonicalize_identifier(raw: str) -> str:
+    cleaned = _INVISIBLE_CTRL_RE.sub("", str(raw or "")).strip()
+    nfkc = unicodedata.normalize("NFKC", cleaned)
+    mapped = "".join(_CONFUSABLE_MAP.get(ch, ch) for ch in nfkc)
+    return mapped.casefold().strip()
+
+def validate_username(raw: str) -> tuple[str, str]:
+    cleaned = _INVISIBLE_CTRL_RE.sub("", str(raw or "")).strip()
+    if not cleaned:
+        raise HTTPException(status_code=400, detail="Username cannot be empty.")
+    if len(cleaned) > 64:
+        raise HTTPException(status_code=400, detail="Username must be 64 characters or fewer.")
+    canon = canonicalize_identifier(cleaned)
+    if not canon:
+        raise HTTPException(status_code=400, detail="Username is invalid.")
+    return cleaned, canon
+
+def check_rate_limit(bucket: str, key: str, limit: int, window_s: int) -> bool:
+    now = time.monotonic()
+    cutoff = now - window_s
+    bkey = f"{bucket}:{key}"
+    with _RATE_LOCK:
+        hits = [t for t in _RATE_BUCKETS.get(bkey, []) if t > cutoff]
+        if len(hits) >= limit:
+            _RATE_BUCKETS[bkey] = hits
+            return False
+        hits.append(now)
+        _RATE_BUCKETS[bkey] = hits
+        if len(_RATE_BUCKETS) > 4096:
+            stale = [k for k, v in _RATE_BUCKETS.items() if not v or v[-1] <= cutoff]
+            for sk in stale[:1024]:
+                _RATE_BUCKETS.pop(sk, None)
+        return True
+
+def _is_global_public_ip(ip_str: str) -> bool:
+    try:
+        ip_obj = ipaddress.ip_address(ip_str.strip("[]"))
+        return not (
+            ip_obj.is_private
+            or ip_obj.is_loopback
+            or ip_obj.is_link_local
+            or ip_obj.is_multicast
+            or ip_obj.is_reserved
+            or ip_obj.is_unspecified
+        )
+    except ValueError:
+        return False
+
+def is_safe_public_url(raw_url: str) -> bool:
+    try:
+        parsed = urllib.parse.urlparse(str(raw_url or "").strip())
+        if parsed.scheme not in ("http", "https") or not parsed.hostname:
+            return False
+        host = parsed.hostname.lower().strip("[]")
+        if (
+            host in ("localhost", "localhost.localdomain", "metadata.google.internal", "169.254.169.254")
+            or host.endswith(".local")
+            or host.endswith(".internal")
+        ):
+            return False
+        try:
+            ipaddress.ip_address(host)
+            return _is_global_public_ip(host)
+        except ValueError:
+            pass
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+        if not infos:
+            return False
+        return all(_is_global_public_ip(info[4][0]) for info in infos)
+    except Exception:
+        return False
+
+def is_valid_public_origin(raw_url: str) -> bool:
+    s = str(raw_url or "").strip()
+    if not s:
+        return True
+    parsed = urllib.parse.urlparse(s)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return False
+    return not _INVISIBLE_CTRL_RE.search(s)
+
+def verify_google_id_token_claims(id_token_str: str) -> dict:
+    if not id_token_str or not os.path.exists(CLIENT_SECRETS_FILE):
+        return {}
+    try:
+        with open(CLIENT_SECRETS_FILE, "r", encoding="utf-8") as f:
+            sec_json = json.load(f)
+        cfg = sec_json.get("web") or sec_json.get("installed") or {}
+        client_id = cfg.get("client_id")
+        if not client_id:
+            return {}
+        claims = google_id_token.verify_oauth2_token(
+            id_token_str, google_auth_requests.Request(), audience=client_id
+        )
+        if claims.get("iss") not in ("https://accounts.google.com", "accounts.google.com"):
+            return {}
+        if claims.get("email_verified") is not True:
+            return {}
+        return dict(claims)
+    except Exception as e:
+        logger.warning(f"Failed Google ID token cryptographic verification: {e}")
+        return {}
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    if request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "private, no-store"
+    return response
 
 # --- Logging Setup ---
 file_handler = RotatingFileHandler(LOG_FILE, maxBytes=1024*1024, backupCount=1) # 1 MB max
@@ -293,14 +440,17 @@ def clean_display_event_title(title: str, child_names=None, self_name="Dominic")
     t = title.strip()
     
     for name in child_names + [self_name, "Wife"]:
+        esc_name = re.escape(str(name or ""))
+        if not esc_name:
+            continue
         # Match (Leo - 2nd Grade), (Leo, 2nd Grade), [Leo - Grade 2]
-        pattern = rf'[\(\[]\s*{name}\s*[\-,].*?(?:grade|school).*?[\)\]]'
+        pattern = rf'[\(\[]\s*{esc_name}\s*[\-,].*?(?:grade|school).*?[\)\]]'
         t = re.sub(pattern, f'- {name}', t, flags=re.IGNORECASE).strip()
         # Match - Leo (2nd Grade), - Leo (6th Grade Middle School)
-        pattern2 = rf'-\s*{name}\s*[\(\[].*?(?:grade|school).*?[\)\]]'
+        pattern2 = rf'-\s*{esc_name}\s*[\(\[].*?(?:grade|school).*?[\)\]]'
         t = re.sub(pattern2, f'- {name}', t, flags=re.IGNORECASE).strip()
         # Match (Leo) or [Leo] at end of title
-        pattern3 = rf'[\(\[]\s*{name}\s*[\)\]]$'
+        pattern3 = rf'[\(\[]\s*{esc_name}\s*[\)\]]$'
         t = re.sub(pattern3, f'- {name}', t, flags=re.IGNORECASE).strip()
 
     # Strip standalone grade/school tags like (2nd Grade), (6th Grade Middle School)
@@ -807,6 +957,20 @@ def init_db():
     except sqlite3.OperationalError:
         pass # Column already exists
 
+    try:
+        c.execute("ALTER TABLE users ADD COLUMN canonical_username TEXT;")
+    except sqlite3.OperationalError:
+        pass # Column already exists
+
+    try:
+        c.execute("SELECT id, username, canonical_username FROM users")
+        for u_id_row, u_name_row, u_canon_row in c.fetchall():
+            if not u_canon_row and u_name_row:
+                c.execute("UPDATE users SET canonical_username=? WHERE id=?", (canonicalize_identifier(u_name_row), u_id_row))
+        c.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_canonical ON users(canonical_username);")
+    except Exception as e:
+        logger.debug(f"Canonical username migration note: {e}")
+
     # Ensure at least one admin exists if users exist
     try:
         c.execute("SELECT id FROM users WHERE role='admin' LIMIT 1")
@@ -906,7 +1070,7 @@ def get_user_id_from_token(token: Optional[str]) -> Optional[str]:
             
     # 2. Check persistent SQLite database
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_conn()
         c = conn.cursor()
         c.execute("SELECT user_id, expires FROM sessions WHERE token=?", (token,))
         row = c.fetchone()
@@ -985,7 +1149,11 @@ def auth_status(request: Request):
     }
 
 @app.post("/api/auth/register")
-def auth_register(req: AuthRequest):
+def auth_register(req: AuthRequest, request: Request):
+    client_ip = request.client.host if request.client else "local"
+    if not check_rate_limit("register", client_ip, 15, 60):
+        raise HTTPException(status_code=429, detail="Too many registration attempts.")
+    clean_user, canon_user = validate_username(req.username)
     if len(req.password) < 4:
         return {"error": "Password must be at least 4 characters."}
     conn = get_db_conn()
@@ -996,13 +1164,16 @@ def auth_register(req: AuthRequest):
         # Seal registration: only allow initial admin setup; all subsequent users must be created by an authenticated admin
         if count > 0:
             return {"error": "Public registration is disabled. Please contact the administrator for an account."}
-        
+
         pwd_hash = hash_password(req.password)
         user_id = str(uuid.uuid4())
         default_settings = json.dumps({"ai_provider": "gemini", "ai_model": "gemini-1.5-flash", "public_url": ""})
-        c.execute("INSERT INTO users (id, username, password_hash, settings, role) VALUES (?, ?, ?, ?, 'admin')", (user_id, req.username, pwd_hash, default_settings))
+        c.execute(
+            "INSERT INTO users (id, username, canonical_username, password_hash, settings, role) VALUES (?, ?, ?, ?, ?, 'admin')",
+            (user_id, clean_user, canon_user, pwd_hash, default_settings),
+        )
         conn.commit()
-        logger.info(f"Initial administrator account created: {req.username}")
+        logger.info(f"Initial administrator account created: {clean_user}")
     except sqlite3.IntegrityError:
         return {"error": "Username already exists."}
     finally:
@@ -1010,14 +1181,19 @@ def auth_register(req: AuthRequest):
     return {"status": "success"}
 
 @app.post("/api/auth/login")
-def auth_login(req: AuthRequest, response: Response):
+def auth_login(req: AuthRequest, request: Request, response: Response):
+    client_ip = request.client.host if request.client else "local"
+    if not check_rate_limit("login", client_ip, 30, 60):
+        raise HTTPException(status_code=429, detail="Too many login attempts. Please wait a minute.")
+    raw_user = _INVISIBLE_CTRL_RE.sub("", str(req.username or "")).strip()
+    canon_user = canonicalize_identifier(raw_user)
     conn = get_db_conn()
     c = conn.cursor()
-    c.execute("SELECT id, password_hash FROM users WHERE username=?", (req.username,))
+    c.execute("SELECT id, username, password_hash FROM users WHERE canonical_username=? OR username=?", (canon_user, raw_user))
     user = c.fetchone()
     if not user or not verify_password(req.password, user["password_hash"]):
         conn.close()
-        logger.warning(f"Failed login attempt for username: {req.username}")
+        logger.warning(f"Failed login attempt for username: {raw_user}")
         return {"error": "Invalid username or password"}
         
     user_id = user["id"]
@@ -1100,6 +1276,7 @@ def get_users():
 
 @app.post("/api/users", dependencies=[Depends(verify_admin)])
 def create_user(req: UserCreate):
+    clean_user, canon_user = validate_username(req.username)
     if len(req.password) < 4:
         return {"error": "Password must be at least 4 characters."}
     pwd_hash = hash_password(req.password)
@@ -1109,13 +1286,22 @@ def create_user(req: UserCreate):
     conn = get_db_conn()
     c = conn.cursor()
     try:
-        c.execute("INSERT INTO users (id, username, password_hash, settings, role) VALUES (?, ?, ?, ?, ?)", (user_id, req.username, pwd_hash, default_settings, role))
+        c.execute(
+            "INSERT INTO users (id, username, canonical_username, password_hash, settings, role) VALUES (?, ?, ?, ?, ?, ?)",
+            (user_id, clean_user, canon_user, pwd_hash, default_settings, role),
+        )
         conn.commit()
     except sqlite3.IntegrityError:
         return {"error": "Username already exists."}
     finally:
         conn.close()
     return {"status": "success"}
+
+def _revoke_user_sessions(c, user_id: str):
+    c.execute("DELETE FROM sessions WHERE user_id=?", (user_id,))
+    for tok, entry in list(SESSION_CACHE.items()):
+        if entry[0] == user_id:
+            SESSION_CACHE.pop(tok, None)
 
 @app.put("/api/users/{target_user_id}")
 def update_user(target_user_id: str, req: UserUpdate, current_user: str = Depends(verify_auth)):
@@ -1130,20 +1316,26 @@ def update_user(target_user_id: str, req: UserUpdate, current_user: str = Depend
         raise HTTPException(status_code=403, detail="Permission denied. You can only update your own account.")
 
     if req.username:
+        clean_user, canon_user = validate_username(req.username)
         try:
-            c.execute("UPDATE users SET username=? WHERE id=?", (req.username, target_user_id))
+            c.execute("UPDATE users SET username=?, canonical_username=? WHERE id=?", (clean_user, canon_user, target_user_id))
         except sqlite3.IntegrityError:
             conn.close()
             return {"error": "Username already exists."}
+    should_revoke = False
     if req.password:
         if len(req.password) < 4:
             conn.close()
             return {"error": "Password too short."}
         pwd_hash = hash_password(req.password)
         c.execute("UPDATE users SET password_hash=? WHERE id=?", (pwd_hash, target_user_id))
+        should_revoke = True
     if req.role and is_admin:
         new_role = "admin" if req.role.lower() == "admin" else "user"
         c.execute("UPDATE users SET role=? WHERE id=?", (new_role, target_user_id))
+        should_revoke = True
+    if should_revoke:
+        _revoke_user_sessions(c, target_user_id)
 
     conn.commit()
     conn.close()
@@ -1155,17 +1347,35 @@ def delete_user(target_user_id: str, current_user: str = Depends(verify_auth)):
         return {"error": "You cannot delete yourself."}
     conn = get_db_conn()
     c = conn.cursor()
+    for tbl in (
+        "email_accounts",
+        "events",
+        "processed_emails_v2",
+        "sessions",
+        "grocery_stores",
+        "grocery_lists",
+        "grocery_list_items",
+        "grocery_price_history",
+        "meal_plans",
+        "site_suggestions",
+        "fb_watchlists",
+        "fb_listings",
+        "notification_logs",
+    ):
+        c.execute(f"DELETE FROM {tbl} WHERE user_id=?", (target_user_id,))
     c.execute("DELETE FROM users WHERE id=?", (target_user_id,))
-    c.execute("DELETE FROM email_accounts WHERE user_id=?", (target_user_id,))
-    c.execute("DELETE FROM events WHERE user_id=?", (target_user_id,))
-    c.execute("DELETE FROM processed_emails_v2 WHERE user_id=?", (target_user_id,))
-    c.execute("DELETE FROM sessions WHERE user_id=?", (target_user_id,))
-    c.execute("DELETE FROM grocery_stores WHERE user_id=?", (target_user_id,))
-    c.execute("DELETE FROM grocery_lists WHERE user_id=?", (target_user_id,))
-    c.execute("DELETE FROM grocery_list_items WHERE user_id=?", (target_user_id,))
-    c.execute("DELETE FROM meal_plans WHERE user_id=?", (target_user_id,))
+    for tok, entry in list(SESSION_CACHE.items()):
+        if entry[0] == target_user_id:
+            SESSION_CACHE.pop(tok, None)
     conn.commit()
     conn.close()
+    for fname in (f"token_{target_user_id}.json", f"fb_cookie_{target_user_id}.txt"):
+        fpath = os.path.join(DATA_DIR, fname)
+        if os.path.exists(fpath):
+            try:
+                os.remove(fpath)
+            except Exception:
+                pass
     return {"status": "success"}
 
 # --- Settings & Accounts ---
@@ -1231,6 +1441,8 @@ def read_settings(user_id: str = Depends(verify_auth)):
 
 @app.post("/api/settings/ai")
 def save_ai_settings(s: SettingsSave, user_id: str = Depends(verify_auth)):
+    if s.public_url and not is_valid_public_origin(s.public_url):
+        raise HTTPException(status_code=400, detail="Invalid public URL scheme or format.")
     conn = get_db_conn()
     c = conn.cursor()
     c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
@@ -1476,12 +1688,21 @@ def bulk_delete_history(req: list[dict], user_id: str = Depends(verify_auth)):
     conn.close()
     return {"status": "success"}
 
-@app.post("/api/upload_client_secret", dependencies=[Depends(verify_auth)])
+@app.post("/api/upload_client_secret", dependencies=[Depends(verify_admin)])
 def upload_client_secret(file: UploadFile = File(...)):
-    contents = file.file.read()
+    contents = file.file.read(65537)
+    if len(contents) > 65536:
+        raise HTTPException(status_code=413, detail="Client secret file exceeds 64 KB limit.")
+    try:
+        parsed = json.loads(contents.decode("utf-8"))
+        cfg = parsed.get("web") or parsed.get("installed") if isinstance(parsed, dict) else None
+        if not isinstance(cfg, dict) or not cfg.get("client_id") or not cfg.get("client_secret"):
+            raise ValueError("Missing OAuth client_id/client_secret fields")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid Google OAuth client_secret.json format.")
     with open(CLIENT_SECRETS_FILE, "wb") as f:
         f.write(contents)
-    logger.info("Google Client Secret JSON uploaded.")
+    logger.info("Google Client Secret JSON uploaded by admin.")
     return {"status": "success"}
 
 class ModelRequest(BaseModel):
@@ -1594,6 +1815,9 @@ def resolve_email_webview_links(text_content: str) -> str:
     fetched_sections = []
     # Follow up to 5 article links per email
     for target_url in found_urls[:5]:
+        if not is_safe_public_url(target_url):
+            logger.warning(f"Blocked unsafe webview link target: {target_url}")
+            continue
         try:
             req = urllib.request.Request(
                 target_url,
@@ -1603,8 +1827,6 @@ def resolve_email_webview_links(text_content: str) -> str:
                 }
             )
             ssl_ctx = ssl.create_default_context()
-            ssl_ctx.check_hostname = False
-            ssl_ctx.verify_mode = ssl.CERT_NONE
             with urllib.request.urlopen(req, timeout=10, context=ssl_ctx) as response:
                 html_bytes = response.read(250000)
                 charset = response.headers.get_content_charset() or 'utf-8'
@@ -2440,13 +2662,14 @@ def get_google_auth_url(request: Request, from_wizard: Optional[bool] = False, u
     c = conn.cursor()
     c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
     s = json.loads(c.fetchone()[0] or "{}")
-    base_url = s.get("public_url") or f"{request.url.scheme}://{request.url.netloc}"
+    base_url = s.get("public_url") if is_valid_public_origin(s.get("public_url", "")) and s.get("public_url") else f"{request.url.scheme}://{request.url.netloc}"
     redirect_uri = f"{base_url.rstrip('/')}/api/auth/google/callback"
     flow = Flow.from_client_secrets_file(CLIENT_SECRETS_FILE, scopes=SCOPES, redirect_uri=redirect_uri)
     auth_url, state = flow.authorization_url(prompt='consent', access_type='offline')
     s["oauth_state"] = state
     s["oauth_verifier"] = flow.code_verifier
     s["oauth_from_wizard"] = bool(from_wizard)
+    s["oauth_state_ts"] = time.time()
     c.execute("UPDATE users SET settings=? WHERE id=?", (json.dumps(s), user_id))
     conn.commit()
     conn.close()
@@ -2456,6 +2679,8 @@ def get_google_auth_url(request: Request, from_wizard: Optional[bool] = False, u
 def google_auth_callback(request: Request, state: str):
     if not os.path.exists(CLIENT_SECRETS_FILE):
         return "Error: secrets missing."
+    if not state:
+        return "Error: Missing OAuth state."
     conn = get_db_conn()
     c = conn.cursor()
     c.execute("SELECT id, settings FROM users")
@@ -2463,39 +2688,48 @@ def google_auth_callback(request: Request, state: str):
     user_settings = {}
     for row in c.fetchall():
         s = json.loads(row[1] or "{}")
-        if s.get("oauth_state") == state:
+        stored_state = str(s.get("oauth_state") or "")
+        if stored_state and secrets.compare_digest(stored_state, state):
             user_id = row[0]
             user_settings = s
             break
-    conn.close()
     if not user_id:
+        conn.close()
         return "Error: Invalid state or session expired. Try logging in with Google again."
-    base_url = user_settings.get("public_url") or f"{request.url.scheme}://{request.url.netloc}"
-    redirect_uri = f"{base_url.rstrip('/')}/api/auth/google/callback"
+    state_ts = float(user_settings.pop("oauth_state_ts", 0) or 0)
+    user_settings.pop("oauth_state", None)
+    verifier = user_settings.pop("oauth_verifier", None)
     from_wizard = user_settings.pop("oauth_from_wizard", False)
+    c.execute("UPDATE users SET settings=? WHERE id=?", (json.dumps(user_settings), user_id))
+    conn.commit()
+    conn.close()
+    if state_ts and (time.time() - state_ts) > 600:
+        return "Error: OAuth state expired. Please try linking Google Calendar again."
+    base_url = user_settings.get("public_url") if is_valid_public_origin(user_settings.get("public_url", "")) and user_settings.get("public_url") else f"{request.url.scheme}://{request.url.netloc}"
+    redirect_uri = f"{base_url.rstrip('/')}/api/auth/google/callback"
     try:
         flow = Flow.from_client_secrets_file(CLIENT_SECRETS_FILE, scopes=SCOPES, redirect_uri=redirect_uri)
-        os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
-        flow.code_verifier = user_settings.get("oauth_verifier")
-        flow.fetch_token(authorization_response=str(request.url))
+        parsed_redir = urllib.parse.urlparse(redirect_uri)
+        is_local_dev = parsed_redir.scheme == "http" and (parsed_redir.hostname or "").lower() in ("localhost", "127.0.0.1")
+        if is_local_dev or os.environ.get("ALLOW_INSECURE_OAUTHLIB") == "1":
+            os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+        else:
+            os.environ.pop('OAUTHLIB_INSECURE_TRANSPORT', None)
+        flow.code_verifier = verifier
+        auth_response_url = str(request.url)
+        if parsed_redir.scheme == "https" and auth_response_url.startswith("http://"):
+            auth_response_url = "https://" + auth_response_url[7:]
+        flow.fetch_token(authorization_response=auth_response_url)
         token_file = os.path.join(DATA_DIR, f"token_{user_id}.json")
-        with open(token_file, 'w') as f:
+        with open(token_file, 'w', encoding='utf-8') as f:
             f.write(flow.credentials.to_json())
 
-        # Extract user's Google email if returned in id_token
+        # Cryptographically verify Google ID token & require email_verified=True
         google_email = ""
         if flow.credentials and flow.credentials.id_token:
-            try:
-                import base64
-                parts = flow.credentials.id_token.split(".")
-                if len(parts) >= 2:
-                    padding = "=" * (4 - len(parts[1]) % 4)
-                    payload_json = base64.urlsafe_b64decode(parts[1] + padding).decode("utf-8")
-                    payload = json.loads(payload_json)
-                    google_email = payload.get("email", "")
-            except Exception as e:
-                logger.debug(f"Could not parse email from id_token: {e}")
-        
+            claims = verify_google_id_token_claims(flow.credentials.id_token)
+            google_email = claims.get("email", "")
+
         if google_email:
             user_settings["google_email"] = google_email
 
@@ -2898,10 +3132,12 @@ async def favicon():
 
 @app.get("/google{verification_code}.html")
 async def google_verification_file(verification_code: str):
-    """Dynamically serves Google Search Console HTML verification files."""
+    """Dynamically serves Google Search Console verification files."""
+    if not re.fullmatch(r"[A-Za-z0-9_-]{8,64}", verification_code or ""):
+        raise HTTPException(status_code=404, detail="Not found")
     return Response(
         content=f"google-site-verification: google{verification_code}.html",
-        media_type="text/html"
+        media_type="text/plain"
     )
 
 @app.get("/privacy")
@@ -4062,16 +4298,16 @@ def fetch_flipp_store_deals(postal_code: str = '76262', store_name_filter: Optio
     if not postal_code or not postal_code.strip():
         postal_code = '76262'
     postal_code = postal_code.strip()
-    
+    if not re.fullmatch(r"[A-Za-z0-9 -]{3,12}", postal_code):
+        postal_code = '76262'
+
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         'Accept': 'application/json, text/plain, */*'
     }
     ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
-    
-    url = f"https://backflipp.wishabi.com/flipp/flyers?postal_code={postal_code}&locale=en-us"
+
+    url = f"https://backflipp.wishabi.com/flipp/flyers?postal_code={urllib.parse.quote_plus(postal_code)}&locale=en-us"
     try:
         req = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(req, timeout=8, context=ctx) as resp:
@@ -4262,7 +4498,7 @@ def fetch_flipp_store_deals(postal_code: str = '76262', store_name_filter: Optio
 
 # Web content fetcher for store ads
 def fetch_url_clean_content(url: str) -> str:
-    if not url or not url.startswith(("http://", "https://")):
+    if not is_safe_public_url(url):
         return ""
     try:
         req = urllib.request.Request(
@@ -4279,8 +4515,6 @@ def fetch_url_clean_content(url: str) -> str:
             }
         )
         ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
         with urllib.request.urlopen(req, timeout=12, context=ctx) as response:
             html_bytes = response.read(500000)
             charset = response.headers.get_content_charset() or 'utf-8'
@@ -5242,6 +5476,10 @@ def delete_grocery_list(list_id: str, user_id: str = Depends(verify_auth)):
 def get_grocery_list_items(list_id: str, user_id: str = Depends(verify_auth)):
     conn = get_db_conn()
     c = conn.cursor()
+    c.execute("SELECT id FROM grocery_lists WHERE id=? AND user_id=?", (list_id, user_id))
+    if not c.fetchone():
+        conn.close()
+        raise HTTPException(status_code=404, detail="Grocery list not found")
     c.execute("SELECT id, list_id, item_name, store_name, price_notes, category, is_checked, image_url FROM grocery_list_items WHERE list_id=? AND user_id=? ORDER BY is_checked ASC, category ASC, item_name ASC", (list_id, user_id))
     rows = [dict(r) for r in c.fetchall()]
     
@@ -5284,6 +5522,10 @@ def get_grocery_list_items(list_id: str, user_id: str = Depends(verify_auth)):
 def add_grocery_item(list_id: str, item: GroceryItemSave, user_id: str = Depends(verify_auth)):
     conn = get_db_conn()
     c = conn.cursor()
+    c.execute("SELECT id FROM grocery_lists WHERE id=? AND user_id=?", (list_id, user_id))
+    if not c.fetchone():
+        conn.close()
+        raise HTTPException(status_code=404, detail="Grocery list not found")
     item_id = item.id or str(uuid.uuid4())
     c.execute("INSERT INTO grocery_list_items (id, list_id, user_id, item_name, store_name, price_notes, category, is_checked, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
               (item_id, list_id, user_id, item.item_name, item.store_name or "Any", item.price_notes or "", item.category or "General", item.is_checked or 0, item.image_url or ""))
@@ -5299,6 +5541,10 @@ def add_batch_grocery_items(list_id: str, req: GroceryBatchItemsSave, user_id: s
         return {"status": "success", "count": 0}
     conn = get_db_conn()
     c = conn.cursor()
+    c.execute("SELECT id FROM grocery_lists WHERE id=? AND user_id=?", (list_id, user_id))
+    if not c.fetchone():
+        conn.close()
+        raise HTTPException(status_code=404, detail="Grocery list not found")
     added_count = 0
     now = datetime.now().isoformat()
     for item in req.items:
@@ -5676,15 +5922,15 @@ def send_grocery_list_to_phone(list_id: str, req: GrocerySendToPhoneRequest, use
         html_sections = []
         for st, sitems in by_store.items():
             li_html = "".join([
-                f"<li style='margin-bottom:6px;'><strong>{it['item_name']}</strong> "
-                f"<span style='color:#10b981;font-size:12px;'>{it.get('price_notes','')}</span> "
-                f"<span style='color:#94a3b8;font-size:11px;'>[{it.get('category','General')}]</span></li>"
+                f"<li style='margin-bottom:6px;'><strong>{_html_mod.escape(str(it.get('item_name') or ''))}</strong> "
+                f"<span style='color:#10b981;font-size:12px;'>{_html_mod.escape(str(it.get('price_notes') or ''))}</span> "
+                f"<span style='color:#94a3b8;font-size:11px;'>[{_html_mod.escape(str(it.get('category') or 'General'))}]</span></li>"
                 for it in sitems
             ])
-            html_sections.append(f"<h3 style='color:#38bdf8;margin:14px 0 6px;'>🏪 {st} ({len(sitems)})</h3><ul style='margin:0;padding-left:20px;'>{li_html}</ul>")
+            html_sections.append(f"<h3 style='color:#38bdf8;margin:14px 0 6px;'>🏪 {_html_mod.escape(str(st or ''))} ({len(sitems)})</h3><ul style='margin:0;padding-left:20px;'>{li_html}</ul>")
         html_body = f"""
         <div style="font-family:sans-serif;background:#0f172a;color:#f8fafc;padding:20px;border-radius:12px;">
-            <h2 style="margin-top:0;color:#10b981;">🛒 {list_title}</h2>
+            <h2 style="margin-top:0;color:#10b981;">🛒 {_html_mod.escape(str(list_title or ''))}</h2>
             <p style="color:#94a3b8;font-size:13px;">{len(target_items)} items remaining • Estimated Base Trip Total: <strong>~${est_total:.2f}</strong></p>
             {''.join(html_sections)}
         </div>
@@ -8606,10 +8852,12 @@ Examine the attached bike photo(s) carefully and return ONLY a valid JSON object
                 genai.configure(api_key=gemini_key)
                 img_objs = []
                 for img_u in gallery[:3]:
+                    if not is_safe_public_url(img_u):
+                        continue
                     try:
                         req_img = urllib.request.Request(img_u, headers={"User-Agent": "Mozilla/5.0"})
-                        with urllib.request.urlopen(req_img, timeout=6) as r_img:
-                            img_objs.append(PIL.Image.open(io.BytesIO(r_img.read())))
+                        with urllib.request.urlopen(req_img, timeout=6, context=ssl.create_default_context()) as r_img:
+                            img_objs.append(PIL.Image.open(io.BytesIO(r_img.read(4_000_000))))
                     except Exception:
                         pass
                 if img_objs:
@@ -8623,7 +8871,7 @@ Examine the attached bike photo(s) carefully and return ONLY a valid JSON object
                         FB_VISION_CACHE[fb_item_id] = parsed_v
                         return parsed_v
             elif openai_key:
-                client = OpenAI(api_key=openai_key)
+                client = openai.OpenAI(api_key=openai_key)
                 content_parts = [{"type": "text", "text": prompt_text}]
                 for img_u in gallery[:3]:
                     content_parts.append({"type": "image_url", "image_url": {"url": img_u}})
@@ -8710,10 +8958,10 @@ def get_effective_fb_cookie(user_id: str, conn: sqlite3.Connection = None) -> st
         if norm:
             return norm
 
-        cookie_path = os.path.join(DATA_DIR, "fb_cookie.txt")
-        if os.path.exists(cookie_path):
+        user_cookie_path = os.path.join(DATA_DIR, f"fb_cookie_{user_id}.txt")
+        if os.path.exists(user_cookie_path):
             try:
-                with open(cookie_path, "r", encoding="utf-8") as f:
+                with open(user_cookie_path, "r", encoding="utf-8") as f:
                     file_cookie = normalize_fb_cookie_header(f.read())
                 if file_cookie:
                     s["fb_session_cookie"] = file_cookie
@@ -8721,7 +8969,7 @@ def get_effective_fb_cookie(user_id: str, conn: sqlite3.Connection = None) -> st
                     conn.commit()
                     return file_cookie
             except Exception as e:
-                logger.warning(f"Could not read data/fb_cookie.txt: {e}")
+                logger.warning(f"Could not read user FB cookie file: {e}")
         return ""
     finally:
         if should_close:
@@ -9547,22 +9795,25 @@ def scan_fb_watchlist_by_id(user_id: str, watchlist_id: str, trigger_notificatio
                         new_alerts_sent += 1
 
                 if watchlist.get("notify_email") and notif_settings.get("email_enabled"):
+                    cand_url = str(cand.get('url') or 'https://www.facebook.com/marketplace')
+                    if not cand_url.startswith(("http://", "https://")):
+                        cand_url = "https://www.facebook.com/marketplace"
                     html_email = f"""
                     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; background: #0f172a; color: #f8fafc; border-radius: 12px; border: 1px solid #334155; overflow: hidden;">
                         <div style="background: linear-gradient(135deg, #10b981, #2563eb); padding: 16px 22px; color: #fff;">
-                            <h2 style="margin: 0; font-size: 18px;">{prefix} Verified Local Facebook Match</h2>
-                            <div style="font-size: 12.5px; opacity: 0.9; margin-top: 3px;">Watchlist: {watchlist.get('name', '')}</div>
+                            <h2 style="margin: 0; font-size: 18px;">{_html_mod.escape(str(prefix or ''))} Verified Local Facebook Match</h2>
+                            <div style="font-size: 12.5px; opacity: 0.9; margin-top: 3px;">Watchlist: {_html_mod.escape(str(watchlist.get('name') or ''))}</div>
                         </div>
                         <div style="padding: 22px;">
-                            <h3 style="margin: 0 0 8px 0; color: #38bdf8; font-size: 17px;">{cand.get('title', '')}</h3>
+                            <h3 style="margin: 0 0 8px 0; color: #38bdf8; font-size: 17px;">{_html_mod.escape(str(cand.get('title') or ''))}</h3>
                             <div style="font-size: 15px; font-weight: 700; color: #34d399; margin-bottom: 12px;">
-                                Asking: {cand.get('price_str', '')} &bull; Location: {cand.get('location', '')} (~{eval_res['distance_miles']:.0f} mi from Argyle)
+                                Asking: {_html_mod.escape(str(cand.get('price_str') or ''))} &bull; Location: {_html_mod.escape(str(cand.get('location') or ''))} (~{eval_res['distance_miles']:.0f} mi from Argyle)
                             </div>
-                            <p style="color: #cbd5e1; font-size: 13.5px; line-height: 1.5; margin-bottom: 14px;">{cand.get('description', '')}</p>
+                            <p style="color: #cbd5e1; font-size: 13.5px; line-height: 1.5; margin-bottom: 14px;">{_html_mod.escape(str(cand.get('description') or ''))}</p>
                             <div style="background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 12px; margin-bottom: 18px; font-size: 12.5px; color: #94a3b8;">
-                                {eval_res['ai_verdict']}
+                                {_html_mod.escape(str(eval_res.get('ai_verdict') or ''))}
                             </div>
-                            <a href="{cand.get('url', 'https://www.facebook.com/marketplace')}" style="display: inline-block; background: #2563eb; color: #fff; text-decoration: none; font-weight: 700; padding: 11px 20px; border-radius: 8px; font-size: 13.5px;">Open Listing on Facebook Marketplace ↗</a>
+                            <a href="{_html_mod.escape(cand_url)}" style="display: inline-block; background: #2563eb; color: #fff; text-decoration: none; font-weight: 700; padding: 11px 20px; border-radius: 8px; font-size: 13.5px;">Open Listing on Facebook Marketplace ↗</a>
                         </div>
                     </div>
                     """
@@ -9878,10 +10129,10 @@ def api_save_fb_cookie(req: FBCookieSaveRequest, user_id: str = Depends(verify_a
         conn.commit()
         if norm:
             try:
-                with open(os.path.join(DATA_DIR, "fb_cookie.txt"), "w", encoding="utf-8") as f:
+                with open(os.path.join(DATA_DIR, f"fb_cookie_{user_id}.txt"), "w", encoding="utf-8") as f:
                     f.write(norm)
             except Exception as e:
-                logger.warning(f"Could not write fb_cookie.txt: {e}")
+                logger.warning(f"Could not write per-user fb_cookie file: {e}")
         has_c_user = "c_user=" in norm
         has_xs = "xs=" in norm
         uid_match = re.search(r'c_user=(\d+)', norm)
