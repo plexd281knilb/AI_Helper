@@ -3993,7 +3993,37 @@ def is_store_deals_expired(store: dict) -> bool:
             
     return False
 
-def sanitize_deal_price_and_notes(price_str: str, notes_str: str = "") -> tuple:
+_BULK_MEAT_LB_PATTERN = re.compile(
+    r'\b(?:'
+    r'steaks?|roasts?|brisket|sirloin|ribeye|tenderloin|ground\s+beef|ground\s+chuck|ground\s+round|'
+    r'drumsticks?|thighs?|chicken\s+breasts?|whole\s+turkey|whole\s+chicken|'
+    r'salmon\s+fillets?|pork\s+belly|pork\s+chops?|pork\s+loin|catfish\s+nuggets|shrimp'
+    r')\b',
+    re.IGNORECASE
+)
+_FIXED_PACKAGE_MEAT_PATTERN = re.compile(
+    r'\b(?:\d+(?:\.\d+)?\s*(?:oz|fl\s*oz|pc|pcs|piece|pieces|pk|pack)|'
+    r'bacon|sausage|sausages|pepperoni|smokies|hot\s+dogs?|franks?|bratwurst|brats|'
+    r'dinner|stuffed|jalape[nñ]os?|meatballs?|entrees?|entr[eé]es?|when\s+you\s+buy)\b',
+    re.IGNORECASE
+)
+
+def _should_infer_meat_lb_unit(item_name: str, notes_str: str = "", category: str = "") -> bool:
+    """Returns True when a bare $X.XX price represents per-pound pricing for fresh bulk meat/seafood."""
+    notes_low = (notes_str or "").lower()
+    if re.search(r'(?:/|\bper\s+|\b)lb\.?\b', notes_low) and not re.search(r'\b(?:ea|each)\b', notes_low):
+        return True
+    if not item_name:
+        return False
+    cat = category or guess_deal_category(item_name)
+    if cat != "Meat & Seafood":
+        return False
+    combined = f"{item_name} {notes_str}"
+    if _FIXED_PACKAGE_MEAT_PATTERN.search(combined) or re.search(r'\b(?:ea|each)\b', notes_low):
+        return False
+    return bool(_BULK_MEAT_LB_PATTERN.search(item_name))
+
+def sanitize_deal_price_and_notes(price_str: str, notes_str: str = "", item_name: str = "", category: str = "") -> tuple:
     p = (price_str or '').strip()
     n = (notes_str or '').strip()
     
@@ -4022,8 +4052,8 @@ def sanitize_deal_price_and_notes(price_str: str, notes_str: str = "") -> tuple:
         else:
             p = 'Special Promo'
             
-    # Preserve /lb unit when plain dollar price has per-lb context in notes
-    if re.match(r'^\$\d+(?:\.\d{1,2})?$', p) and re.search(r'(?:/|\bper\s+|\b)lb\.?\b', n, re.I):
+    # Preserve /lb unit when plain dollar price has per-lb context or is a bulk butcher meat/seafood cut
+    if re.match(r'^\$\d+(?:\.\d{1,2})?$', p) and _should_infer_meat_lb_unit(item_name, n, category):
         p = f"{p}/lb"
     return p, n
 
@@ -4177,7 +4207,7 @@ def normalize_item_tokens(item_name: str) -> set:
     return {stem_word(w) for w in cleaned.split() if len(w) > 2 and w not in stop_words}
 
 def find_cross_store_comparison(current_item_name: str, current_store: str, current_price_str: str, current_category: str, all_stores_deals: list) -> dict:
-    clean_curr_price, _ = sanitize_deal_price_and_notes(current_price_str, "")
+    clean_curr_price, _ = sanitize_deal_price_and_notes(current_price_str, "", item_name=current_item_name, category=current_category)
     curr_parsed = parse_numeric_price(clean_curr_price)
     curr_price_val = curr_parsed.get('unit_price')
     curr_unit = curr_parsed.get('unit')
@@ -4212,7 +4242,7 @@ def find_cross_store_comparison(current_item_name: str, current_store: str, curr
                 
             overlap = curr_tokens.intersection(d_tokens)
             if len(overlap) >= min(2, len(curr_tokens)) and (len(overlap) / max(len(curr_tokens), 1)) >= 0.5:
-                d_clean_price, _ = sanitize_deal_price_and_notes(d.get('price', ''), d.get('notes', ''))
+                d_clean_price, _ = sanitize_deal_price_and_notes(d.get('price', ''), d.get('notes', ''), item_name=d_name, category=d_cat)
                 d_parsed = parse_numeric_price(d_clean_price)
                 matches.append({
                     'store': s_name,
@@ -4303,11 +4333,11 @@ def record_store_deals_price_history(conn, user_id: str, store_name: str, deals:
         raw_name = d.get('item') or ''
         if not raw_name or len(raw_name.strip()) < 2:
             continue
-        clean_price, notes_str = sanitize_deal_price_and_notes(d.get('price', ''), d.get('notes', ''))
+        category = d.get('category', 'Pantry & Dry Goods')
+        clean_price, notes_str = sanitize_deal_price_and_notes(d.get('price', ''), d.get('notes', ''), item_name=raw_name, category=category)
         parsed = parse_numeric_price(clean_price)
         unit_price = parsed.get('unit_price')
         unit = parsed.get('unit') or 'ea'
-        category = d.get('category', 'Pantry & Dry Goods')
         
         if unit_price is None:
             continue
@@ -4456,9 +4486,13 @@ def format_deal_price_and_notes(raw_price, sale_story: Optional[str], descriptio
         except Exception:
             price_str = str(raw_price).strip()
 
+    post_low = (post_price or '').lower()
     unit_context = f"{post_price or ''} {sale_story or ''} {description or ''}".lower()
-    if price_str and re.match(r'^\$\d+(?:\.\d{1,2})?$', price_str) and re.search(r'(?:/|\bper\s+|\b)lb\.?\b', unit_context):
-        price_str = f"{price_str}/lb"
+    if price_str and re.match(r'^\$\d+(?:\.\d{1,2})?$', price_str):
+        if re.search(r'(?:/|\b)ea\b|\beach\b', post_low):
+            price_str = f"{price_str}/ea"
+        elif re.search(r'(?:/|\bper\s+|\b)lb\.?\b', unit_context) or _should_infer_meat_lb_unit(clean_name, unit_context):
+            price_str = f"{price_str}/lb"
             
     if sale_story:
         ss = sale_story.strip()
@@ -5574,7 +5608,7 @@ def get_personalized_deals_feed(
         item_lower = item_name.lower()
         deal_cat = deal.get("category", "Pantry & Dry Goods")
         deal_cat_lower = deal_cat.lower()
-        price_str, notes_str = sanitize_deal_price_and_notes(deal.get("price", ""), deal.get("notes", ""))
+        price_str, notes_str = sanitize_deal_price_and_notes(deal.get("price", ""), deal.get("notes", ""), item_name=item_name, category=deal_cat)
         img_url = deal.get("image_url", "")
         
         # Category filter

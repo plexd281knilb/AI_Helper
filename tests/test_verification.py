@@ -662,5 +662,21 @@ class TestVerificationSuite(unittest.TestCase):
         self.assertEqual(p2, "$0.97/lb")
         self.assertEqual(parse_numeric_price(p2)["unit"], "lb")
 
+        # 5. Cached bulk butcher meat cuts without notes (e.g. Albertsons Sirloin / Kroger Turkey) infer /lb, while packaged/dinner stay /ea
+        p3, _ = sanitize_deal_price_and_notes("$9.99", "", item_name="USDA Prime Beef Boneless Top Sirloin Steaks", category="Meat & Seafood")
+        self.assertEqual(p3, "$9.99/lb")
+        self.assertEqual(parse_numeric_price(p3)["unit"], "lb")
+
+        p4, _ = sanitize_deal_price_and_notes("$0.88", "", item_name="Butterball Whole Turkey", category="Meat & Seafood")
+        self.assertEqual(p4, "$0.88/lb")
+
+        p5, _ = sanitize_deal_price_and_notes("$99.99", "", item_name="Prime Rib Dinner", category="Meat & Seafood")
+        self.assertEqual(p5, "$99.99")
+        self.assertEqual(parse_numeric_price(p5)["unit"], "ea")
+
+        p6, _ = format_deal_price_and_notes(3.99, "", "", "Oscar Mayer", "Oscar Mayer Bacon 12-16 oz.", post_price="ea when you buy 4")
+        self.assertEqual(p6, "$3.99/ea")
+        self.assertEqual(parse_numeric_price(p6)["unit"], "ea")
+
 if __name__ == "__main__":
     unittest.main()
