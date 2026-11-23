@@ -192,10 +192,11 @@
             text-transform: uppercase;
             padding: 1.5px 5.5px;
             border-radius: 4px;
-            background: rgba(168, 85, 247, 0.2);
-            color: #d8b4fe;
-            border: 1px solid rgba(168, 85, 247, 0.35);
+            background: rgba(59, 130, 246, 0.18);
+            color: #93c5fd;
+            border: 1px solid rgba(59, 130, 246, 0.35);
             letter-spacing: 0.5px;
+            font-variant-numeric: tabular-nums;
         }
         .brand-subtitle {
             font-size: 11px;
@@ -250,9 +251,9 @@
             border-radius: 4px;
         }
         .sidebar-role-badge.admin {
-            background: rgba(168, 85, 247, 0.18);
-            color: #c084fc;
-            border: 1px solid rgba(168, 85, 247, 0.35);
+            background: rgba(245, 158, 11, 0.18);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.35);
         }
         .sidebar-role-badge.member {
             background: rgba(59, 130, 246, 0.18);
@@ -409,9 +410,10 @@
             font-weight: 700;
             padding: 1px 4px;
             border-radius: 3px;
-            background: rgba(168, 85, 247, 0.2);
-            color: #d8b4fe;
-            border: 1px solid rgba(168, 85, 247, 0.35);
+            background: rgba(59, 130, 246, 0.18);
+            color: #93c5fd;
+            border: 1px solid rgba(59, 130, 246, 0.35);
+            font-variant-numeric: tabular-nums;
         }
         .mobile-fetch-btn {
             background: #e11d48;
@@ -487,7 +489,17 @@
         .view.active { display: block; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         
+        h1, h2, h3 { text-wrap: balance; }
         h1 { margin-top: 0; margin-bottom: 10px; font-weight: 800; letter-spacing: -0.5px; }
+        .cmd-bento-metric, .deal-price-badge, .family-filter-pill, .meal-cost-badge { font-variant-numeric: tabular-nums; }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+                scroll-behavior: auto !important;
+            }
+        }
         
         .error { color: #ef4444; font-weight: 600; margin-bottom: 15px; padding: 12px; background: rgba(239, 68, 68, 0.1); border-radius: var(--radius-sm); border-left: 4px solid #ef4444;}
         .success { color: #10b981; font-weight: 600; margin-bottom: 15px; padding: 12px; background: rgba(16, 185, 129, 0.1); border-radius: var(--radius-sm); border-left: 4px solid #10b981;}
@@ -827,7 +839,7 @@
         .store-pill-walmart { background: rgba(217, 119, 6, 0.22); color: #fbbf24; border: 1px solid rgba(217, 119, 6, 0.5); }
         .store-pill-target { background: rgba(225, 29, 72, 0.2); color: #f43f5e; border: 1px solid rgba(225, 29, 72, 0.45); }
         .store-pill-aldi { background: rgba(29, 78, 216, 0.22); color: #93c5fd; border: 1px solid rgba(29, 78, 216, 0.5); }
-        .store-pill-fiesta { background: rgba(168, 85, 247, 0.22); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.5); }
+        .store-pill-fiesta { background: rgba(245, 158, 11, 0.22); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.5); }
         .store-pill-trader-joes, .store-pill-trader-joe { background: rgba(194, 65, 12, 0.22); color: #fdba74; border: 1px solid rgba(194, 65, 12, 0.5); }
         .store-pill-any { background: rgba(100, 116, 139, 0.22); color: #cbd5e1; border: 1px solid rgba(100, 116, 139, 0.45); }
 
@@ -1779,9 +1791,9 @@
             border: 1px solid rgba(59, 130, 246, 0.35);
         }
         .badge-effort.involved {
-            background: rgba(168, 85, 247, 0.18);
-            color: #d8b4fe;
-            border: 1px solid rgba(168, 85, 247, 0.4);
+            background: rgba(245, 158, 11, 0.18);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.4);
         }
 
         /* Macro Pills Row */
@@ -1822,9 +1834,9 @@
             border: 1px solid rgba(16, 185, 129, 0.3);
         }
         .macro-pill.fiber {
-            background: rgba(168, 85, 247, 0.15);
-            color: #c084fc;
-            border: 1px solid rgba(168, 85, 247, 0.3);
+            background: rgba(56, 189, 248, 0.15);
+            color: #38bdf8;
+            border: 1px solid rgba(56, 189, 248, 0.3);
         }
         
         /* Bulk Buy Reuse Box */
@@ -1940,9 +1952,9 @@
             border: 1px solid rgba(245, 158, 11, 0.4);
         }
         .sugg-priority-tag.idea {
-            background: rgba(168, 85, 247, 0.2);
-            color: #d8b4fe;
-            border: 1px solid rgba(168, 85, 247, 0.4);
+            background: rgba(56, 189, 248, 0.2);
+            color: #38bdf8;
+            border: 1px solid rgba(56, 189, 248, 0.4);
         }
         .sugg-priority-tag.fix {
             background: rgba(239, 68, 68, 0.15);
@@ -3155,8 +3167,8 @@
 
                 <!-- FB SUB-PANE 4: SESSION COOKIE VAULT & LIVE LISTING INSPECTOR -->
                 <div id="fb-pane-cookie" class="fb-sub-pane" style="display: none;">
-                    <div class="account-box" style="margin-bottom: 20px; border-color: rgba(168, 85, 247, 0.4);">
-                        <h3 style="margin: 0 0 8px 0; color: #d8b4fe;">🍪 Facebook Session Cookie Vault (Authenticated Local Search)</h3>
+                    <div class="account-box" style="margin-bottom: 20px; border-color: rgba(59, 130, 246, 0.4);">
+                        <h3 style="margin: 0 0 8px 0; color: #60a5fa;">🍪 Facebook Session Cookie Vault (Authenticated Local Search)</h3>
                         <p style="margin: 0 0 12px 0; font-size: 13px; color: #cbd5e1; line-height: 1.5;">
                             Facebook restricts unauthenticated Marketplace searches and serves out-of-state junk. Paste your logged-in Facebook cookie string (containing <code>c_user</code> and <code>xs</code>) or a JSON export from the <strong>Cookie-Editor</strong> Chrome/Edge extension below so AI Helper queries Marketplace with your real local session.
                         </p>
@@ -3172,7 +3184,7 @@
                         <div id="fb-cookie-test-msg" style="margin-bottom: 12px;"></div>
                         <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                             <button type="button" class="save-btn" onclick="saveFacebookSessionCookie()">💾 Save Session Cookie</button>
-                            <button type="button" class="add-btn" onclick="testFacebookSessionCookie()" style="background: #7c3aed;">🧪 Validate Session Cookie</button>
+                            <button type="button" class="add-btn" onclick="testFacebookSessionCookie()" style="background: #0284c7;">🧪 Validate Session Cookie</button>
                         </div>
                     </div>
 
@@ -3378,7 +3390,7 @@
                                 <span id="groc-kpi-hist-lows" style="font-size: 11.5px; color: #fca5a5;">0 all-time lows</span>
                             </div>
                         </div>
-                        <div onclick="switchGrocerySubTab('lists')" style="cursor: pointer; background: rgba(13,17,23,0.75); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 11px 14px; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#a78bfa'" onmouseout="this.style.borderColor='rgba(255,255,255,0.08)'">
+                        <div onclick="switchGrocerySubTab('lists')" style="cursor: pointer; background: rgba(13,17,23,0.75); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 11px 14px; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#38bdf8'" onmouseout="this.style.borderColor='rgba(255,255,255,0.08)'">
                             <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: 700; letter-spacing: 0.4px;">🛒 Active Shopping Cart</div>
                             <div style="display: flex; align-items: baseline; gap: 8px; margin-top: 4px;">
                                 <span id="groc-kpi-cart-items" style="font-size: 21px; font-weight: 800; color: #c4b5fd;">0 items</span>
@@ -3535,7 +3547,7 @@
                             <button class="add-btn" onclick="importMealPlanToGroceryList(this)" style="margin: 0; padding: 8px 14px; font-size: 12.5px; background: #2563eb; border-radius: 8px; font-weight: 600;" title="Pull all ingredients from your active Smart Meal Plan">
                                 🍲 Import Meal Plan
                             </button>
-                            <button class="add-btn" onclick="openAIGenerateListModal()" style="margin: 0; padding: 8px 14px; font-size: 12.5px; background: #8b5cf6; border-radius: 8px;">
+                            <button class="add-btn" onclick="openAIGenerateListModal()" style="margin: 0; padding: 8px 14px; font-size: 12.5px; background: #2563eb; border-radius: 8px;">
                                 🤖 AI Builder
                             </button>
                             <button class="save-btn" onclick="sendGroceryListToPhone(this)" style="margin: 0; padding: 8px 14px; font-size: 12.5px; background: #0284c7; border-radius: 8px;" title="Push formatted list grouped by store to Discord & Email">
@@ -3797,7 +3809,7 @@
             <!-- AI Grocery List Modal -->
             <div id="ai-list-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 999; justify-content: center; align-items: center;">
                 <div class="account-box" style="width: 90%; max-width: 540px; background: #161b22; border: 1px solid #30363d; border-radius: var(--radius-md); padding: 24px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
-                    <h3 style="margin-top: 0; color: #a78bfa; display: flex; align-items: center; gap: 8px;">
+                    <h3 style="margin-top: 0; color: #60a5fa; display: flex; align-items: center; gap: 8px;">
                         <span>🤖</span> Generate Smart Grocery List with AI
                     </h3>
                     <p style="color: #aaa; font-size: 13.5px; margin-bottom: 15px;">
@@ -3814,7 +3826,7 @@
                     <div id="ai-modal-msg" style="margin-bottom: 10px;"></div>
                     <div style="display: flex; justify-content: flex-end; gap: 10px;">
                         <button class="remove-btn" onclick="closeAIGenerateListModal()" style="margin: 0;">Cancel</button>
-                        <button class="save-btn" id="ai-modal-submit-btn" onclick="submitAIGenerateList()" style="margin: 0; background: #8b5cf6;">✨ Generate List</button>
+                        <button class="save-btn" id="ai-modal-submit-btn" onclick="submitAIGenerateList()" style="margin: 0; background: #2563eb;">✨ Generate List</button>
                     </div>
                 </div>
             </div>
@@ -4036,7 +4048,7 @@
                             </div>
                             <div style="background: rgba(0,0,0,0.25); padding: 8px; border-radius: 6px;">
                                 <div style="color: #94a3b8; font-size: 11px;">Batch Dinner Calories</div>
-                                <strong style="color: #a78bfa; font-size: 14px;" id="calc-batch-cals">~3,100 kcal</strong>
+                                <strong style="color: #38bdf8; font-size: 14px;" id="calc-batch-cals">~3,100 kcal</strong>
                             </div>
                         </div>
                     </div>
@@ -4504,7 +4516,7 @@
                                 </div>
                             </label>
 
-                            <div style="font-size: 12.5px; font-weight: 700; color: #a78bfa; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 8px;">📬 Inbox Safety &amp; Read Status</div>
+                            <div style="font-size: 12.5px; font-weight: 700; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 8px;">📬 Inbox Safety &amp; Read Status</div>
 
                             <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; background: rgba(255,255,255,0.02); padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 6px;">
                                 <input type="checkbox" id="rules-keep-unread" checked style="margin-top: 3px; transform: scale(1.15); cursor: pointer;">
@@ -5829,22 +5841,23 @@
         function createAccountRow(acc = {id: '', email_user: '', email_pass: '', email_host: 'imap.gmail.com'}) {
             const div = document.createElement('div');
             div.className = 'account-box';
-            div.dataset.id = acc.id;
+            div.dataset.id = acc.id || '';
+            const safeAccId = escapeHtml(acc.id || 'new');
             div.innerHTML = `
                 <div class="form-group">
                     <label>Email Address</label>
-                    <input type="email" class="acc_user" value="${acc.email_user}" placeholder="e.g. you@gmail.com" autocomplete="off">
+                    <input type="email" class="acc_user" value="${escapeHtml(acc.email_user || '')}" placeholder="e.g. you@gmail.com" autocomplete="off">
                 </div>
                 <div class="form-group" style="position: relative;">
                     <label>App Password</label>
-                    <input type="password" class="acc_pass" value="${acc.email_pass}" placeholder="Password" autocomplete="new-password">
+                    <input type="password" class="acc_pass" value="${escapeHtml(acc.email_pass || '')}" placeholder="Password" autocomplete="new-password">
                     <button class="toggle-password" onclick="toggleAccountPassword(this)">Show</button>
                 </div>
                 <div class="form-group">
                     <label>IMAP Host</label>
-                    <input type="text" class="acc_host" value="${acc.email_host}" placeholder="imap.gmail.com" autocomplete="off">
+                    <input type="text" class="acc_host" value="${escapeHtml(acc.email_host || 'imap.gmail.com')}" placeholder="imap.gmail.com" autocomplete="off">
                 </div>
-                <div id="msg-${acc.id || 'new'}" style="margin-top: 5px;"></div>
+                <div id="msg-${safeAccId}" style="margin-top: 5px;"></div>
                 <div class="account-actions">
                     <button class="save-btn" onclick="saveAccount(this)" style="margin-top:0;">Save Account</button>
                     <button class="remove-btn" onclick="removeAccount(this)" style="margin-top:0;">Delete Account</button>
@@ -8202,9 +8215,9 @@
             }
             if (!activeGroceryListId) return alert("Please create a grocery list first.");
 
-            const origHtml = btn ? btn.innerHTML : stapleName;
+            const origHtml = btn ? btn.innerHTML : '';
             if (btn) {
-                btn.innerHTML = `⏳ ${stapleName}...`;
+                btn.textContent = `⏳ ${stapleName}...`;
                 btn.disabled = true;
             }
             try {
@@ -8218,7 +8231,7 @@
                 const saleTxt = data.on_sale ? `at ${data.store_name} (${data.price_notes})` : '(Regular price)';
                 showGroceryMsg(`✓ Added ${data.item_name} ${saleTxt}!`, 'success');
                 if (btn) {
-                    btn.innerHTML = `✓ ${stapleName}`;
+                    btn.textContent = `✓ ${stapleName}`;
                     setTimeout(() => { if (btn) btn.innerHTML = origHtml; }, 1400);
                 }
                 loadActiveListItems();
@@ -8444,7 +8457,7 @@
 
             submitBtn.innerText = "Generating List with AI...";
             submitBtn.disabled = true;
-            msgBox.innerHTML = '<span style="color: #a78bfa;">AI is creating your ingredient list and checking store sales...</span>';
+            msgBox.innerHTML = '<span style="color: #60a5fa;">AI is creating your ingredient list and checking store sales...</span>';
 
             try {
                 const response = await fetch('/api/groceries/ai_generate_list', {
@@ -8905,7 +8918,7 @@
                 
                 let badgeHtml = '<span style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); font-size: 11px; padding: 2px 8px; border-radius: 9999px; font-weight: 600;">🍳 Cook at Home</span>';
                 if (isNoMeal) {
-                    badgeHtml = '<span style="background: rgba(147, 51, 234, 0.2); color: #c084fc; border: 1px solid rgba(147, 51, 234, 0.4); font-size: 11px; padding: 2px 8px; border-radius: 9999px; font-weight: 600;">👨‍👩‍👧 Skip / Family Dinner</span>';
+                    badgeHtml = '<span style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); font-size: 11px; padding: 2px 8px; border-radius: 9999px; font-weight: 600;">👨‍👩‍👧 Skip / Family Dinner</span>';
                 } else if (isThemed) {
                     badgeHtml = '<span style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); font-size: 11px; padding: 2px 8px; border-radius: 9999px; font-weight: 600;">🍕 Themed Routine</span>';
                 }
@@ -9075,7 +9088,7 @@
                 showMealMsg("✓ Routine and skip day rules saved successfully! Generate a plan to apply.", "success");
             } catch (e) {
                 if (e.message !== "Unauthorized") {
-                    if (msg) msg.innerHTML = `<div class="error">Failed to save rules: ${e.message}</div>`;
+                    if (msg) msg.innerHTML = `<div class="error">Failed to save rules: ${escapeHtml(e.message || 'Unknown error')}</div>`;
                 }
             } finally {
                 if (btn) btn.disabled = false;
@@ -9111,25 +9124,25 @@
 
                 if (m.is_no_meal_needed) {
                     return `
-                        <div class="meal-card" id="meal-card-${mealId}" style="border: 1px solid #7c3aed; background: linear-gradient(180deg, rgba(147, 51, 234, 0.08) 0%, #161b22 100%);">
+                        <div class="meal-card" id="meal-card-${mealId}" style="border: 1px solid #f59e0b; background: linear-gradient(180deg, rgba(245, 158, 11, 0.08) 0%, #161b22 100%);">
                             <div>
                                 <div class="meal-card-top">
-                                    <div class="meal-date-badge" style="background: rgba(147, 51, 234, 0.2); color: #d8b4fe; border-color: rgba(147, 51, 234, 0.4);">
+                                    <div class="meal-date-badge" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border-color: rgba(245, 158, 11, 0.4);">
                                         <span>📅</span> ${escapeHtml(m.day)} • ${escapeHtml(m.date)}
                                     </div>
-                                    <span class="meal-cuisine-pill" style="background: rgba(147, 51, 234, 0.25); color: #d8b4fe; border-color: rgba(147, 51, 234, 0.4);">👨‍👩‍👧 Family Dinner</span>
+                                    <span class="meal-cuisine-pill" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border-color: rgba(245, 158, 11, 0.4);">👨‍👩‍👧 Family Dinner</span>
                                 </div>
 
-                                <h3 class="meal-title" style="color: #e9d5ff;">${escapeHtml(m.title)}</h3>
+                                <h3 class="meal-title" style="color: #fef3c7;">${escapeHtml(m.title)}</h3>
                                 <p class="meal-desc">${escapeHtml(m.description)}</p>
 
                                 <div class="meal-meta-row">
                                     <span>✨ Family Gathering</span>
                                     <span>🏠 No Home Cooking</span>
-                                    <span class="meal-cost-badge" style="background: rgba(147, 51, 234, 0.2); color: #c084fc;">$0.00</span>
+                                    <span class="meal-cost-badge" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24;">$0.00</span>
                                 </div>
 
-                                <div style="margin: 14px 0; padding: 12px; background: rgba(147, 51, 234, 0.1); border: 1px dashed rgba(168, 85, 247, 0.4); border-radius: 8px; font-size: 13px; color: #d8b4fe; line-height: 1.4;">
+                                <div style="margin: 14px 0; padding: 12px; background: rgba(245, 158, 11, 0.1); border: 1px dashed rgba(245, 158, 11, 0.4); border-radius: 8px; font-size: 13px; color: #fde68a; line-height: 1.4;">
                                     👨‍👩‍👧 <strong>Routine Family Dinner:</strong> Dinner with family scheduled — no ingredients or meal preparation needed today!
                                 </div>
                             </div>
@@ -10827,7 +10840,7 @@
                                     <strong>🚫 Blocked Words:</strong> ${escapeHtml(exclStr)}${(w.exclude_keywords || []).length > 14 ? '...' : ''}
                                 </div>
                                 ${w.visual_targets ? `
-                                    <div style="font-size: 11.8px; color: #d8b4fe; margin-top: 5px;">
+                                    <div style="font-size: 11.8px; color: #93c5fd; margin-top: 5px;">
                                         <strong>🔬 AI Photo Targets:</strong> ${escapeHtml(w.visual_targets)}
                                     </div>
                                 ` : ''}
@@ -11093,8 +11106,10 @@
                     const eOk = data.email && data.email.status === 'success';
                     const msgBox = document.getElementById('fb-msg');
                     if (msgBox) {
+                        const safeEmailErr = escapeHtml(data.email?.error || 'Not configured');
+                        const safeDiscordErr = escapeHtml(data.discord?.error || 'Add Webhook in Alerts tab');
                         msgBox.innerHTML = `<div class="${(dOk || eOk) ? 'success' : 'error'}">
-                            🔔 Alert Dispatch: Email (${eOk ? '✓ Sent' : (data.email?.error || 'Not configured')}) &bull; Discord (${dOk ? '✓ Sent' : (data.discord?.error || 'Add Webhook in Alerts tab')})
+                            🔔 Alert Dispatch: Email (${eOk ? '✓ Sent' : safeEmailErr}) &bull; Discord (${dOk ? '✓ Sent' : safeDiscordErr})
                         </div>`;
                         setTimeout(() => msgBox.innerHTML = '', 6000);
                     }

@@ -34,6 +34,7 @@ from app import (
     sanitize_deal_price_and_notes,
     parse_numeric_price,
     is_safe_public_url,
+    is_safe_public_hostname,
     is_valid_public_origin,
     parse_flexible_iso_datetime,
     evaluate_fb_listing_against_watchlist,
@@ -682,6 +683,51 @@ class TestVerificationSuite(unittest.TestCase):
         with open(os.path.join(ROOT_DIR, "static", "index.html"), "r", encoding="utf-8") as f:
             html_doc = f.read()
         self.assertNotIn("-webkit-line-clamp", html_doc)
+
+    def test_16_deep_audit_ssrf_bounds_and_ui_unslop(self):
+        """Verify SSRF mail/webhook guards, settings clamping, and 20-point UI design-system standards."""
+        # 1. Mail/SMTP hostname SSRF blocking
+        for bad_host in ("127.0.0.1", "localhost", "169.254.169.254", "192.168.1.50", "10.0.0.5", "db.internal", "nas.local", "http://imap.gmail.com"):
+            self.assertFalse(is_safe_public_hostname(bad_host), f"Host should be blocked: {bad_host}")
+        self.assertTrue(is_safe_public_hostname("8.8.8.8", default_port=993))
+
+        # 2. Authenticate as admin (reusing spotify user from test_12 if already created)
+        c = TestClient(app)
+        login_res = c.post("/api/auth/login", json={"username": "spotify", "password": "AdminPassword!1"})
+        if login_res.json().get("status") != "success":
+            c.post("/api/auth/register", json={"username": "spotify", "password": "AdminPassword!1"})
+            c.post("/api/auth/login", json={"username": "spotify", "password": "AdminPassword!1"})
+
+        # Account test & save block internal hosts
+        r_test = c.post("/api/accounts/test", json={"email_user": "a@b.com", "email_pass": "pw", "email_host": "127.0.0.1:993"})
+        self.assertEqual(r_test.status_code, 400)
+        r_save = c.post("/api/accounts", json={"email_user": "a@b.com", "email_pass": "pw", "email_host": "169.254.169.254"})
+        self.assertEqual(r_save.status_code, 400)
+
+        # Notification settings block non-Discord webhooks and private SMTP hosts
+        r_wh = c.post("/api/notifications/settings", json={"discord_webhook_url": "http://127.0.0.1:8080/hook"})
+        self.assertEqual(r_wh.status_code, 400)
+        r_smtp = c.post("/api/notifications/settings", json={"smtp_host": "10.0.0.1"})
+        self.assertEqual(r_smtp.status_code, 400)
+
+        # Settings bounds clamping & provider validation
+        r_bad_prov = c.post("/api/settings/ai", json={"ai_provider": "evil_provider"})
+        self.assertEqual(r_bad_prov.status_code, 400)
+        r_clamp = c.post("/api/settings/ai", json={"ai_provider": "gemini", "fetch_interval_minutes": 1, "lookback_days": 999, "email_fetch_limit": 9999})
+        self.assertEqual(r_clamp.status_code, 200)
+        s_read = c.get("/api/settings").json()
+        self.assertEqual(s_read["fetch_interval_minutes"], 5)
+        self.assertEqual(s_read["lookback_days"], 90)
+        self.assertEqual(s_read["email_fetch_limit"], 200)
+
+        # 3. UI 20-point unslop assertions (no purple slop, prefers-reduced-motion, tabular-nums, text-wrap: balance)
+        with open(os.path.join(ROOT_DIR, "static", "index.html"), "r", encoding="utf-8") as f:
+            html_doc = f.read()
+        for purple_tok in ("#a855f7", "#d8b4fe", "#7c3aed", "#8b5cf6", "#a78bfa", "rgba(168, 85, 247", "rgba(147, 51, 234"):
+            self.assertNotIn(purple_tok, html_doc, f"Purple slop token found in UI: {purple_tok}")
+        self.assertIn("prefers-reduced-motion", html_doc)
+        self.assertIn("tabular-nums", html_doc)
+        self.assertIn("text-wrap: balance", html_doc)
 
 if __name__ == "__main__":
     unittest.main()

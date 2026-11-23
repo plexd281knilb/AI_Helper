@@ -37,6 +37,7 @@ from google.auth.transport import requests as google_auth_requests
 from googleapiclient.discovery import build
 import asyncio
 import calendar
+from contextlib import contextmanager
 
 load_dotenv()
 
@@ -134,28 +135,53 @@ def _is_global_public_ip(ip_str: str) -> bool:
     except ValueError:
         return False
 
+def _is_safe_host_and_port(host: str, port: int) -> bool:
+    """Validates a hostname/IP against private, loopback, link-local, and internal DNS ranges."""
+    clean_host = (host or "").strip().lower().strip("[]")
+    if not clean_host or _INVISIBLE_CTRL_RE.search(clean_host) or any(ch.isspace() for ch in clean_host):
+        return False
+    if (
+        clean_host in ("localhost", "localhost.localdomain", "metadata.google.internal", "169.254.169.254")
+        or clean_host.endswith(".local")
+        or clean_host.endswith(".internal")
+    ):
+        return False
+    try:
+        ipaddress.ip_address(clean_host)
+        return _is_global_public_ip(clean_host)
+    except ValueError:
+        pass
+    try:
+        infos = socket.getaddrinfo(clean_host, int(port), type=socket.SOCK_STREAM)
+        if not infos:
+            return False
+        return all(_is_global_public_ip(info[4][0]) for info in infos)
+    except Exception:
+        return False
+
+def is_safe_public_hostname(raw_host: str, default_port: int = 993) -> bool:
+    """Validates mail/service hostnames (optionally with :port) against SSRF and internal hosts."""
+    s = str(raw_host or "").strip()
+    if not s or "://" in s or "/" in s or "@" in s:
+        return False
+    host = s
+    port = default_port
+    if ":" in s and not s.startswith("["):
+        parts = s.rsplit(":", 1)
+        if not parts[1].isdigit():
+            return False
+        host, port = parts[0], int(parts[1])
+        if port < 1 or port > 65535:
+            return False
+    return _is_safe_host_and_port(host, port)
+
 def is_safe_public_url(raw_url: str) -> bool:
     try:
         parsed = urllib.parse.urlparse(str(raw_url or "").strip())
         if parsed.scheme not in ("http", "https") or not parsed.hostname:
             return False
-        host = parsed.hostname.lower().strip("[]")
-        if (
-            host in ("localhost", "localhost.localdomain", "metadata.google.internal", "169.254.169.254")
-            or host.endswith(".local")
-            or host.endswith(".internal")
-        ):
-            return False
-        try:
-            ipaddress.ip_address(host)
-            return _is_global_public_ip(host)
-        except ValueError:
-            pass
         port = parsed.port or (443 if parsed.scheme == "https" else 80)
-        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
-        if not infos:
-            return False
-        return all(_is_global_public_ip(info[4][0]) for info in infos)
+        return _is_safe_host_and_port(parsed.hostname, port)
     except Exception:
         return False
 
@@ -868,6 +894,18 @@ def get_db_conn():
         pass
     return conn
 
+@contextmanager
+def db_conn():
+    """Context manager guaranteeing SQLite connection closure even on exceptions or early returns."""
+    conn = get_db_conn()
+    try:
+        yield conn
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
 def init_db():
     conn = sqlite3.connect(DB_FILE, timeout=30.0)
     c = conn.cursor()
@@ -1255,21 +1293,19 @@ def get_user_id_from_token(token: Optional[str]) -> Optional[str]:
             
     # 2. Check persistent SQLite database
     try:
-        conn = get_db_conn()
-        c = conn.cursor()
-        c.execute("SELECT user_id, expires FROM sessions WHERE token=?", (token,))
-        row = c.fetchone()
-        if row:
-            user_id, expires = row[0], row[1]
-            if expires and expires > now_ts:
-                SESSION_CACHE[token] = (user_id, expires)
-                conn.close()
-                return user_id
-            else:
-                # Clean up expired token
-                c.execute("DELETE FROM sessions WHERE token=?", (token,))
-                conn.commit()
-        conn.close()
+        with db_conn() as conn:
+            c = conn.cursor()
+            c.execute("SELECT user_id, expires FROM sessions WHERE token=?", (token,))
+            row = c.fetchone()
+            if row:
+                user_id, expires = row[0], row[1]
+                if expires and expires > now_ts:
+                    SESSION_CACHE[token] = (user_id, expires)
+                    return user_id
+                else:
+                    # Clean up expired token
+                    c.execute("DELETE FROM sessions WHERE token=?", (token,))
+                    conn.commit()
     except Exception as e:
         logger.error(f"Error querying session token from database: {e}")
         
@@ -1283,11 +1319,10 @@ def verify_auth(request: Request):
     return user_id
 
 def verify_admin(current_user: str = Depends(verify_auth)):
-    conn = get_db_conn()
-    c = conn.cursor()
-    c.execute("SELECT role FROM users WHERE id=?", (current_user,))
-    row = c.fetchone()
-    conn.close()
+    with db_conn() as conn:
+        c = conn.cursor()
+        c.execute("SELECT role FROM users WHERE id=?", (current_user,))
+        row = c.fetchone()
     if not row or (row["role"] or "").lower() != "admin":
         raise HTTPException(status_code=403, detail="Administrator privileges required.")
     return current_user
@@ -1452,12 +1487,10 @@ class UserUpdate(BaseModel):
 
 @app.get("/api/users", dependencies=[Depends(verify_admin)])
 def get_users():
-    conn = get_db_conn()
-    c = conn.cursor()
-    c.execute("SELECT id, username, COALESCE(role, 'user') as role FROM users")
-    users = [{"id": r[0], "username": r[1], "role": r[2]} for r in c.fetchall()]
-    conn.close()
-    return users
+    with db_conn() as conn:
+        c = conn.cursor()
+        c.execute("SELECT id, username, COALESCE(role, 'user') as role FROM users")
+        return [{"id": r[0], "username": r[1], "role": r[2]} for r in c.fetchall()]
 
 @app.post("/api/users", dependencies=[Depends(verify_admin)])
 def create_user(req: UserCreate):
@@ -1490,70 +1523,65 @@ def _revoke_user_sessions(c, user_id: str):
 
 @app.put("/api/users/{target_user_id}")
 def update_user(target_user_id: str, req: UserUpdate, current_user: str = Depends(verify_auth)):
-    conn = get_db_conn()
-    c = conn.cursor()
-    c.execute("SELECT role FROM users WHERE id=?", (current_user,))
-    caller = c.fetchone()
-    is_admin = caller and (caller["role"] or "").lower() == "admin"
-    
-    if not is_admin and current_user != target_user_id:
-        conn.close()
-        raise HTTPException(status_code=403, detail="Permission denied. You can only update your own account.")
+    with db_conn() as conn:
+        c = conn.cursor()
+        c.execute("SELECT role FROM users WHERE id=?", (current_user,))
+        caller = c.fetchone()
+        is_admin = caller and (caller["role"] or "").lower() == "admin"
+        
+        if not is_admin and current_user != target_user_id:
+            raise HTTPException(status_code=403, detail="Permission denied. You can only update your own account.")
 
-    if req.username:
-        clean_user, canon_user = validate_username(req.username)
-        try:
-            c.execute("UPDATE users SET username=?, canonical_username=? WHERE id=?", (clean_user, canon_user, target_user_id))
-        except sqlite3.IntegrityError:
-            conn.close()
-            return {"error": "Username already exists."}
-    should_revoke = False
-    if req.password:
-        if len(req.password) < 4:
-            conn.close()
-            return {"error": "Password too short."}
-        pwd_hash = hash_password(req.password)
-        c.execute("UPDATE users SET password_hash=? WHERE id=?", (pwd_hash, target_user_id))
-        should_revoke = True
-    if req.role and is_admin:
-        new_role = "admin" if req.role.lower() == "admin" else "user"
-        c.execute("UPDATE users SET role=? WHERE id=?", (new_role, target_user_id))
-        should_revoke = True
-    if should_revoke:
-        _revoke_user_sessions(c, target_user_id)
+        if req.username:
+            clean_user, canon_user = validate_username(req.username)
+            try:
+                c.execute("UPDATE users SET username=?, canonical_username=? WHERE id=?", (clean_user, canon_user, target_user_id))
+            except sqlite3.IntegrityError:
+                return {"error": "Username already exists."}
+        should_revoke = False
+        if req.password:
+            if len(req.password) < 4:
+                return {"error": "Password too short."}
+            pwd_hash = hash_password(req.password)
+            c.execute("UPDATE users SET password_hash=? WHERE id=?", (pwd_hash, target_user_id))
+            should_revoke = True
+        if req.role and is_admin:
+            new_role = "admin" if req.role.lower() == "admin" else "user"
+            c.execute("UPDATE users SET role=? WHERE id=?", (new_role, target_user_id))
+            should_revoke = True
+        if should_revoke:
+            _revoke_user_sessions(c, target_user_id)
 
-    conn.commit()
-    conn.close()
+        conn.commit()
     return {"status": "success"}
 
 @app.delete("/api/users/{target_user_id}", dependencies=[Depends(verify_admin)])
 def delete_user(target_user_id: str, current_user: str = Depends(verify_auth)):
     if target_user_id == current_user:
         return {"error": "You cannot delete yourself."}
-    conn = get_db_conn()
-    c = conn.cursor()
-    for tbl in (
-        "email_accounts",
-        "events",
-        "processed_emails_v2",
-        "sessions",
-        "grocery_stores",
-        "grocery_lists",
-        "grocery_list_items",
-        "grocery_price_history",
-        "meal_plans",
-        "site_suggestions",
-        "fb_watchlists",
-        "fb_listings",
-        "notification_logs",
-    ):
-        c.execute(f"DELETE FROM {tbl} WHERE user_id=?", (target_user_id,))
-    c.execute("DELETE FROM users WHERE id=?", (target_user_id,))
-    for tok, entry in list(SESSION_CACHE.items()):
-        if entry[0] == target_user_id:
-            SESSION_CACHE.pop(tok, None)
-    conn.commit()
-    conn.close()
+    with db_conn() as conn:
+        c = conn.cursor()
+        for tbl in (
+            "email_accounts",
+            "events",
+            "processed_emails_v2",
+            "sessions",
+            "grocery_stores",
+            "grocery_lists",
+            "grocery_list_items",
+            "grocery_price_history",
+            "meal_plans",
+            "site_suggestions",
+            "fb_watchlists",
+            "fb_listings",
+            "notification_logs",
+        ):
+            c.execute(f"DELETE FROM {tbl} WHERE user_id=?", (target_user_id,))
+        c.execute("DELETE FROM users WHERE id=?", (target_user_id,))
+        for tok, entry in list(SESSION_CACHE.items()):
+            if entry[0] == target_user_id:
+                SESSION_CACHE.pop(tok, None)
+        conn.commit()
     for fname in (f"token_{target_user_id}.json", f"fb_cookie_{target_user_id}.txt"):
         fpath = os.path.join(DATA_DIR, fname)
         if os.path.exists(fpath):
@@ -1590,14 +1618,13 @@ class ParsingRulesSaveRequest(BaseModel):
 
 @app.get("/api/settings")
 def read_settings(user_id: str = Depends(verify_auth)):
-    conn = get_db_conn()
-    c = conn.cursor()
-    c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
-    row = c.fetchone()
-    settings = json.loads(row['settings']) if row and row['settings'] else {}
-    c.execute("SELECT id, email_user, email_pass, email_host FROM email_accounts WHERE user_id=?", (user_id,))
-    accounts = [dict(r) for r in c.fetchall()]
-    conn.close()
+    with db_conn() as conn:
+        c = conn.cursor()
+        c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
+        row = c.fetchone()
+        settings = json.loads(row['settings']) if row and row['settings'] else {}
+        c.execute("SELECT id, email_user, email_pass, email_host FROM email_accounts WHERE user_id=?", (user_id,))
+        accounts = [dict(r) for r in c.fetchall()]
     token_file = os.path.join(DATA_DIR, f"token_{user_id}.json")
     
     parsing_rules = settings.get("parsing_rules", DEFAULT_PARSING_RULES)
@@ -1628,16 +1655,25 @@ def read_settings(user_id: str = Depends(verify_auth)):
 def save_ai_settings(s: SettingsSave, user_id: str = Depends(verify_auth)):
     if s.public_url and not is_valid_public_origin(s.public_url):
         raise HTTPException(status_code=400, detail="Invalid public URL scheme or format.")
-    conn = get_db_conn()
-    c = conn.cursor()
-    c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
-    row = c.fetchone()
-    current = json.loads(row[0]) if row and row[0] else {}
-    current.update({k: v for k, v in s.dict().items() if v is not None})
-    c.execute("UPDATE users SET settings=? WHERE id=?", (json.dumps(current), user_id))
-    conn.commit()
-    conn.close()
-    logger.info(f"User {user_id} saved settings (job interval: {s.fetch_interval_minutes}m, lookback: {s.lookback_days}d).")
+    if s.ai_provider is not None and s.ai_provider not in ("gemini", "openai", "ollama"):
+        raise HTTPException(status_code=400, detail="Invalid AI provider.")
+    updates = {k: v for k, v in s.model_dump().items() if v is not None}
+    if "fetch_interval_minutes" in updates:
+        iv = int(updates["fetch_interval_minutes"])
+        updates["fetch_interval_minutes"] = 0 if iv <= 0 else max(5, min(1440, iv))
+    if "lookback_days" in updates:
+        updates["lookback_days"] = max(1, min(90, int(updates["lookback_days"])))
+    if "email_fetch_limit" in updates:
+        updates["email_fetch_limit"] = max(1, min(200, int(updates["email_fetch_limit"])))
+    with db_conn() as conn:
+        c = conn.cursor()
+        c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
+        row = c.fetchone()
+        current = json.loads(row[0]) if row and row[0] else {}
+        current.update(updates)
+        c.execute("UPDATE users SET settings=? WHERE id=?", (json.dumps(current), user_id))
+        conn.commit()
+    logger.info(f"User {user_id} saved settings (job interval: {updates.get('fetch_interval_minutes', s.fetch_interval_minutes)}m, lookback: {updates.get('lookback_days', s.lookback_days)}d).")
     return {"status": "success"}
 
 @app.get("/api/settings/parsing_rules")
@@ -1694,6 +1730,8 @@ def test_account_connection(req: AccountTest):
     clean_user = req.email_user.strip()
     clean_pass = req.email_pass.replace(" ", "")
     clean_host = req.email_host.strip()
+    if not is_safe_public_hostname(clean_host, default_port=993):
+        raise HTTPException(status_code=400, detail="Invalid or disallowed IMAP server hostname.")
     try:
         with MailBox(clean_host).login(clean_user, clean_pass) as mailbox:
             return {
@@ -1719,7 +1757,7 @@ def test_account_connection(req: AccountTest):
 
         return {
             "status": "error",
-            "message": f"Connection failed: {err_msg}",
+            "message": "Connection failed. Check host, email address, and App Password.",
             "hint": hint
         }
 
@@ -1728,16 +1766,17 @@ def save_account(acc: AccountSave, user_id: str = Depends(verify_auth)):
     clean_user = acc.email_user.strip()
     clean_pass = acc.email_pass.replace(" ", "")
     clean_host = acc.email_host.strip()
-    conn = get_db_conn()
-    c = conn.cursor()
-    acc_id = acc.id or str(uuid.uuid4())
-    c.execute("SELECT id FROM email_accounts WHERE id=? AND user_id=?", (acc_id, user_id))
-    if c.fetchone():
-        c.execute("UPDATE email_accounts SET email_user=?, email_pass=?, email_host=? WHERE id=?", (clean_user, clean_pass, clean_host, acc_id))
-    else:
-        c.execute("INSERT INTO email_accounts (id, user_id, email_user, email_pass, email_host) VALUES (?, ?, ?, ?, ?)", (acc_id, user_id, clean_user, clean_pass, clean_host))
-    conn.commit()
-    conn.close()
+    if not is_safe_public_hostname(clean_host, default_port=993):
+        raise HTTPException(status_code=400, detail="Invalid or disallowed IMAP server hostname.")
+    with db_conn() as conn:
+        c = conn.cursor()
+        acc_id = acc.id or str(uuid.uuid4())
+        c.execute("SELECT id FROM email_accounts WHERE id=? AND user_id=?", (acc_id, user_id))
+        if c.fetchone():
+            c.execute("UPDATE email_accounts SET email_user=?, email_pass=?, email_host=? WHERE id=? AND user_id=?", (clean_user, clean_pass, clean_host, acc_id, user_id))
+        else:
+            c.execute("INSERT INTO email_accounts (id, user_id, email_user, email_pass, email_host) VALUES (?, ?, ?, ?, ?)", (acc_id, user_id, clean_user, clean_pass, clean_host))
+        conn.commit()
     return {"status": "success", "id": acc_id}
 
 # --- Onboarding Setup Wizard Endpoints ---
@@ -1962,7 +2001,7 @@ def get_models(req: ModelRequest):
             models_list.sort(reverse=True)
     except Exception as e:
         logger.error(f"Error fetching models from {req.provider}: {e}")
-        return {"error": str(e)}
+        return {"error": "Unable to fetch models from provider. Verify your API key and network access."}
     return {"models": models_list}
 
 # --- Webview & Newsletter Link Resolver ---
@@ -2942,6 +2981,7 @@ def google_auth_callback(request: Request, state: str):
         return "Error: OAuth state expired. Please try linking Google Calendar again."
     base_url = user_settings.get("public_url") if is_valid_public_origin(user_settings.get("public_url", "")) and user_settings.get("public_url") else f"{request.url.scheme}://{request.url.netloc}"
     redirect_uri = f"{base_url.rstrip('/')}/api/auth/google/callback"
+    oauth_ok = False
     try:
         flow = Flow.from_client_secrets_file(CLIENT_SECRETS_FILE, scopes=SCOPES, redirect_uri=redirect_uri)
         parsed_redir = urllib.parse.urlparse(redirect_uri)
@@ -2968,15 +3008,17 @@ def google_auth_callback(request: Request, state: str):
         if google_email:
             user_settings["google_email"] = google_email
 
-        conn = get_db_conn()
-        c = conn.cursor()
-        c.execute("UPDATE users SET settings=? WHERE id=?", (json.dumps(user_settings), user_id))
-        conn.commit()
-        conn.close()
+        with db_conn() as conn:
+            c = conn.cursor()
+            c.execute("UPDATE users SET settings=? WHERE id=?", (json.dumps(user_settings), user_id))
+            conn.commit()
+        oauth_ok = True
 
     except Exception as e:
         logger.error(f"Google OAuth Failed for user {user_id}: {e}")
 
+    if not oauth_ok:
+        return RedirectResponse(url="/?wizard_step=2&oauth_error=1" if from_wizard else "/?oauth_error=1")
     if from_wizard:
         return RedirectResponse(url="/?wizard_step=3&oauth_success=1")
     return RedirectResponse(url="/?oauth_success=1")
@@ -3025,9 +3067,10 @@ def sync_event(event_id: str, user_id: str = Depends(verify_auth)):
     except Exception as e:
         conn.close()
         err_str = str(e)
+        logger.error(f"Google sync failed for event {event_id}: {err_str}")
         if "invalid_grant" in err_str:
             raise HTTPException(status_code=400, detail="Google Calendar token has expired or was revoked. Please reconnect Google Calendar in Settings.")
-        raise HTTPException(status_code=500, detail=err_str)
+        raise HTTPException(status_code=500, detail="Failed to sync event to Google Calendar.")
 
 @app.delete("/api/events/{event_id}")
 def dismiss_event(event_id: str, user_id: str = Depends(verify_auth)):
@@ -3078,9 +3121,10 @@ def bulk_sync_events(req: BulkEventAction, user_id: str = Depends(verify_auth)):
         service = build('calendar', 'v3', credentials=creds)
     except Exception as e:
         err_str = str(e)
+        logger.error(f"Google auth failed in bulk_sync_events: {err_str}")
         if "invalid_grant" in err_str:
             raise HTTPException(status_code=400, detail="Google Calendar token has expired or was revoked. Please reconnect Google Calendar in Settings.")
-        raise HTTPException(status_code=500, detail=f"Failed to authenticate with Google: {err_str}")
+        raise HTTPException(status_code=500, detail="Failed to authenticate with Google Calendar. Please reconnect in Settings.")
         
     conn = get_db_conn()
     c = conn.cursor()
@@ -3153,9 +3197,10 @@ def sync_history_email(account: str, uid: str, user_id: str = Depends(verify_aut
         service = build('calendar', 'v3', credentials=creds)
     except Exception as e:
         err_str = str(e)
+        logger.error(f"Google auth failed in bulk_sync_events: {err_str}")
         if "invalid_grant" in err_str:
             raise HTTPException(status_code=400, detail="Google Calendar token has expired or was revoked. Please reconnect Google Calendar in Settings.")
-        raise HTTPException(status_code=500, detail=f"Failed to authenticate with Google: {err_str}")
+        raise HTTPException(status_code=500, detail="Failed to authenticate with Google Calendar. Please reconnect in Settings.")
         
     conn = get_db_conn()
     c = conn.cursor()
@@ -3261,9 +3306,10 @@ def bulk_sync_history(req: BulkHistorySync, user_id: str = Depends(verify_auth))
         service = build('calendar', 'v3', credentials=creds)
     except Exception as e:
         err_str = str(e)
+        logger.error(f"Google auth failed in bulk_sync_events: {err_str}")
         if "invalid_grant" in err_str:
             raise HTTPException(status_code=400, detail="Google Calendar token has expired or was revoked. Please reconnect Google Calendar in Settings.")
-        raise HTTPException(status_code=500, detail=f"Failed to authenticate with Google: {err_str}")
+        raise HTTPException(status_code=500, detail="Failed to authenticate with Google Calendar. Please reconnect in Settings.")
         
     conn = get_db_conn()
     c = conn.cursor()
@@ -3345,7 +3391,8 @@ def get_logs():
             logs = f.read()
         return {"logs": logs}
     except Exception as e:
-        return {"logs": f"Error reading logs: {e}"}
+        logger.error(f"Error reading logs: {e}")
+        return {"logs": "Error reading application logs."}
 
 @app.get("/")
 @app.get("/dashboard")
@@ -8421,9 +8468,9 @@ def send_discord_notification(user_id: str, title: str, description: str, url: s
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "footer": {"text": "AI Helper v3.0 • Life OS & Facebook Deal Sniper"}
     }
-    if url:
+    if url and is_safe_public_url(url):
         embed["url"] = url
-    if image_url and image_url.startswith("http"):
+    if image_url and is_safe_public_url(image_url):
         embed["thumbnail"] = {"url": image_url}
     if fields:
         embed["fields"] = fields[:10]
@@ -8455,63 +8502,68 @@ def send_discord_notification(user_id: str, title: str, description: str, url: s
                 return {"status": "error", "error": err_msg}
     except Exception as e:
         err_str = str(e)
-        log_notification(user_id, "discord", category, title, description, url, "failed", err_str)
-        return {"status": "error", "error": err_str}
+        logger.warning(f"Discord notification failed for user {user_id}: {err_str}")
+        log_notification(user_id, "discord", category, title, description, url, "failed", "Discord webhook request failed")
+        return {"status": "error", "error": "Discord webhook request failed."}
 
 def send_email_notification(user_id: str, subject: str, plain_body: str, html_body: str = "", url: str = "", category: str = "facebook_sniper", recipient_override: str = "") -> dict:
-    conn = get_db_conn()
-    try:
-        notif = get_user_notification_settings(user_id, conn=conn)
-        c = conn.cursor()
-        c.execute("SELECT email_user, email_pass, email_host FROM email_accounts WHERE user_id=? LIMIT 1", (user_id,))
-        acc = c.fetchone()
-        if not acc:
-            err = "No connected email account found in Settings to send email alerts from."
-            log_notification(user_id, "email", category, subject, plain_body, url, "failed", err, conn=conn)
-            return {"status": "error", "error": err}
+    with db_conn() as conn:
+        try:
+            notif = get_user_notification_settings(user_id, conn=conn)
+            c = conn.cursor()
+            c.execute("SELECT email_user, email_pass, email_host FROM email_accounts WHERE user_id=? LIMIT 1", (user_id,))
+            acc = c.fetchone()
+            if not acc:
+                err = "No connected email account found in Settings to send email alerts from."
+                log_notification(user_id, "email", category, subject, plain_body, url, "failed", err, conn=conn)
+                return {"status": "error", "error": err}
 
-        sender_email = (acc["email_user"] or "").strip()
-        sender_pass = (acc["email_pass"] or "").replace(" ", "").strip()
-        imap_host = (acc["email_host"] or "imap.gmail.com").strip()
-        recipient = (recipient_override or notif.get("email_recipient") or sender_email).strip()
+            sender_email = re.sub(r'[\r\n\x00]+', '', (acc["email_user"] or "")).strip()
+            sender_pass = (acc["email_pass"] or "").replace(" ", "").strip()
+            imap_host = (acc["email_host"] or "imap.gmail.com").strip()
+            recipient = re.sub(r'[\r\n\x00]+', '', (recipient_override or notif.get("email_recipient") or sender_email)).strip()
+            clean_subject = re.sub(r'[\r\n\x00]+', ' ', str(subject or "")).strip()
 
-        smtp_host, smtp_port, use_ssl = resolve_smtp_from_imap(
-            imap_host,
-            notif.get("smtp_host", ""),
-            notif.get("smtp_port", 0)
-        )
+            smtp_host, smtp_port, use_ssl = resolve_smtp_from_imap(
+                imap_host,
+                notif.get("smtp_host", ""),
+                notif.get("smtp_port", 0)
+            )
+            if not is_safe_public_hostname(smtp_host, default_port=int(smtp_port or 465)):
+                err = "Invalid or disallowed SMTP server hostname."
+                log_notification(user_id, "email", category, clean_subject, plain_body, url, "failed", err, conn=conn)
+                return {"status": "error", "error": err}
 
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"] = f"AI Helper Sniper <{sender_email}>"
-        msg["To"] = recipient
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = clean_subject
+            msg["From"] = f"AI Helper Sniper <{sender_email}>"
+            msg["To"] = recipient
 
-        msg.attach(MIMEText(plain_body, "plain", "utf-8"))
-        if html_body:
-            msg.attach(MIMEText(html_body, "html", "utf-8"))
+            msg.attach(MIMEText(plain_body, "plain", "utf-8"))
+            if html_body:
+                msg.attach(MIMEText(html_body, "html", "utf-8"))
 
-        if use_ssl:
-            context = ssl.create_default_context()
-            with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context, timeout=15) as server:
-                server.login(sender_email, sender_pass)
-                server.sendmail(sender_email, [recipient], msg.as_string())
-        else:
-            context = ssl.create_default_context()
-            with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as server:
-                server.ehlo()
-                server.starttls(context=context)
-                server.ehlo()
-                server.login(sender_email, sender_pass)
-                server.sendmail(sender_email, [recipient], msg.as_string())
+            if use_ssl:
+                context = ssl.create_default_context()
+                with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context, timeout=15) as server:
+                    server.login(sender_email, sender_pass)
+                    server.sendmail(sender_email, [recipient], msg.as_string())
+            else:
+                context = ssl.create_default_context()
+                with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as server:
+                    server.ehlo()
+                    server.starttls(context=context)
+                    server.ehlo()
+                    server.login(sender_email, sender_pass)
+                    server.sendmail(sender_email, [recipient], msg.as_string())
 
-        log_notification(user_id, "email", category, subject, plain_body, url, "sent", "", conn=conn)
-        return {"status": "success", "channel": "email", "recipient": recipient}
-    except Exception as e:
-        err_str = str(e)
-        log_notification(user_id, "email", category, subject, plain_body, url, "failed", err_str, conn=conn)
-        return {"status": "error", "error": err_str}
-    finally:
-        conn.close()
+            log_notification(user_id, "email", category, clean_subject, plain_body, url, "sent", "", conn=conn)
+            return {"status": "success", "channel": "email", "recipient": recipient}
+        except Exception as e:
+            err_str = str(e)
+            logger.warning(f"Email notification failed for user {user_id}: {err_str}")
+            log_notification(user_id, "email", category, subject, plain_body, url, "failed", "Email delivery failed", conn=conn)
+            return {"status": "error", "error": "Failed to send email notification. Verify SMTP and App Password settings."}
 
 class NotificationSettingsUpdate(BaseModel):
     discord_enabled: Optional[bool] = True
@@ -8552,8 +8604,13 @@ def api_get_notification_settings(user_id: str = Depends(verify_auth)):
 
 @app.post("/api/notifications/settings")
 def api_save_notification_settings(req: NotificationSettingsUpdate, user_id: str = Depends(verify_auth)):
-    conn = get_db_conn()
-    try:
+    clean_webhook = (req.discord_webhook_url or "").strip()
+    if clean_webhook and not (clean_webhook.startswith("https://discord.com/api/webhooks/") or clean_webhook.startswith("https://discordapp.com/api/webhooks/")):
+        raise HTTPException(status_code=400, detail="Invalid Discord Webhook URL format.")
+    clean_smtp = (req.smtp_host or "").strip()
+    if clean_smtp and not is_safe_public_hostname(clean_smtp, default_port=int(req.smtp_port or 465)):
+        raise HTTPException(status_code=400, detail="Invalid or disallowed SMTP server hostname.")
+    with db_conn() as conn:
         c = conn.cursor()
         c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
         row = c.fetchone()
@@ -8561,24 +8618,22 @@ def api_save_notification_settings(req: NotificationSettingsUpdate, user_id: str
         notif = s.get("notification_settings") or dict(DEFAULT_NOTIFICATION_SETTINGS)
         notif.update({
             "discord_enabled": bool(req.discord_enabled),
-            "discord_webhook_url": (req.discord_webhook_url or "").strip(),
+            "discord_webhook_url": clean_webhook,
             "email_enabled": bool(req.email_enabled),
-            "email_recipient": (req.email_recipient or "").strip(),
-            "smtp_host": (req.smtp_host or "").strip(),
-            "smtp_port": int(req.smtp_port or 465),
+            "email_recipient": re.sub(r'[\r\n\x00]+', '', (req.email_recipient or "")).strip(),
+            "smtp_host": clean_smtp,
+            "smtp_port": max(1, min(65535, int(req.smtp_port or 465))),
             "notify_fb_matches": bool(req.notify_fb_matches),
             "notify_fb_price_drops": bool(req.notify_fb_price_drops),
             "notify_calendar_events": bool(req.notify_calendar_events),
             "notify_meal_plans": bool(req.notify_meal_plans),
             "notify_grocery_steals": bool(req.notify_grocery_steals),
-            "min_deal_score": int(req.min_deal_score or 60)
+            "min_deal_score": max(0, min(100, int(req.min_deal_score or 60)))
         })
         s["notification_settings"] = notif
         c.execute("UPDATE users SET settings=? WHERE id=?", (json.dumps(s), user_id))
         conn.commit()
         return {"status": "success", "settings": notif}
-    finally:
-        conn.close()
 
 @app.post("/api/notifications/test")
 def api_test_notifications(req: NotificationTestRequest, user_id: str = Depends(verify_auth)):
@@ -8639,11 +8694,10 @@ def api_test_notifications(req: NotificationTestRequest, user_id: str = Depends(
 
 @app.delete("/api/notifications/logs")
 def api_clear_notification_logs(user_id: str = Depends(verify_auth)):
-    conn = get_db_conn()
-    c = conn.cursor()
-    c.execute("DELETE FROM notification_logs WHERE user_id=?", (user_id,))
-    conn.commit()
-    conn.close()
+    with db_conn() as conn:
+        c = conn.cursor()
+        c.execute("DELETE FROM notification_logs WHERE user_id=?", (user_id,))
+        conn.commit()
     return {"status": "success"}
 
 
