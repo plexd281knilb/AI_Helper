@@ -729,5 +729,13 @@ class TestVerificationSuite(unittest.TestCase):
         self.assertIn("tabular-nums", html_doc)
         self.assertIn("text-wrap: balance", html_doc)
 
+        # 4. Docker / Unraid container icon image and OCI labels
+        self.assertTrue(os.path.exists(os.path.join(ROOT_DIR, "static", "images", "ai-helper-logo.png")))
+        with open(os.path.join(ROOT_DIR, "Dockerfile"), "r", encoding="utf-8") as f:
+            dockerfile_txt = f.read()
+        self.assertIn("net.unraid.docker.icon", dockerfile_txt)
+        self.assertIn("org.opencontainers.image.icon", dockerfile_txt)
+        self.assertIn("ai-helper-logo.png", dockerfile_txt)
+
 if __name__ == "__main__":
     unittest.main()

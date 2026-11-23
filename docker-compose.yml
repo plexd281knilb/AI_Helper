@@ -5,6 +5,10 @@ services:
     build: .
     container_name: ai_helper
     restart: unless-stopped
+    labels:
+      - "net.unraid.docker.icon=https://raw.githubusercontent.com/plexd281knilb/AI_Helper/main/static/images/ai-helper-logo.png"
+      - "org.opencontainers.image.icon=https://raw.githubusercontent.com/plexd281knilb/AI_Helper/main/static/images/ai-helper-logo.png"
+      - "net.unraid.docker.webui=http://[IP]:[PORT:8000]/"
     ports:
       - "8000:8000"
     environment:

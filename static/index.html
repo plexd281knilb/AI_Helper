@@ -901,17 +901,31 @@
         .deal-card {
             background: #161b22;
             border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 10px 12px;
+            border-radius: 10px;
+            padding: 14px 16px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 10px;
+            transition: all 0.15s ease;
+            position: relative;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+            box-sizing: border-box;
+        }
+        .deal-card-header {
             display: flex;
             flex-direction: row;
             align-items: flex-start;
             gap: 12px;
-            transition: all 0.15s ease;
-            position: relative;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-            min-height: 80px;
-            box-sizing: border-box;
+        }
+        .deal-category-tag {
+            font-size: 10px;
+            color: #8b949e;
+            margin-left: auto;
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            white-space: nowrap;
         }
         .deal-card:hover {
             border-color: #3b82f6;
@@ -1105,20 +1119,22 @@
 
         .deal-right-actions {
             display: flex;
-            flex-direction: column;
-            align-items: flex-end;
-            justify-content: center;
-            gap: 6px;
-            flex-shrink: 0;
-            min-width: 175px;
+            flex-direction: row;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+            width: 100%;
+            box-sizing: border-box;
         }
         .deal-add-btn-compact {
             background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
             color: #ffffff;
             border: 1px solid rgba(255, 255, 255, 0.16);
             border-radius: 6px;
-            padding: 5px 12px;
-            font-size: 11.5px;
+            padding: 6px 14px;
+            font-size: 12px;
             font-weight: 600;
             cursor: pointer;
             display: inline-flex;
@@ -1127,7 +1143,8 @@
             gap: 5px;
             transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
             white-space: nowrap;
-            width: 100%;
+            width: auto;
+            min-width: 128px;
             box-sizing: border-box;
             box-shadow: 0 2px 6px rgba(37, 99, 235, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.15);
             letter-spacing: 0.15px;
@@ -3472,7 +3489,7 @@
                     </div>
 
                     <!-- Deal Cards Grid Container -->
-                    <div id="my-deals-feed-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(350px, 100%), 1fr)); gap: 12px;">
+                    <div id="my-deals-feed-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(min(390px, 100%), 1fr)); gap: 14px;">
                         Loading personalized feed...
                     </div>
                 </div>
@@ -6766,10 +6783,13 @@
                 const gradePillHtml = getGradePillHtml(deal.beef_grade, deal.item);
                 const historyPillHtml = getHistoryPillHtml(deal.price_history);
 
+                let displayPrice = cleanedPrice || 'Sale';
                 let unitPriceTag = '';
                 if (deal.unit_price !== null && deal.unit_price !== undefined && deal.unit) {
                     const unitFormatted = `$${Number(deal.unit_price).toFixed(2)}/${deal.unit}`;
-                    if (!cleanedPrice.toLowerCase().includes(`/${deal.unit}`)) {
+                    if (/^\$\d+(?:\.\d{1,2})?$/.test(displayPrice)) {
+                        displayPrice = `${displayPrice}/${deal.unit}`;
+                    } else if (!displayPrice.toLowerCase().includes(`/${deal.unit}`)) {
                         unitPriceTag = `<span style="font-size: 11px; color: #94a3b8; background: rgba(255,255,255,0.05); padding: 1px 6px; border-radius: 4px; font-weight: 600;">${escapeHtml(unitFormatted)}</span>`;
                     }
                 }
@@ -6809,45 +6829,47 @@
 
                 return `
                     <div class="deal-card" id="deal-card-${idx}">
-                        <div class="deal-thumb-box">
-                            ${deal.image_url ? `
-                                <img src="${escapeHtml(deal.image_url)}" class="deal-thumb-img" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                                <div class="deal-thumb-fallback" style="display:none;">${emoji}</div>
-                            ` : `<div class="deal-thumb-fallback">${emoji}</div>`}
+                        <div class="deal-card-header">
+                            <div class="deal-thumb-box">
+                                ${deal.image_url ? `
+                                    <img src="${escapeHtml(deal.image_url)}" class="deal-thumb-img" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                    <div class="deal-thumb-fallback" style="display:none;">${emoji}</div>
+                                ` : `<div class="deal-thumb-fallback">${emoji}</div>`}
+                            </div>
+
+                            <div class="deal-main-info">
+                                <div class="deal-top-line">
+                                    <span class="store-pill ${pillClass}">${escapeHtml(deal.store)}</span>
+                                    <span class="deal-price-badge">${escapeHtml(displayPrice)}</span>
+                                    ${unitPriceTag}
+                                    ${gradePillHtml}
+                                    ${dealValidityHtml}
+                                    <span class="deal-category-tag">${escapeHtml(deal.category || '')}</span>
+                                </div>
+
+                                <div class="deal-title-text" title="${escapeHtml(deal.item)}">
+                                    ${escapeHtml(deal.item)}
+                                </div>
+
+                                ${cleanNotes ? `<div class="deal-compact-notes" title="${escapeHtml(cleanNotes)}">${escapeHtml(cleanNotes)}</div>` : ''}
+                            </div>
                         </div>
 
-                        <div class="deal-main-info">
-                            <div class="deal-top-line">
-                                <span class="store-pill ${pillClass}">${escapeHtml(deal.store)}</span>
-                                <span class="deal-price-badge">${escapeHtml(cleanedPrice || 'Sale')}</span>
-                                ${unitPriceTag}
-                                ${gradePillHtml}
-                                ${dealValidityHtml}
-                                <span style="font-size: 10px; color: #8b949e; margin-left: auto; text-transform: uppercase; font-weight: 600; letter-spacing: 0.3px;">${escapeHtml(deal.category || '')}</span>
-                            </div>
-
-                            <div class="deal-title-text" title="${escapeHtml(deal.item)}">
-                                ${escapeHtml(deal.item)}
-                            </div>
-
-                            ${cleanNotes ? `<div class="deal-compact-notes" title="${escapeHtml(cleanNotes)}">${escapeHtml(cleanNotes)}</div>` : ''}
-
-                            <div class="deal-badges-row">
-                                ${compPillHtml}
-                                ${historyPillHtml}
-                            </div>
+                        <div class="deal-badges-row">
+                            ${compPillHtml}
+                            ${historyPillHtml}
                         </div>
 
                         <div class="deal-right-actions">
-                            <button class="${addBtnClass}" onclick="addFeedDealToList('${safeItemName}', '${safeStoreName}', '${safePrice}', '${safeCategory}', '${safeImageUrl}', this)">
-                                ${addBtnText}
-                            </button>
                             <div class="deal-feedback-row">
                                 <button class="deal-feedback-btn-mini" onclick="openPriceHistoryModal('${safeItemName}', '${safeCategory}')" title="View Historical Price Ledger">📈</button>
                                 <button class="deal-feedback-btn-mini" onclick="submitDealFeedback('${safeItemName}', '${safeCategory}', 'more', this, ${idx})" title="More like this">👍</button>
                                 <button class="deal-feedback-btn-mini" onclick="submitDealFeedback('${safeItemName}', '${safeCategory}', 'less', this, ${idx})" title="Less like this">👎</button>
                                 <button class="deal-feedback-btn-mini" onclick="submitDealFeedback('${safeItemName}', '${safeCategory}', 'hide_category', this, ${idx})" title="Hide category">🚫</button>
                             </div>
+                            <button class="${addBtnClass}" onclick="addFeedDealToList('${safeItemName}', '${safeStoreName}', '${safePrice}', '${safeCategory}', '${safeImageUrl}', this)">
+                                ${addBtnText}
+                            </button>
                         </div>
                     </div>
                 `;
