@@ -3859,7 +3859,7 @@ class FeedbackActionRequest(BaseModel):
 
 DEFAULT_DEAL_PREFERENCES = {
     "favorite_categories": ["Meat & Seafood", "Produce"],
-    "ignored_categories": ["Furniture & Patio", "Canned Goods & Soups"],
+    "ignored_categories": ["Furniture & Patio", "Canned Goods & Soups", "Electronics & Tech"],
     "liked_keywords": ["steak", "ribeye", "brisket", "beef", "chicken", "bacon", "salmon", "pork", "wings", "eggs"],
     "disliked_keywords": ["patio", "chair", "canned soup", "furniture", "umbrella"]
 }
@@ -3890,6 +3890,18 @@ _MEAT_SEAFOOD_PATTERN = re.compile(
 
 def guess_deal_category(item_name: str) -> str:
     name = (item_name or '').lower()
+    # 0. Electronics & Tech first (prevents "Apple M5 Max Chip" / "MacBook Pro Laptop" matching "apple" -> Produce)
+    if re.search(
+        r'\b(?:macbook|imac|iphone|ipad|airpods|apple\s+(?:watch|tv|m\d+|silicon|intelligence|care|pencil)|'
+        r'laptop|laptops|notebook\s+computer|chromebook|desktop\s+(?:pc|computer)|pc\s+gaming|tablet|tablets|'
+        r'smartwatch|smart\s+tv|oled|qled|uhd\s+tv|4k\s+tv|soundbar|headphones?|earbuds?|bluetooth\s+speaker|'
+        r'playstation|xbox|nintendo|ssd\s+storage|tb\s+ssd|gb\s+memory|core\s+cpu|core\s+gpu|cpu|gpu|ram|'
+        r'processor|graphics\s+card|motherboard|router|wi-?fi|mesh\s+system|printer|scanner|monitor|'
+        r'dyson|roomba|robot\s+vacuum|vacuum\s+cleaner|digital\s+camera|dash\s+cam|security\s+camera|'
+        r'airtag|kindle|roku|fire\s+tv|streaming\s+stick)\b',
+        name
+    ):
+        return 'Electronics & Tech'
     # 1. Non-food Household & Personal items first (prevents "parchment paper for fried chicken wings" matching Meat)
     if re.search(
         r'\b(?:air\s+fryer\s+liners?|liners?|parchment|baking\s+paper|wax\s+paper|paper\s+towels?|toilet\s+paper|'
@@ -3898,8 +3910,12 @@ def guess_deal_category(item_name: str) -> str:
         name
     ):
         return 'Household & Personal'
-    # 2. Furniture & Patio
-    if any(w in name for w in ['patio', 'furniture', 'chair', 'table', 'umbrella', 'gazebo', 'cushion', 'grill tool', 'fire pit', 'outdoor seating', 'recliner', 'bench', 'lounger', 'lawn mower', 'adirondack', 'planter', 'storage box', 'hammock', 'canopy']):
+    # 2. Furniture & Patio (word-boundary so "vegetable" or "tablet" never matches "table")
+    if re.search(
+        r'\b(?:patio|furniture|chairs?|tables?|umbrella|gazebo|cushions?|grill\s+tool|fire\s+pit|'
+        r'outdoor\s+seating|recliner|bench|lounger|lawn\s+mower|adirondack|planter|storage\s+box|hammock|canopy)\b',
+        name
+    ):
         return 'Furniture & Patio'
     # 3. Canned Goods & Soups (before Meat so chicken broth/soup stays canned)
     if any(w in name for w in ['soup', 'campbell', 'progresso', 'canned', 'broth', 'bouillon', 'canned beans', 'canned corn', 'canned tomato', 'spaghetti-o']):
@@ -3913,8 +3929,13 @@ def guess_deal_category(item_name: str) -> str:
     # 6. Meat & Seafood (word-boundary matched)
     if _MEAT_SEAFOOD_PATTERN.search(name):
         return 'Meat & Seafood'
+    # 6b. Apple beverages & bakery goods before Produce's standalone "apple" match
+    if re.search(r'\b(?:apple\s+(?:juice|cider)|snapple)\b', name):
+        return 'Beverages'
+    if re.search(r'\b(?:apple\s+(?:pie|pies|turnover|turnovers|crisp|fritter|fritters|strudel|cobbler|tart|muffin|danish))\b', name):
+        return 'Bakery & Deli'
     # 7. Produce
-    if any(w in name for w in ['apple', 'berry', 'berries', 'grape', 'banana', 'peach', 'melon', 'watermelon', 'cantaloupe', 'salad', 'lettuce', 'tomato', 'potato', 'onion', 'avocado', 'zucchini', 'vegetable', 'fruit', 'lemon', 'lime', 'citrus', 'nectarine', 'cherry', 'spinach', 'kale', 'carrot', 'broccoli', 'asparagus', 'cucumber', 'pepper', 'bell pepper', 'squash', 'mango', 'pineapple', 'strawberries', 'blueberries', 'raspberries', 'mushrooms', 'garlic', 'celery']):
+    if re.search(r'\bapples?\b', name) or any(w in name for w in ['berry', 'berries', 'grape', 'banana', 'peach', 'melon', 'watermelon', 'cantaloupe', 'salad', 'lettuce', 'tomato', 'potato', 'onion', 'avocado', 'zucchini', 'vegetable', 'fruit', 'lemon', 'lime', 'citrus', 'nectarine', 'cherry', 'spinach', 'kale', 'carrot', 'broccoli', 'asparagus', 'cucumber', 'pepper', 'bell pepper', 'squash', 'mango', 'pineapple', 'strawberries', 'blueberries', 'raspberries', 'mushrooms', 'garlic', 'celery']):
         return 'Produce'
     # 8. Dairy & Eggs
     if any(w in name for w in ['milk', 'cheese', 'yogurt', 'butter', 'cream', 'egg', 'eggs', 'dairy', 'sour cream', 'creamer', 'cheddar', 'mozzarella', 'parmesan', 'swiss', 'cottage cheese', 'half & half', 'half and half']):

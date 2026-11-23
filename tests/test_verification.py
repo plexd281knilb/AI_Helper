@@ -642,6 +642,18 @@ class TestVerificationSuite(unittest.TestCase):
             guess_deal_category("Taylor Farms or Fresh Express Chopped Salad Kits or Original Kits"),
             "Produce"
         )
+        # 1b. Electronics & Tech never pollute Produce ("Apple" in chip/device names) and "table" doesn't match "vegetable"
+        self.assertEqual(
+            guess_deal_category("MacBook Pro Laptop (16-inch) - Apple M5 Max Chip, Built for Apple Intelligence, 18-core CPU, 40-core GPU, 48GB Memory, 2TB SSD Storage."),
+            "Electronics & Tech"
+        )
+        self.assertEqual(guess_deal_category("Apple iPad Air 11-inch"), "Electronics & Tech")
+        self.assertEqual(guess_deal_category("Samsung 65-inch OLED 4K TV"), "Electronics & Tech")
+        self.assertEqual(guess_deal_category("Mixed Vegetables"), "Produce")
+        self.assertEqual(guess_deal_category("Honeycrisp Apples 3 lb"), "Produce")
+        self.assertEqual(guess_deal_category("Motts Apple Juice"), "Beverages")
+        self.assertEqual(guess_deal_category("Bakery Fresh Apple Pie"), "Bakery & Deli")
+        self.assertEqual(guess_deal_category("Applewood Smoked Bacon"), "Meat & Seafood")
 
         # 2. Real Meat & Seafood items still match Meat & Seafood
         self.assertEqual(guess_deal_category("USDA Prime Beef Boneless Top Sirloin Steaks"), "Meat & Seafood")

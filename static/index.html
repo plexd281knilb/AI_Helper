@@ -6442,6 +6442,7 @@
 
         function getCategoryEmoji(category) {
             const c = (category || '').toLowerCase();
+            if (c.includes('electronic') || c.includes('tech') || c.includes('laptop') || c.includes('macbook')) return '💻';
             if (c.includes('meat') || c.includes('seafood') || c.includes('beef') || c.includes('steak') || c.includes('chicken') || c.includes('pork') || c.includes('fish') || c.includes('salmon') || c.includes('shrimp')) return '🥩';
             if (c.includes('produce') || c.includes('fruit') || c.includes('vegetable') || c.includes('apple') || c.includes('berry') || c.includes('salad')) return '🥑';
             if (c.includes('dairy') || c.includes('egg') || c.includes('milk') || c.includes('cheese') || c.includes('butter')) return '🧀';
@@ -7094,7 +7095,7 @@
         const ALL_AVAILABLE_CATEGORIES = [
             'Meat & Seafood', 'Produce', 'Dairy & Eggs', 'Bakery & Deli',
             'Frozen', 'Beverages', 'Snacks', 'Pantry & Dry Goods',
-            'Household & Personal', 'Canned Goods & Soups', 'Furniture & Patio'
+            'Household & Personal', 'Canned Goods & Soups', 'Furniture & Patio', 'Electronics & Tech'
         ];
 
         let modalLikedKeywords = [];
@@ -7108,7 +7109,7 @@
             } catch(e) {
                 currentPreferences = {
                     favorite_categories: ['Meat & Seafood', 'Produce'],
-                    ignored_categories: ['Furniture & Patio', 'Canned Goods & Soups'],
+                    ignored_categories: ['Furniture & Patio', 'Canned Goods & Soups', 'Electronics & Tech'],
                     liked_keywords: ['steak', 'ribeye', 'brisket', 'beef', 'chicken', 'bacon', 'salmon', 'pork', 'wings', 'eggs'],
                     disliked_keywords: ['patio', 'chair', 'canned soup', 'furniture']
                 };
@@ -7240,7 +7241,7 @@
 
         function applyMeatLoverPreset() {
             currentPreferences.favorite_categories = ['Meat & Seafood', 'Produce'];
-            currentPreferences.ignored_categories = ['Furniture & Patio', 'Canned Goods & Soups'];
+            currentPreferences.ignored_categories = ['Furniture & Patio', 'Canned Goods & Soups', 'Electronics & Tech'];
             modalLikedKeywords = ['steak', 'ribeye', 'brisket', 'beef', 'chicken', 'bacon', 'salmon', 'pork', 'wings', 'eggs', 'ground beef'];
             modalDislikedKeywords = ['patio', 'chair', 'canned soup', 'furniture', 'umbrella'];
             renderPreferencesCategories();
