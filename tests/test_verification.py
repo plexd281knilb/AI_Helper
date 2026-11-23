@@ -678,5 +678,10 @@ class TestVerificationSuite(unittest.TestCase):
         self.assertEqual(p6, "$3.99/ea")
         self.assertEqual(parse_numeric_price(p6)["unit"], "ea")
 
+        # 6. Deal titles must never be line-clamped/truncated with ellipsis in UI
+        with open(os.path.join(ROOT_DIR, "static", "index.html"), "r", encoding="utf-8") as f:
+            html_doc = f.read()
+        self.assertNotIn("-webkit-line-clamp", html_doc)
+
 if __name__ == "__main__":
     unittest.main()
