@@ -346,16 +346,18 @@ def build_parsing_prompt_instructions(settings: dict) -> str:
   * Try to match each event with the relevant child based on grade, sport, or teacher context.
   * ALWAYS append the person's name at the very end of the event title with a hyphen (e.g. "Track Meet - Ellie", "Softball Practice - Gia", "Spelling Bee - Leo").
   * NEVER include the school grade in the event title (e.g., use "Track Meet - Ellie", NOT "Track Meet - 6th Grade").
-  * If an event is NOT for one of the children (e.g. personal, household, or general appointments), label it for {self_name} at the end of the title (e.g. "Dentist Appointment - {self_name}").
+  * If a school event applies to ALL children or is a general/school-wide event at the kids' school (e.g. "Jeans Day", "Spirit Day", "School Holiday", "Early Dismissal", "Picture Day", "Book Fair", "Homecoming", "All-School Chapel" at Liberty Christian School), ALWAYS append "- Kids" at the end of the title (e.g. "Jeans Day - Kids", "Early Dismissal - Kids").
+  * CRITICAL: NEVER attribute school-wide, student, or general school community events (such as Jeans Day, Spirit Day, or Liberty Christian School events) to {self_name}. {self_name} is a parent, NOT a student. Only label an event for {self_name} if it is truly a personal adult appointment, bill, travel, or parent-only/Class of 2006 alumni event.
+  * If an event is truly personal or adult-only (NOT for the children and NOT a kids' school event, e.g. personal appointments, utility bills, flights), label it for {self_name} at the end of the title (e.g. "Dentist Appointment - {self_name}").
   * Write a robust and detailed event description specifying who the event is for and relevant context from the email.""")
 
     # 2. School Events & Grade Filter
     if rules.get("school_grade_filter", True):
-        sections.append("""2. SCHOOL EVENT & GRADE FILTERING:
+        sections.append(f"""2. SCHOOL EVENT & GRADE FILTERING:
 - The children are in 2nd, 6th, and 9th grades (6th grade is considered Middle School; 9th grade is High School).
-- ONLY extract school events for 2nd, 6th, and 9th grades (and middle/high school activities relevant to them).
-- STRICTLY IGNORE school events for all other grades (Kindergarten, 1st, 3rd, 4th, 5th, 7th, 8th, 10th, 11th, 12th).
-- If an email is from a teacher, coach, or school staff, assume it is for one of the children and scan it thoroughly for calendar events to add.""")
+- ONLY extract school events for 2nd, 6th, and 9th grades (and middle/high school activities relevant to them), OR general all-school / school-wide events (e.g. Jeans Day, Spirit Day, School Holidays, Early Dismissal, All-School Chapel) which apply to all children and must be labeled "- Kids" (never "- {self_name}").
+- STRICTLY IGNORE school events exclusively for other grades (Kindergarten, 1st, 3rd, 4th, 5th, 7th, 8th, 10th, 11th, 12th).
+- If an email is from a teacher, coach, or school staff, assume it is for the children and scan it thoroughly for calendar events to add.""")
 
     # 3. Block Unregistered School Camps & Registration Solicitations
     if rules.get("filter_unregistered_camps", True):
@@ -388,11 +390,11 @@ def build_parsing_prompt_instructions(settings: dict) -> str:
     # 7. Promotions, Deliveries & Marketing Filter
     filter_items = []
     if rules.get("filter_class_actions_and_legal", True):
-        filter_items.append("  * STRICTLY REJECT class action settlement notices, claim form deadlines, and court hearings (e.g. 'CVS Class Action Settlement Claim Form Deadline', 'Final Approval Hearing', 'Settlement Administrator notice'). These are legal notices, NOT personal calendar appointments.")
+        filter_items.append("  * STRICTLY REJECT class action settlement notices, claim form deadlines, and court hearings (e.g. 'CVS Class Action Settlement Claim Form Deadline', 'CVS Class Action Final Approval Hearing', 'Final Approval Hearing', 'Settlement Administrator notice', 'proposed settlement'). These are legal notices, NOT personal calendar appointments.")
     if rules.get("filter_loyalty_and_rewards_deadlines", True):
         filter_items.append("  * STRICTLY REJECT rewards, points, or loyalty program partnership deadlines (e.g. 'Link World of Hyatt and American Airlines accounts deadline', 'Points expiration warning', 'Transfer bonus ending'). These are marketing program announcements, NOT calendar appointments.")
     if rules.get("filter_public_festivals_and_events", True):
-        filter_items.append("  * STRICTLY REJECT public social events, festivals, tastings, expos, concerts, sporting event ticket solicitations, and community fairs (e.g. '11th Annual Whiskey Social', 'Beer Fest', 'Wine Walk', 'Food & Wine Festival', 'Concert Tour', 'Tickets On Sale Now') UNLESS the email is an EXPLICIT ticket purchase receipt, order confirmation, ticket barcode, or calendar invite (ICS) showing the user has ACTUALLY purchased tickets or registered. If it is merely an announcement, newsletter, or invitation to buy tickets, return empty events [] with reason 'Promotional event/festival solicitation without confirmed ticket purchase or registration'.")
+        filter_items.append("  * STRICTLY REJECT public social events, festivals, tastings, expos, concerts, sporting event ticket solicitations, community fairs, church/club speaker breakfast/luncheon flyers, and optional meal/food preorder deadlines (e.g. '11th Annual Whiskey Social', 'Beer Fest', 'Men\\'s Bible Breakfast', 'Dr. McCullough Speaking at Marty B\\'s', 'Tailgate Meal Preorder Deadline', 'Community Tailgate') UNLESS the email is an EXPLICIT ticket purchase receipt, paid order confirmation, confirmed RSVP, ticket barcode, or calendar invite (.ics) showing the user ALREADY registered or purchased. NEVER fabricate 'attended by Dominic' for unconfirmed announcements or flyers. If it is merely an announcement, newsletter, speaker flyer, preorder solicitation, or invitation, return empty events [] with reason 'Promotional/community event or preorder solicitation without confirmed registration, RSVP, or purchase'.")
         filter_items.append("  * Midnight / All-Day default notice: Do NOT fabricate midnight (12:00:00 AM) events from general marketing date mentions.")
     if rules.get("filter_promotions_and_travel", True):
         filter_items.append("  * Ignore marketing promotions, rewards deadlines (e.g. 'deadline to book Atmos Rewards Global Getaways by TOMORROW', 'Daily Drop Pro sale ending on Sept 8'). Ignore promotional offers and travel news.")
@@ -439,7 +441,7 @@ def clean_display_event_title(title: str, child_names=None, self_name="Dominic")
         child_names = ["Leo", "Ellie", "Gia"]
     t = title.strip()
     
-    for name in child_names + [self_name, "Wife"]:
+    for name in child_names + ["Kids", self_name, "Wife"]:
         esc_name = re.escape(str(name or ""))
         if not esc_name:
             continue
@@ -459,6 +461,135 @@ def clean_display_event_title(title: str, child_names=None, self_name="Dominic")
     t = re.sub(r'\s+-\s*-\s+', ' - ', t)
     t = re.sub(r'\s{2,}', ' ', t).strip()
     return t
+
+_SCHOOL_WIDE_EVENT_PATTERNS = (
+    r'\bjeans\s+day\b',
+    r'\bspirit\s+(?:day|week)\b',
+    r'\bdress[\s\-]+up\s+day\b',
+    r'\bfree\s+dress\b',
+    r'\bpajama\s+day\b',
+    r'\bpicture\s+day\b',
+    r'\bbook\s+fair\b',
+    r'\bfield\s+day\b',
+    r'\ball[\s\-]+school\b',
+    r'\bschool[\s\-]+wide\b',
+    r'\bgeneral\s+school\b',
+    r'\bschool\s+community\b',
+    r'\bschool\s+holiday\b',
+    r'\bno\s+school\b',
+    r'\bearly\s+(?:dismissal|release)\b',
+    r'\bhalf[\s\-]+day\b',
+    r'\bstudent\s+holiday\b',
+    r'\bteacher\s+work\s*day\b',
+    r'\bin[\s\-]?service\b',
+    r'\bmeet\s+the\s+teacher\b',
+    r'\bopen\s+house\b',
+    r'\bback\s+to\s+school\b',
+    r'\bgrandparents[\'\u2019]?\s+day\b',
+    r'\bhomecoming\b',
+    r'\bpep\s+rally\b',
+    r'\bchapel\b',
+    r'\blower\s+school\b',
+    r'\b(?:fall|spring|thanksgiving|christmas|winter)\s+break\b',
+)
+
+_ADULT_OR_ALUMNI_EXCLUSION_PATTERNS = (
+    r'\bclass\s+of\s+2006\b',
+    r'\balumni\b',
+    r'\breunion\b',
+    r'\btuition\b',
+    r'\bfactsmgt\b',
+    r'\binvoice\b',
+    r'\btax\s+statement\b',
+    r'\bparents[\'\u2019]?\s+night\s+out\b',
+)
+
+def _get_child_schools(settings: dict) -> list:
+    """Returns normalized lowercase school names configured for children in the family profile."""
+    family = settings.get("family_profile") or DEFAULT_FAMILY_PROFILE
+    schools = []
+    for m in family.get("members", []):
+        if m.get("role") == "child" and m.get("school"):
+            s = str(m.get("school")).strip().lower()
+            if s and s not in schools:
+                schools.append(s)
+    if not schools:
+        schools = ["liberty christian school"]
+    if any("liberty christian" in s for s in schools) and "liberty christian" not in schools:
+        schools.append("liberty christian")
+    return schools
+
+def _is_school_kids_event(title: str, desc: str, loc: str, subject: str, body: str, settings: dict) -> bool:
+    """Detects whether an event is a kids' or school-wide event (rather than a personal adult/alumni event)."""
+    event_blob = f"{title} {desc} {loc}".lower()
+    full_blob = f"{event_blob} {subject} {body}".lower()
+
+    if any(re.search(pat, full_blob) for pat in _ADULT_OR_ALUMNI_EXCLUSION_PATTERNS):
+        return False
+
+    if any(re.search(pat, event_blob) for pat in _SCHOOL_WIDE_EVENT_PATTERNS):
+        return True
+
+    schools = _get_child_schools(settings)
+    if any(sch in event_blob for sch in schools):
+        return True
+
+    # Also catch explicit school-event context in subject when location/title is generic (e.g. "Jeans Day")
+    if any(sch in f"{subject} {loc}".lower() for sch in schools) and any(
+        re.search(pat, full_blob) for pat in _SCHOOL_WIDE_EVENT_PATTERNS
+    ):
+        return True
+    return False
+
+def _match_children_in_text(text: str, members: list) -> list:
+    """Returns distinct child names matched by name, grade, or sport in the given text."""
+    low = f" {(text or '').lower()} "
+    matched = []
+
+    def add_match(name: str):
+        if name and name not in matched:
+            matched.append(name)
+
+    if re.search(r'\bleo\b|\b2nd\s+grade\b|\bsecond\s+grade\b', low):
+        add_match("Leo")
+    if re.search(r'\bellie\b|\b6th\s+grade\b|\bsixth\s+grade\b|\bmiddle\s+school\b|\bxc\b|\bcross\s+country\b|\bsoccer\b|\btrack\b', low):
+        add_match("Ellie")
+    if re.search(r'\bgia\b|\b9th\s+grade\b|\bninth\s+grade\b|\bsoftball\b|\bhigh\s+school\b', low):
+        add_match("Gia")
+
+    # Support any additional dynamically configured children in family_profile
+    for m in members:
+        if m.get("role") != "child":
+            continue
+        name = (m.get("name") or "").strip()
+        if not name or name in ("Leo", "Ellie", "Gia"):
+            continue
+        if re.search(rf'\b{re.escape(name.lower())}\b', low):
+            add_match(name)
+            continue
+        grade = (m.get("grade") or "").strip().lower()
+        if grade and grade in low:
+            add_match(name)
+            continue
+        for sp in str(m.get("sports") or "").split(","):
+            sp_clean = sp.strip().lower()
+            if len(sp_clean) >= 2 and re.search(rf'\b{re.escape(sp_clean)}\b', low):
+                add_match(name)
+                break
+    return matched
+
+def _replace_or_append_person_suffix(title: str, person: str, names_to_replace: list) -> str:
+    """Replaces an existing trailing person suffix (if in names_to_replace) or appends '- person'."""
+    t = (title or "").strip()
+    for n in names_to_replace:
+        esc_n = re.escape(str(n or ""))
+        if not esc_n:
+            continue
+        t_new = re.sub(rf'(?:\s*-\s*{esc_n}|\s*[\(\[]\s*{esc_n}\s*[\)\]])$', '', t, flags=re.IGNORECASE).strip()
+        if t_new != t:
+            t = t_new
+            break
+    return f"{t} - {person}" if person else t
 
 def post_process_extracted_event(e: dict, settings: dict, subject: str, body: str) -> Optional[dict]:
     rules = settings.get("parsing_rules") or DEFAULT_PARSING_RULES
@@ -495,6 +626,9 @@ def post_process_extracted_event(e: dict, settings: dict, subject: str, body: st
             r'claim\s+form\s+deadline',
             r'final\s+approval\s+hearing',
             r'fairness\s+hearing',
+            r'settlement\s+hearing',
+            r'proposed\s+settlement',
+            r'opt[\s\-]?out\s+deadline',
             r'settlement\s+administrator',
             r'notice\s+of\s+(?:proposed\s+)?settlement',
             r'proposed\s+class\s+action',
@@ -523,7 +657,7 @@ def post_process_extracted_event(e: dict, settings: dict, subject: str, body: st
             logger.info(f"Filtered loyalty / rewards program deadline: '{title}'")
             return None
 
-    # Filter unconfirmed public festivals, socials, tastings & ticket solicitations
+    # Filter unconfirmed public festivals, socials, tastings, community speaker flyers & meal preorder solicitations
     if rules.get("filter_public_festivals_and_events", True):
         ticket_solicitation_patterns = [
             r'tickets\s+(?:are\s+)?on\s+sale',
@@ -540,20 +674,35 @@ def post_process_extracted_event(e: dict, settings: dict, subject: str, body: st
             r'whiskey\s+social',
             r'whiskey\s+tasting',
             r'beer\s+festival',
-            r'wine\s+festival'
+            r'wine\s+festival',
+            r'\bpre[\s\-]?order\b.*?\b(?:meal|meals|dinner|lunch|food|tailgate|shirt|t[\s\-]?shirt)\b',
+            r'\b(?:meal|meals|dinner|lunch|food|tailgate)\s+pre[\s\-]?order\b',
+            r'\bdeadline\s+to\s+pre[\s\-]?order\b',
+            r'\bcommunity\s+tailgate\b',
+            r'\bmen\'?s\s+bible\s+breakfast\b',
+            r'\bbible\s+breakfast\b',
+            r'\bspeaking\s+at\b',
+            r'\bguest\s+speaker\b',
+            r'\bbreakfast,?\s+coffee,?\s+worship\b',
+            r'\bcommunity\s+(?:breakfast|luncheon|fellowship|mixer)\b',
+            r'\bopen\s+to\s+(?:all|the\s+community|the\s+public)\b',
+            r'\beveryone\s+is\s+invited\b',
+            r'\bno\s+rsvp\s+required\b',
         ]
         has_confirmed_ticket = any(kw in full_context for kw in [
             "order confirmation", "order #", "confirmation #", "ticket receipt", "your tickets are attached",
-            "receipt for your purchase", "you're attending", "you are registered", "ticket confirmation", "barcode",
-            "thank you for your order", "thank you for your purchase", "rsvp: accepted", "accepted invitation"
+            "receipt for your purchase", "you're attending", "you are registered", "registration confirmed",
+            "rsvp confirmed", "thank you for registering", "ticket confirmation", "barcode",
+            "thank you for your order", "thank you for your purchase", "rsvp: accepted", "accepted invitation",
+            "calendar invitation"
         ])
         
         is_festival_or_solicitation = any(re.search(pat, full_context) for pat in ticket_solicitation_patterns) or (
-            any(kw in title.lower() for kw in ["annual", "festival", "whiskey", "tasting", "expo", "social"]) and any(kw in full_context for kw in ["tasting", "whiskey", "beer", "wine", "sponsor", "admission", "exceptional whiskeys"])
+            any(kw in title.lower() for kw in ["annual", "festival", "whiskey", "tasting", "expo", "social", "preorder", "pre-order"]) and any(kw in full_context for kw in ["tasting", "whiskey", "beer", "wine", "sponsor", "admission", "exceptional whiskeys", "preorder", "pre-order", "tailgate"])
         )
         
         if is_festival_or_solicitation and not has_confirmed_ticket:
-            logger.info(f"Filtered unconfirmed public festival/event solicitation: '{title}'")
+            logger.info(f"Filtered unconfirmed public/community event or preorder solicitation: '{title}'")
             return None
 
     # 2. Marketing / Travel / Flash Sales filter
@@ -638,32 +787,68 @@ def post_process_extracted_event(e: dict, settings: dict, subject: str, body: st
         # Clean any embedded or trailing parentheticals like (Leo - 2nd Grade), (2nd Grade), etc.
         title = clean_display_event_title(title, child_names=child_names, self_name=self_name)
 
-        # Check if title already ends with any valid name suffix
-        all_possible_names = child_names + [self_name, "Wife"]
+        all_possible_names = child_names + ["Kids", self_name, "Wife"]
         has_name_suffix = any(title.strip().endswith(f"- {n}") or title.strip().endswith(f"({n})") for n in all_possible_names)
+        ends_with_self = title.strip().endswith(f"- {self_name}") or title.strip().endswith(f"({self_name})")
+        is_kids_school = _is_school_kids_event(title, desc, loc, subject, body, settings)
 
-        if not has_name_suffix:
+        # Match single vs multiple children in event title/description first so school newsletter footers don't hijack school-wide events
+        event_text = f"{title} {desc}"
+        event_matches = _match_children_in_text(event_text, members)
+        is_explicit_school_wide = any(re.search(pat, event_text.lower()) for pat in _SCHOOL_WIDE_EVENT_PATTERNS)
+
+        if not has_name_suffix or (ends_with_self and is_kids_school):
             matched_person = None
-            if "leo" in full_context or "2nd grade" in full_context or "second grade" in full_context:
-                matched_person = "Leo"
-            elif "ellie" in full_context or "6th grade" in full_context or "sixth grade" in full_context or "middle school" in full_context or " xc " in f" {full_context} " or "soccer" in full_context or "track" in full_context:
-                matched_person = "Ellie"
-            elif "gia" in full_context or "9th grade" in full_context or "ninth grade" in full_context or "softball" in full_context or "high school" in full_context:
-                matched_person = "Gia"
-            elif rules.get("label_non_child_for_self", True):
-                matched_person = self_name
+            if len(event_matches) > 1:
+                matched_person = "Kids"
+            elif len(event_matches) == 1:
+                matched_person = event_matches[0]
+            elif is_kids_school:
+                # Only narrow a school event to a single child from email body if it isn't explicitly school-wide
+                if not is_explicit_school_wide:
+                    body_matches = _match_children_in_text(f"{subject} {body}", members)
+                    matched_person = body_matches[0] if len(body_matches) == 1 else "Kids"
+                else:
+                    matched_person = "Kids"
+            else:
+                ctx_matches = _match_children_in_text(full_context, members)
+                if len(ctx_matches) > 1:
+                    matched_person = "Kids"
+                elif len(ctx_matches) == 1:
+                    matched_person = ctx_matches[0]
+                elif rules.get("label_non_child_for_self", True):
+                    matched_person = self_name
 
             if matched_person:
-                title = f"{title} - {matched_person}"
+                title = _replace_or_append_person_suffix(title, matched_person, [self_name])
+                if ends_with_self and matched_person != self_name and desc:
+                    replacement_target = "the kids" if matched_person == "Kids" else matched_person
+                    desc = re.sub(
+                        rf'\btracked\s+for\s+{re.escape(self_name)}\b',
+                        f'tracked for {replacement_target}',
+                        desc,
+                        flags=re.IGNORECASE
+                    )
+                    desc = re.sub(
+                        rf'\bpersonal\s+event\s+for\s+{re.escape(self_name)}\.?\s*',
+                        '',
+                        desc,
+                        flags=re.IGNORECASE
+                    ).strip()
 
     # 10. Robust description enhancement
-    if "ellie" in title.lower() and "ellie" not in desc.lower():
+    title_low = title.lower()
+    desc_low = desc.lower()
+    if title_low.endswith("- kids") or "(kids)" in title_low:
+        if "kids" not in desc_low and not any(n in desc_low for n in ("gia", "ellie", "leo")):
+            desc = f"School event for the kids (Gia, Ellie & Leo). {desc}".strip()
+    elif "ellie" in title_low and "ellie" not in desc_low:
         desc = f"Event for Ellie (6th Grade XC, Soccer & Track). {desc}".strip()
-    elif "gia" in title.lower() and "gia" not in desc.lower():
+    elif "gia" in title_low and "gia" not in desc_low:
         desc = f"Event for Gia (9th Grade Softball). {desc}".strip()
-    elif "leo" in title.lower() and "leo" not in desc.lower():
+    elif "leo" in title_low and "leo" not in desc_low:
         desc = f"Event for Leo (2nd Grade). {desc}".strip()
-    elif "dominic" in title.lower() and "dominic" not in desc.lower():
+    elif "dominic" in title_low and "dominic" not in desc_low:
         desc = f"Personal event for Dominic. {desc}".strip()
 
     e["title"] = title
@@ -1709,9 +1894,55 @@ class ModelRequest(BaseModel):
     provider: str
     api_key: str
 
+def _resolve_ollama_endpoint() -> str | None:
+    custom = os.environ.get("OLLAMA_HOST", "").strip()
+    candidates = [u.strip().rstrip("/") for u in custom.split(",") if u.strip()] if custom else [
+        "http://192.168.10.78:11434",
+        "http://192.168.1.68:11434",
+        "http://127.0.0.1:11434",
+    ]
+    for base in candidates:
+        try:
+            req = urllib.request.Request(f"{base}/api/tags", headers={"Accept": "application/json"})
+            with urllib.request.urlopen(req, timeout=1.2) as resp:
+                if resp.status == 200:
+                    return base
+        except Exception:
+            continue
+    return None
+
+def _call_rtx3080_ollama(system_prompt: str, user_prompt: str, model_name: str = "qwen2.5:3b", temperature: float = 0.2) -> str | None:
+    base = _resolve_ollama_endpoint()
+    if not base:
+        return None
+    active_model = model_name if (model_name and "gemini" not in model_name.lower() and not model_name.startswith("gpt")) else "qwen2.5:3b"
+    client = openai.OpenAI(base_url=f"{base}/v1", api_key="ollama", timeout=25.0)
+    response = client.chat.completions.create(
+        model=active_model,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        temperature=temperature,
+    )
+    return (response.choices[0].message.content or "").strip()
+
 @app.post("/api/models", dependencies=[Depends(verify_auth)])
 def get_models(req: ModelRequest):
     api_key = req.api_key
+    if req.provider == "ollama":
+        base = _resolve_ollama_endpoint()
+        if not base:
+            return {"models": ["qwen2.5:3b"]}
+        try:
+            http_req = urllib.request.Request(f"{base}/api/tags", headers={"Accept": "application/json"})
+            with urllib.request.urlopen(http_req, timeout=3.0) as resp:
+                if resp.status == 200:
+                    payload = json.loads(resp.read().decode("utf-8"))
+                    models = [m.get("name") for m in payload.get("models", []) if isinstance(m, dict) and m.get("name")]
+                    return {"models": models or ["qwen2.5:3b"]}
+        except Exception:
+            return {"models": ["qwen2.5:3b"]}
     if not api_key:
         return {"models": []}
     models_list = []
@@ -1931,14 +2162,18 @@ def extract_event(text: str, date: datetime, subject: str, settings: dict) -> di
         
     result = ""
     try:
-        if provider == "gemini":
+        if provider == "ollama":
+            result = _call_rtx3080_ollama("Extract calendar events cleanly.", prompt, model_name=model_name, temperature=0.2) or ""
+        elif provider == "gemini" and settings.get("gemini_api_key"):
             genai.configure(api_key=settings.get("gemini_api_key"))
             model = genai.GenerativeModel(model_name)
             result = model.generate_content(prompt).text.strip()
-        elif provider == "openai":
+        elif provider == "openai" and settings.get("openai_api_key"):
             client = openai.OpenAI(api_key=settings.get("openai_api_key"))
             response = client.chat.completions.create(model=model_name, messages=[{"role": "user", "content": prompt}], temperature=0.2)
             result = response.choices[0].message.content.strip()
+        if not result:
+            result = _call_rtx3080_ollama("Extract calendar events cleanly.", prompt, model_name="qwen2.5:3b", temperature=0.2) or ""
             
         clean_result = result
         if clean_result.startswith("```json"):
@@ -3127,6 +3362,9 @@ async def read_index():
 
 @app.get("/favicon.ico")
 async def favicon():
+    logo_path = os.path.join("static", "images", "ai-helper-logo.jpg")
+    if os.path.exists(logo_path):
+        return FileResponse(logo_path, media_type="image/jpeg")
     svg_icon = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">⚡</text></svg>'
     return Response(content=svg_icon, media_type="image/svg+xml")
 
@@ -3590,38 +3828,62 @@ def get_user_deal_preferences(settings: dict) -> dict:
         "disliked_keywords": list(prefs.get("disliked_keywords", DEFAULT_DEAL_PREFERENCES["disliked_keywords"]))
     }
 
+_MEAT_SEAFOOD_PATTERN = re.compile(
+    r'\b(?:'
+    r'beef|steak|steaks|chicken|pork|rib|ribs|roast|roasts|bacon|salmon|fish|catfish|'
+    r'shrimp|lobster|crab|turkey|sausage|sausages|chop|chops|wing|wings|meat|patty|patties|'
+    r'frank|franks|hot\s+dog|hot\s+dogs|ground\s+chuck|ground\s+round|brisket|sirloin|'
+    r'ribeye|tenderloin|t-bone|porterhouse|drumstick|drumsticks|thigh|thighs|tender|tenders|'
+    r'cod|tilapia|halibut|tuna|ham|hams|lamb|veal|loin|filet|filets|brat|brats|bratwurst|'
+    r'meatball|meatballs|strip\s+steak|strip\s+steaks|new\s+york\s+strip|york\s+strip|'
+    r'pepperoni|smokies|prime\s+rib'
+    r')\b',
+    re.IGNORECASE
+)
+
 def guess_deal_category(item_name: str) -> str:
     name = (item_name or '').lower()
-    # Meat & Seafood (prioritized)
-    if any(w in name for w in ['beef', 'steak', 'chicken', 'pork', 'rib', 'roast', 'bacon', 'salmon', 'fish', 'shrimp', 'lobster', 'crab', 'turkey', 'sausage', 'chop', 'wings', 'meat', 'patty', 'patties', 'frank', 'hot dog', 'ground chuck', 'ground round', 'brisket', 'sirloin', 'ribeye', 'tenderloin', 't-bone', 'drumstick', 'thigh', 'tender', 'cod', 'tilapia', 'halibut', 'tuna', 'ham', 'lamb', 'veal', 'loin', 'filet', 'brats', 'bratwurst', 'meatballs', 't-bone', 'strip']):
-        return 'Meat & Seafood'
-    # Furniture & Patio
+    # 1. Non-food Household & Personal items first (prevents "parchment paper for fried chicken wings" matching Meat)
+    if re.search(
+        r'\b(?:air\s+fryer\s+liners?|liners?|parchment|baking\s+paper|wax\s+paper|paper\s+towels?|toilet\s+paper|'
+        r'detergent|tide|shampoo|soap|cleaner|swiffer|bleach|tissue|foil|aluminum\s+foil|wipes?|diapers?|'
+        r'trash\s+bags?|toothpaste|deodorant|body\s+wash|fabric\s+softener|dish\s+soap|ziploc|charcoal|disposable)\b',
+        name
+    ):
+        return 'Household & Personal'
+    # 2. Furniture & Patio
     if any(w in name for w in ['patio', 'furniture', 'chair', 'table', 'umbrella', 'gazebo', 'cushion', 'grill tool', 'fire pit', 'outdoor seating', 'recliner', 'bench', 'lounger', 'lawn mower', 'adirondack', 'planter', 'storage box', 'hammock', 'canopy']):
         return 'Furniture & Patio'
-    # Canned Goods & Soups
+    # 3. Canned Goods & Soups (before Meat so chicken broth/soup stays canned)
     if any(w in name for w in ['soup', 'campbell', 'progresso', 'canned', 'broth', 'bouillon', 'canned beans', 'canned corn', 'canned tomato', 'spaghetti-o']):
         return 'Canned Goods & Soups'
-    # Produce
+    # 4. Dry pantry mixes & flavorings (prevents "Stove Top Stuffing Mix ... Turkey" matching Meat)
+    if re.search(r'\b(?:stuffing|stuffing\s+mix|gravy|marinade|seasoning|ramen|pasta|noodle|noodles|macaroni|hamburger\s+helper|tuna\s+helper)\b', name):
+        return 'Pantry & Dry Goods'
+    # 5. Salad kits & leafy greens before Meat (prevents "Chopped Salad Kits" matching "chop")
+    if re.search(r'\b(?:salad\s+kits?|chopped\s+salad|lettuce|spinach|kale|greens|coleslaw)\b', name) and not re.search(r'\b(?:chicken|tuna|egg|ham|crab|shrimp)\s+salad\b', name):
+        return 'Produce'
+    # 6. Meat & Seafood (word-boundary matched)
+    if _MEAT_SEAFOOD_PATTERN.search(name):
+        return 'Meat & Seafood'
+    # 7. Produce
     if any(w in name for w in ['apple', 'berry', 'berries', 'grape', 'banana', 'peach', 'melon', 'watermelon', 'cantaloupe', 'salad', 'lettuce', 'tomato', 'potato', 'onion', 'avocado', 'zucchini', 'vegetable', 'fruit', 'lemon', 'lime', 'citrus', 'nectarine', 'cherry', 'spinach', 'kale', 'carrot', 'broccoli', 'asparagus', 'cucumber', 'pepper', 'bell pepper', 'squash', 'mango', 'pineapple', 'strawberries', 'blueberries', 'raspberries', 'mushrooms', 'garlic', 'celery']):
         return 'Produce'
-    # Dairy & Eggs
+    # 8. Dairy & Eggs
     if any(w in name for w in ['milk', 'cheese', 'yogurt', 'butter', 'cream', 'egg', 'eggs', 'dairy', 'sour cream', 'creamer', 'cheddar', 'mozzarella', 'parmesan', 'swiss', 'cottage cheese', 'half & half', 'half and half']):
         return 'Dairy & Eggs'
-    # Frozen
+    # 9. Frozen
     if any(w in name for w in ['frozen', 'ice cream', 'pizza', 'novelties', 'fillet', 'waffles', 'popsicle', 'icecream', 'gelato', 'tater tots', 'hot pockets']):
         return 'Frozen'
-    # Beverages
+    # 10. Beverages
     if any(w in name for w in ['water', 'soda', 'coke', 'pepsi', 'drink', 'coffee', 'tea', 'juice', 'beer', 'wine', 'gatorade', 'shake', 'beverage', 'seltzer', 'dr pepper', 'sprite', 'lemonade', 'sparkling water', 'energy drink']):
         return 'Beverages'
-    # Bakery & Deli
+    # 11. Bakery & Deli
     if any(w in name for w in ['bread', 'buns', 'bakery', 'cake', 'pie', 'cookie', 'deli', 'croissant', 'tortilla', 'bagel', 'muffin', 'pastry', 'donut', 'cupcake', 'sourdough', 'rolls', 'sub sandwich', 'rotisserie']):
         return 'Bakery & Deli'
-    # Snacks
+    # 12. Snacks
     if any(w in name for w in ['chip', 'snack', 'candy', 'chocolate', 'nuts', 'cracker', 'popcorn', 'pretzels', 'doritos', 'lays', 'cheetos', 'tortilla chips', 'trail mix', 'granola bar', 'gummies']):
         return 'Snacks'
-    # Household & Personal
-    if any(w in name for w in ['paper', 'towel', 'detergent', 'tide', 'shampoo', 'soap', 'cleaner', 'swiffer', 'bleach', 'tissue', 'foil', 'wipe', 'diaper', 'trash bag', 'toothpaste', 'deodorant', 'body wash', 'fabric softener', 'dish soap', 'ziploc', 'charcoal']):
-        return 'Household & Personal'
     return 'Pantry & Dry Goods'
 
 def stem_word(w: str) -> str:
@@ -3760,6 +4022,9 @@ def sanitize_deal_price_and_notes(price_str: str, notes_str: str = "") -> tuple:
         else:
             p = 'Special Promo'
             
+    # Preserve /lb unit when plain dollar price has per-lb context in notes
+    if re.match(r'^\$\d+(?:\.\d{1,2})?$', p) and re.search(r'(?:/|\bper\s+|\b)lb\.?\b', n, re.I):
+        p = f"{p}/lb"
     return p, n
 
 def parse_numeric_price(price_str: str) -> dict:
@@ -3836,8 +4101,9 @@ def detect_beef_grade(item_name: str, category: str = "") -> str:
     if not is_beef:
         return ""
         
-    # Detect grade
-    if re.search(r'\b(?:usda\s*prime|prime\s*1|prime\s*beef|prime\s*choice\s*n\/a|prime)\b', name):
+    # Detect grade (avoid falsely tagging cut name "Prime Rib" as USDA Prime grade)
+    grade_text = re.sub(r'\bprime\s+rib\b', 'standing_rib', name)
+    if re.search(r'\b(?:usda\s*prime|prime\s*1|prime\s*beef|prime\s*choice\s*n\/a|prime)\b', grade_text):
         return "prime"
     if re.search(r'\b(?:usda\s*choice|choice\s*beef|choice)\b', name):
         return "choice"
@@ -4179,7 +4445,7 @@ def clean_deal_name(name: str) -> str:
     n = re.sub(r'\s+', ' ', n)
     return n
 
-def format_deal_price_and_notes(raw_price, sale_story: Optional[str], description: Optional[str], brand: Optional[str], clean_name: str):
+def format_deal_price_and_notes(raw_price, sale_story: Optional[str], description: Optional[str], brand: Optional[str], clean_name: str, post_price: Optional[str] = ""):
     price_str = ''
     notes_parts = []
     
@@ -4189,6 +4455,10 @@ def format_deal_price_and_notes(raw_price, sale_story: Optional[str], descriptio
             price_str = f"${fval:.2f}"
         except Exception:
             price_str = str(raw_price).strip()
+
+    unit_context = f"{post_price or ''} {sale_story or ''} {description or ''}".lower()
+    if price_str and re.match(r'^\$\d+(?:\.\d{1,2})?$', price_str) and re.search(r'(?:/|\bper\s+|\b)lb\.?\b', unit_context):
+        price_str = f"{price_str}/lb"
             
     if sale_story:
         ss = sale_story.strip()
@@ -4247,11 +4517,12 @@ def _fetch_single_flipp_flyer(f: dict, postal_code: str, headers: dict, ctx: ssl
                     continue
                 
                 raw_price = it.get('price') or it.get('current_price') or ''
+                post_price = it.get('post_price_text') or it.get('price_text') or ''
                 sale_story = it.get('sale_story') or ''
                 desc = it.get('description') or ''
                 brand = it.get('brand') or ''
                 
-                price_str, notes_str = format_deal_price_and_notes(raw_price, sale_story, desc, brand, clean_name)
+                price_str, notes_str = format_deal_price_and_notes(raw_price, sale_story, desc, brand, clean_name, post_price=post_price)
                 
                 img_url = it.get('cutout_image_url') or it.get('clean_image_url') or it.get('clipping_image_url') or it.get('image_url') or it.get('original_image_url') or ''
                 if img_url.startswith('//'):
@@ -4456,11 +4727,12 @@ def fetch_flipp_store_deals(postal_code: str = '76262', store_name_filter: Optio
                                 continue
                             
                             s_raw_price = sit.get('current_price') or sit.get('price') or ''
+                            s_post_price = sit.get('post_price_text') or sit.get('price_text') or ''
                             s_sale = sit.get('sale_story') or ''
                             s_desc = sit.get('description') or ''
                             s_brand = sit.get('brand') or ''
                             
-                            s_price_str, s_notes_str = format_deal_price_and_notes(s_raw_price, s_sale, s_desc, s_brand, clean_name)
+                            s_price_str, s_notes_str = format_deal_price_and_notes(s_raw_price, s_sale, s_desc, s_brand, clean_name, post_price=s_post_price)
                             
                             s_img = sit.get('cutout_image_url') or sit.get('clean_image_url') or sit.get('clipping_image_url') or sit.get('image_url') or sit.get('original_image_url') or ''
                             if s_img.startswith('//'):
@@ -4547,25 +4819,31 @@ def extract_store_deals_with_ai(store_name: str, page_content: str, settings: di
     model_name = settings.get("ai_model", "gemini-1.5-flash") or "gemini-1.5-flash"
     result_text = ""
     try:
-        if provider == "gemini":
+        if provider == "ollama":
+            result_text = _call_rtx3080_ollama("You extract grocery deals and return pure valid JSON.", prompt, model_name=model_name) or ""
+        elif provider == "gemini":
             api_key = settings.get("gemini_api_key", "")
-            if not api_key: return []
-            genai.configure(api_key=api_key)
-            model = genai.GenerativeModel(model_name)
-            response = model.generate_content(prompt)
-            result_text = response.text
+            if api_key:
+                genai.configure(api_key=api_key)
+                model = genai.GenerativeModel(model_name)
+                response = model.generate_content(prompt)
+                result_text = response.text
         elif provider == "openai":
             api_key = settings.get("openai_api_key", "")
-            if not api_key: return []
-            client = openai.OpenAI(api_key=api_key)
-            response = client.chat.completions.create(
-                model=model_name,
-                messages=[
-                    {"role": "system", "content": "You extract grocery deals and return pure valid JSON."},
-                    {"role": "user", "content": prompt}
-                ]
-            )
-            result_text = response.choices[0].message.content
+            if api_key:
+                client = openai.OpenAI(api_key=api_key)
+                response = client.chat.completions.create(
+                    model=model_name,
+                    messages=[
+                        {"role": "system", "content": "You extract grocery deals and return pure valid JSON."},
+                        {"role": "user", "content": prompt}
+                    ]
+                )
+                result_text = response.choices[0].message.content
+        if not result_text:
+            result_text = _call_rtx3080_ollama("You extract grocery deals and return pure valid JSON.", prompt, model_name="qwen2.5:3b") or ""
+        if not result_text:
+            return []
     except Exception as e:
         logger.error(f"Error extracting store deals for {store_name}: {e}")
         return []
@@ -4625,25 +4903,31 @@ def query_ai_deals_and_prices(user_query: str, store_deals_data: list, settings:
     model_name = settings.get("ai_model", "gemini-1.5-flash") or "gemini-1.5-flash"
     result_text = ""
     try:
-        if provider == "gemini":
+        if provider == "ollama":
+            result_text = _call_rtx3080_ollama("You compare grocery prices and return JSON.", prompt, model_name=model_name) or ""
+        elif provider == "gemini":
             api_key = settings.get("gemini_api_key", "")
-            if not api_key: return {"error": "Gemini API key missing in Settings"}
-            genai.configure(api_key=api_key)
-            model = genai.GenerativeModel(model_name)
-            response = model.generate_content(prompt)
-            result_text = response.text
+            if api_key:
+                genai.configure(api_key=api_key)
+                model = genai.GenerativeModel(model_name)
+                response = model.generate_content(prompt)
+                result_text = response.text
         elif provider == "openai":
             api_key = settings.get("openai_api_key", "")
-            if not api_key: return {"error": "OpenAI API key missing in Settings"}
-            client = openai.OpenAI(api_key=api_key)
-            response = client.chat.completions.create(
-                model=model_name,
-                messages=[
-                    {"role": "system", "content": "You compare grocery prices and return JSON."},
-                    {"role": "user", "content": prompt}
-                ]
-            )
-            result_text = response.choices[0].message.content
+            if api_key:
+                client = openai.OpenAI(api_key=api_key)
+                response = client.chat.completions.create(
+                    model=model_name,
+                    messages=[
+                        {"role": "system", "content": "You compare grocery prices and return JSON."},
+                        {"role": "user", "content": prompt}
+                    ]
+                )
+                result_text = response.choices[0].message.content
+        if not result_text:
+            result_text = _call_rtx3080_ollama("You compare grocery prices and return JSON.", prompt, model_name="qwen2.5:3b") or ""
+        if not result_text:
+            return {"error": "No configured AI provider key or local RTX 3080 Ollama available"}
     except Exception as e:
         logger.error(f"Error running grocery deal query: {e}")
         return {"error": str(e)}
@@ -4687,25 +4971,31 @@ def ai_generate_grocery_list_items(prompt_text: str, store_deals_data: list, set
     model_name = settings.get("ai_model", "gemini-1.5-flash") or "gemini-1.5-flash"
     result_text = ""
     try:
-        if provider == "gemini":
+        if provider == "ollama":
+            result_text = _call_rtx3080_ollama("You build grocery lists and return valid JSON arrays.", prompt, model_name=model_name) or ""
+        elif provider == "gemini":
             api_key = settings.get("gemini_api_key", "")
-            if not api_key: return []
-            genai.configure(api_key=api_key)
-            model = genai.GenerativeModel(model_name)
-            response = model.generate_content(prompt)
-            result_text = response.text
+            if api_key:
+                genai.configure(api_key=api_key)
+                model = genai.GenerativeModel(model_name)
+                response = model.generate_content(prompt)
+                result_text = response.text
         elif provider == "openai":
             api_key = settings.get("openai_api_key", "")
-            if not api_key: return []
-            client = openai.OpenAI(api_key=api_key)
-            response = client.chat.completions.create(
-                model=model_name,
-                messages=[
-                    {"role": "system", "content": "You build grocery lists and return valid JSON arrays."},
-                    {"role": "user", "content": prompt}
-                ]
-            )
-            result_text = response.choices[0].message.content
+            if api_key:
+                client = openai.OpenAI(api_key=api_key)
+                response = client.chat.completions.create(
+                    model=model_name,
+                    messages=[
+                        {"role": "system", "content": "You build grocery lists and return valid JSON arrays."},
+                        {"role": "user", "content": prompt}
+                    ]
+                )
+                result_text = response.choices[0].message.content
+        if not result_text:
+            result_text = _call_rtx3080_ollama("You build grocery lists and return valid JSON arrays.", prompt, model_name="qwen2.5:3b") or ""
+        if not result_text:
+            return []
     except Exception as e:
         logger.error(f"Error generating grocery list with AI: {e}")
         return []
@@ -5258,7 +5548,9 @@ def get_personalized_deals_feed(
             "deals": deals
         })
         for d in deals:
-            d_cat = d.get("category", "Pantry & Dry Goods")
+            d_item = (d.get("item") or "").strip()
+            d_cat = guess_deal_category(d_item) if d_item else d.get("category", "Pantry & Dry Goods")
+            d["category"] = d_cat
             category_counts[d_cat] = category_counts.get(d_cat, 0) + 1
             all_raw_deals.append((s_name, r["ad_url"], d, r["valid_from"], r["valid_to"]))
             
@@ -10401,10 +10693,13 @@ def api_get_command_center_briefing(user_id: str = Depends(verify_auth)):
         today_events = [e for e in events if (e.get("date") or "")[:10] == today_iso]
         week_events = [e for e in events if (e.get("date") or "")[:10] <= week_end_iso]
 
-        family_counts = {"All": len(events), "Dominic": 0, "Wife": 0, "Gia": 0, "Ellie": 0, "Leo": 0}
+        family_counts = {"All": len(events), "Kids": 0, "Dominic": 0, "Wife": 0, "Gia": 0, "Ellie": 0, "Leo": 0}
         for e in events:
-            t_low = (e.get("title") or "").lower() + " " + (e.get("description") or "").lower()
-            if "gia" in t_low or "softball" in t_low:
+            title_low = (e.get("title") or "").lower().strip()
+            t_low = f"{title_low} {(e.get('description') or '').lower()} {(e.get('location') or '').lower()}"
+            if title_low.endswith("- kids") or title_low.endswith("(kids)") or "for the kids" in t_low or "all kids" in t_low:
+                family_counts["Kids"] += 1
+            elif "gia" in t_low or "softball" in t_low:
                 family_counts["Gia"] += 1
             elif "ellie" in t_low or " xc" in t_low or "soccer" in t_low or "track" in t_low:
                 family_counts["Ellie"] += 1

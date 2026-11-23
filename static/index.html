@@ -5,7 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#2563eb">
     <title>AI Helper — Intelligent Scheduling, Meals &amp; Local Deals</title>
-    <link rel="icon" type="image/svg+xml" href="/favicon.ico">
+    <meta name="description" content="AI Helper automatically scans incoming emails via IMAP, extracts family calendar events with AI, syncs to Google Calendar, and tracks local grocery deals and meal plans.">
+    <meta property="og:title" content="AI Helper — Intelligent Scheduling, Meals &amp; Local Deals">
+    <meta property="og:description" content="Self-hosted email-to-calendar intelligence, smart meal planning, and local grocery circular tracking.">
+    <meta property="og:image" content="/static/images/ai-helper-hero.jpg">
+    <link rel="icon" type="image/jpeg" href="/static/images/ai-helper-logo.jpg">
+    <link rel="apple-touch-icon" href="/static/images/ai-helper-logo.jpg">
     <style>
         :root {
             color-scheme: dark;
@@ -2265,7 +2270,7 @@
         <header style="background: rgba(13, 17, 23, 0.95); border-bottom: 1px solid #30363d; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); position: sticky; top: 0; z-index: 100; padding: 14px 16px;">
             <div style="max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
                 <div style="display: flex; align-items: center; gap: 10px;">
-                    <span style="font-size: 24px;">⚡</span>
+                    <img src="/static/images/ai-helper-logo.jpg" alt="AI Helper Logo" width="34" height="34" style="border-radius: 8px; object-fit: cover; border: 1px solid #30363d; display: block;">
                     <div>
                         <span style="font-size: 19px; font-weight: 800; color: #fff; letter-spacing: -0.5px;">AI Helper</span>
                         <span style="font-size: 11px; font-weight: 700; background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.4); padding: 2px 7px; border-radius: 9999px; margin-left: 6px;">v3.1</span>
@@ -2311,8 +2316,8 @@
                 <!-- Sign In Card Container -->
                 <div style="display: flex; justify-content: center;">
                     <div class="auth-box" id="auth-container" style="background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 32px 28px; width: 100%; max-width: 420px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.04);">
-                        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px;">
-                            <span style="font-size: 22px;">⚡</span>
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 8px;">
+                            <img src="/static/images/ai-helper-logo.jpg" alt="AI Helper" width="28" height="28" style="border-radius: 7px; object-fit: cover; border: 1px solid #30363d;">
                             <span style="font-size: 18px; font-weight: 700; color: #fff;">AI Helper Portal</span>
                         </div>
                         <h2 id="auth-title" style="margin: 0 0 18px 0; font-size: 20px; color: #e2e8f0; font-weight: 700;">Account Sign In</h2>
@@ -2332,6 +2337,11 @@
                         </div>
                     </div>
                 </div>
+            </div>
+
+            <!-- Product Workflow Showcase Banner -->
+            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 12px; margin-bottom: 50px; overflow: hidden;">
+                <img src="/static/images/ai-helper-hero.jpg" alt="AI Helper workflow showing email extraction to family calendar and grocery deals" style="width: 100%; max-height: 460px; object-fit: cover; border-radius: 8px; display: block;">
             </div>
 
             <!-- Dedicated Google Calendar Integration Section -->
@@ -2710,7 +2720,7 @@
             <div style="display: flex; align-items: center; gap: 10px;">
                 <button class="mobile-menu-btn" onclick="toggleMobileSidebar()" aria-label="Toggle navigation">☰</button>
                 <div class="mobile-brand">
-                    <span class="mobile-logo">⚡</span>
+                    <img src="/static/images/ai-helper-logo.jpg" alt="AI Helper" width="24" height="24" style="border-radius: 6px; object-fit: cover; display: block;">
                     <span class="mobile-title">AI Helper</span>
                     <span class="brand-badge-mini">v3.1</span>
                 </div>
@@ -2732,7 +2742,7 @@
             <div class="sidebar-top">
                 <!-- App Identity Header -->
                 <div class="brand-header">
-                    <div class="brand-icon-box">⚡</div>
+                    <div class="brand-icon-box" style="overflow: hidden; padding: 0;"><img src="/static/images/ai-helper-logo.jpg" alt="AI Helper" style="width: 100%; height: 100%; object-fit: cover; display: block;"></div>
                     <div>
                         <div class="brand-title-row">
                             <span class="brand-title">AI Helper</span>
@@ -2920,6 +2930,7 @@
                         <div>
                             <label style="font-size: 12px; color: #cbd5e1; display: block; margin-bottom: 4px;">Family Member</label>
                             <select id="qa-event-person" style="width: 100%; box-sizing: border-box; padding: 9px 12px; background: #0d1117; border: 1px solid #334155; border-radius: 6px; color: #fff; font-size: 13.5px;">
+                                <option value="Kids">👨‍👩‍👧‍👦 Kids (All Kids)</option>
                                 <option value="Dominic">👤 Dominic</option>
                                 <option value="Wife">💍 Wife</option>
                                 <option value="Gia">🥎 Gia (9th Grade)</option>
@@ -2942,6 +2953,7 @@
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
                         <div class="family-pill-bar" style="margin-bottom: 0;">
                             <button type="button" class="family-filter-pill active" id="fam-pill-All" onclick="setDashboardFamilyFilter('All')">👨‍👩‍👧‍👦 All Family (<span id="fam-cnt-All">0</span>)</button>
+                            <button type="button" class="family-filter-pill" id="fam-pill-Kids" onclick="setDashboardFamilyFilter('Kids')">🎒 Kids (<span id="fam-cnt-Kids">0</span>)</button>
                             <button type="button" class="family-filter-pill" id="fam-pill-Dominic" onclick="setDashboardFamilyFilter('Dominic')">👤 Dominic (<span id="fam-cnt-Dominic">0</span>)</button>
                             <button type="button" class="family-filter-pill" id="fam-pill-Wife" onclick="setDashboardFamilyFilter('Wife')">💍 Wife (<span id="fam-cnt-Wife">0</span>)</button>
                             <button type="button" class="family-filter-pill" id="fam-pill-Gia" onclick="setDashboardFamilyFilter('Gia')">🥎 Gia (<span id="fam-cnt-Gia">0</span>)</button>
@@ -4414,7 +4426,7 @@
                                 <input type="checkbox" id="rules-label-self" checked style="margin-top: 3px; transform: scale(1.15); cursor: pointer;">
                                 <div>
                                     <strong style="color: #fff; font-size: 13px; display: block;">Label Non-Child Events for Dominic</strong>
-                                    <span style="color: #94a3b8; font-size: 11.5px; line-height: 1.4; display: block;">If an event is personal or not specific to the kids, label it for Dominic (Class of 2006).</span>
+                                    <span style="color: #94a3b8; font-size: 11.5px; line-height: 1.4; display: block;">If an event is personal or adult-only (not for the kids or school-wide), label it for Dominic (Class of 2006). School-wide Liberty Christian events are labeled "- Kids".</span>
                                 </div>
                             </label>
 
@@ -4529,6 +4541,7 @@
                         <select id="ai_provider" onchange="updateProviderUI()">
                             <option value="gemini">Google Gemini</option>
                             <option value="openai">OpenAI</option>
+                            <option value="ollama">Local RTX 3080 (Ollama)</option>
                         </select>
                     </div>
                     
@@ -5515,9 +5528,11 @@
                     const card = document.createElement('div');
                     card.className = 'event-card';
                     card.id = `event-${event.id}`;
+                    const titleLow = (event.title || '').toLowerCase().trim();
                     const fullTxtLow = `${event.title || ''} ${event.description || ''} ${event.location || ''}`.toLowerCase();
                     let personTag = 'Dominic';
-                    if (fullTxtLow.includes('gia') || fullTxtLow.includes('softball')) personTag = 'Gia';
+                    if (titleLow.endsWith('- kids') || titleLow.endsWith('(kids)') || fullTxtLow.includes('for the kids') || fullTxtLow.includes('all kids')) personTag = 'Kids';
+                    else if (fullTxtLow.includes('gia') || fullTxtLow.includes('softball')) personTag = 'Gia';
                     else if (fullTxtLow.includes('ellie') || fullTxtLow.includes(' xc') || fullTxtLow.includes('soccer') || fullTxtLow.includes('track')) personTag = 'Ellie';
                     else if (fullTxtLow.includes('leo') || fullTxtLow.includes('2nd grade')) personTag = 'Leo';
                     else if (fullTxtLow.includes('wife')) personTag = 'Wife';
@@ -5744,11 +5759,15 @@
 
         async function fetchModels(force = false) {
             const provider = document.getElementById('ai_provider').value;
-            const apiKey = provider === 'gemini' ? document.getElementById('gemini_api_key').value : document.getElementById('openai_api_key').value;
+            const apiKey = provider === 'gemini'
+                ? document.getElementById('gemini_api_key').value
+                : provider === 'openai'
+                    ? document.getElementById('openai_api_key').value
+                    : '';
             const modelSelect = document.getElementById('ai_model');
             const modelWarning = document.getElementById('model-warning');
             
-            if (!apiKey) {
+            if (!apiKey && provider !== 'ollama') {
                 modelSelect.innerHTML = '<option value="">Enter API key to see models</option>';
                 return;
             }
@@ -6101,6 +6120,9 @@
                 filter_promotions_and_travel: isChecked('rules-filter-promo'),
                 filter_package_deliveries: isChecked('rules-filter-delivery'),
                 filter_corporate_webinars: isChecked('rules-filter-webinars'),
+                filter_public_festivals_and_events: currentParsingRules ? (currentParsingRules.filter_public_festivals_and_events !== false) : true,
+                filter_class_actions_and_legal: currentParsingRules ? (currentParsingRules.filter_class_actions_and_legal !== false) : true,
+                filter_loyalty_and_rewards_deadlines: currentParsingRules ? (currentParsingRules.filter_loyalty_and_rewards_deadlines !== false) : true,
                 invite_reminders: isChecked('rules-invite-reminders'),
                 keep_emails_unread: isChecked('rules-keep-unread')
             };
@@ -10327,10 +10349,10 @@
                     if (evBadge) evBadge.innerText = `${data.events.today_count} Today • ${data.events.week_count} This Week`;
                     if (evSub) {
                         const fc = data.events.family_counts || {};
-                        evSub.innerHTML = `Gia: <strong>${fc.Gia || 0}</strong> &bull; Ellie: <strong>${fc.Ellie || 0}</strong> &bull; Leo: <strong>${fc.Leo || 0}</strong> &bull; Dom: <strong>${fc.Dominic || 0}</strong>`;
+                        evSub.innerHTML = `Kids: <strong>${fc.Kids || 0}</strong> &bull; Gia: <strong>${fc.Gia || 0}</strong> &bull; Ellie: <strong>${fc.Ellie || 0}</strong> &bull; Leo: <strong>${fc.Leo || 0}</strong> &bull; Dom: <strong>${fc.Dominic || 0}</strong>`;
                     }
                     const fc = data.events.family_counts || {};
-                    ['All', 'Dominic', 'Wife', 'Gia', 'Ellie', 'Leo'].forEach(p => {
+                    ['All', 'Kids', 'Dominic', 'Wife', 'Gia', 'Ellie', 'Leo'].forEach(p => {
                         const el = document.getElementById(`fam-cnt-${p}`);
                         if (el && fc[p] !== undefined) el.innerText = fc[p];
                     });
@@ -10403,7 +10425,7 @@
             const cards = document.querySelectorAll('#events-container .event-card');
             if (!cards.length) return;
 
-            const counts = { All: 0, Dominic: 0, Wife: 0, Gia: 0, Ellie: 0, Leo: 0 };
+            const counts = { All: 0, Kids: 0, Dominic: 0, Wife: 0, Gia: 0, Ellie: 0, Leo: 0 };
             cards.forEach(card => {
                 const p = card.dataset.person || 'Dominic';
                 const s = card.dataset.search || card.innerText.toLowerCase();

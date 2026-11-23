@@ -26,6 +26,13 @@ from app import (
     __build__,
     canonicalize_identifier,
     clean_display_event_title,
+    build_parsing_prompt_instructions,
+    post_process_extracted_event,
+    guess_deal_category,
+    detect_beef_grade,
+    format_deal_price_and_notes,
+    sanitize_deal_price_and_notes,
+    parse_numeric_price,
     is_safe_public_url,
     is_valid_public_origin,
     parse_flexible_iso_datetime,
@@ -478,6 +485,182 @@ class TestVerificationSuite(unittest.TestCase):
         self.assertIn("ai_helper_theme", html_doc)
         self.assertIn("-webkit-backdrop-filter", html_doc)
         self.assertNotIn("user-scalable=no", html_doc)
+
+    def test_13_school_wide_kids_attribution(self):
+        """Verify school-wide Liberty Christian events (e.g., Jeans Day) are attributed to Kids, never Dominic."""
+        # 1. Prompt instructions explicitly enforce "- Kids" for school-wide events
+        prompt_text = build_parsing_prompt_instructions({})
+        self.assertIn("- Kids", prompt_text)
+        self.assertIn("NEVER attribute school-wide, student, or general school community events", prompt_text)
+
+        # 2. Title cleaner normalizes (Kids) suffix cleanly
+        self.assertEqual(clean_display_event_title("Jeans Day (Kids)"), "Jeans Day - Kids")
+
+        # 3. LLM output erroneously labeled "- Dominic" for Jeans Day at Liberty Christian is corrected to "- Kids"
+        ev_jeans_dominic = {
+            "title": "Jeans Day - Dominic",
+            "date": "2026-11-20T09:00:00",
+            "location": "Liberty Christian School, Argyle, Texas",
+            "description": "General school $3 Jeans Day for the community, tracked for Dominic."
+        }
+        res_jeans = post_process_extracted_event(
+            ev_jeans_dominic,
+            {},
+            subject="Liberty Christian Weekly Update",
+            body="Friday, November 20 is a general school $3 Jeans Day for the community. 2nd grade notes below."
+        )
+        self.assertIsNotNone(res_jeans)
+        self.assertEqual(res_jeans["title"], "Jeans Day - Kids")
+        self.assertNotIn("Dominic", res_jeans["title"])
+        self.assertNotIn("tracked for Dominic", res_jeans["description"])
+        self.assertIn("tracked for the kids", res_jeans["description"])
+
+        # 4. School-wide Jeans Day without suffix isn't hijacked by passing 2nd grade mention in newsletter body
+        ev_jeans_raw = {
+            "title": "Jeans Day",
+            "date": "2026-11-20T09:00:00",
+            "location": "Liberty",
+            "description": "School-wide $3 Jeans Day"
+        }
+        res_raw = post_process_extracted_event(
+            ev_jeans_raw,
+            {},
+            subject="All-School Newsletter",
+            body="Friday is $3 Jeans Day. Also 2nd grade has a reading log due next week."
+        )
+        self.assertEqual(res_raw["title"], "Jeans Day - Kids")
+        self.assertEqual(res_raw["location"], "Liberty Christian School, Argyle, Texas")
+
+        # 5. Single-child event still goes to that child
+        ev_leo = {
+            "title": "Spelling Bee",
+            "date": "2026-11-20T09:00:00",
+            "location": "Liberty Christian School",
+            "description": "2nd grade spelling bee in the lower school auditorium."
+        }
+        res_leo = post_process_extracted_event(ev_leo, {}, subject="2nd Grade Update", body="2nd grade spelling bee")
+        self.assertEqual(res_leo["title"], "Spelling Bee - Leo")
+
+        # 6. Personal adult event & Class of 2006 alumni event still go to Dominic
+        ev_dentist = {
+            "title": "Dentist Appointment",
+            "date": "2026-11-21T10:00:00",
+            "location": "Argyle Dental",
+            "description": "Routine cleaning"
+        }
+        res_dentist = post_process_extracted_event(ev_dentist, {}, subject="Appointment Reminder", body="Your dental cleaning is tomorrow.")
+        self.assertEqual(res_dentist["title"], "Dentist Appointment - Dominic")
+
+        ev_alumni = {
+            "title": "Class of 2006 Reunion - Dominic",
+            "date": "2026-11-22T18:00:00",
+            "location": "Liberty Christian School, Argyle, Texas",
+            "description": "20-year alumni dinner"
+        }
+        res_alumni = post_process_extracted_event(ev_alumni, {}, subject="LCS Class of 2006 Alumni Reunion", body="Join fellow Class of 2006 alumni.")
+        self.assertEqual(res_alumni["title"], "Class of 2006 Reunion - Dominic")
+
+        # 7. UI Kids filter pill & Quick Add option present
+        with open(os.path.join(ROOT_DIR, "static", "index.html"), "r", encoding="utf-8") as f:
+            html_doc = f.read()
+        self.assertIn('id="fam-pill-Kids"', html_doc)
+        self.assertIn('value="Kids"', html_doc)
+
+    def test_14_filter_unwanted_public_legal_and_preorder_events(self):
+        """Verify class action hearings, unconfirmed community/speaker breakfasts, and meal preorder flyers are blocked."""
+        # 1. CVS Class Action Final Approval Hearing
+        ev_cvs = {
+            "title": "CVS Class Action Final Approval Hearing - Dominic",
+            "date": "2026-12-01T08:30:00",
+            "location": "Zoom",
+            "description": "The Court will hold the Final Approval Hearing to consider the proposed settlement."
+        }
+        self.assertIsNone(post_process_extracted_event(
+            ev_cvs, {}, subject="Notice of Proposed Class Action Settlement",
+            body="The Court will hold the Final Approval Hearing to consider the proposed settlement."
+        ))
+
+        # 2. Unconfirmed community/church speaker breakfast flyer
+        ev_breakfast = {
+            "title": "Dr. McCullough Speaking at Marty B's Men's Bible Breakfast - Dominic",
+            "date": "2026-11-24T06:30:00",
+            "location": "Marty B's",
+            "description": "Men's Bible Breakfast with breakfast, coffee, worship, and an encouraging message from Dr. McCullough, attended by Dominic."
+        }
+        self.assertIsNone(post_process_extracted_event(
+            ev_breakfast, {}, subject="Tuesday Men's Bible Breakfast at Marty B's",
+            body="Join us Tuesday morning for breakfast, coffee, worship, and an encouraging message from Dr. McCullough."
+        ))
+
+        # 3. Optional food/tailgate meal preorder solicitation
+        ev_tailgate = {
+            "title": "Tailgate Meal Preorder Deadline - Dominic",
+            "date": "2026-11-25T16:00:00",
+            "location": "",
+            "description": "Deadline to preorder meals from The Hamburger Man for the community tailgate and dinner event for Dominic and family."
+        }
+        self.assertIsNone(post_process_extracted_event(
+            ev_tailgate, {}, subject="Community Tailgate Meal Preorder",
+            body="Don't forget to preorder meals from The Hamburger Man by Wednesday at 4 PM for the community tailgate."
+        ))
+
+        # 4. Confirmed paid order / RSVP should still pass if explicit confirmation exists
+        ev_confirmed_rsvp = {
+            "title": "Men's Bible Breakfast - Dominic",
+            "date": "2026-11-24T06:30:00",
+            "location": "Marty B's",
+            "description": "RSVP confirmed for Dominic."
+        }
+        self.assertIsNotNone(post_process_extracted_event(
+            ev_confirmed_rsvp, {}, subject="RSVP Confirmed: Men's Bible Breakfast",
+            body="Thank you for registering! Your RSVP confirmed your seat at Marty B's."
+        ))
+
+        # 5. Generated web & favicon images exist and are served properly
+        for img_name in ("ai-helper-logo.jpg", "ai-helper-hero.jpg"):
+            img_path = os.path.join(ROOT_DIR, "static", "images", img_name)
+            self.assertTrue(os.path.exists(img_path), f"Missing generated image: {img_path}")
+            res_img = client.get(f"/static/images/{img_name}")
+            self.assertEqual(res_img.status_code, 200)
+        res_fav = client.get("/favicon.ico")
+        self.assertEqual(res_fav.status_code, 200)
+        self.assertEqual(res_fav.headers.get("content-type"), "image/jpeg")
+
+    def test_15_grocery_categorization_and_lb_pricing(self):
+        """Verify non-meat items never pollute Meat & Seafood, Prime Rib isn't tagged USDA Prime, and /lb units are preserved."""
+        # 1. Non-meat items that previously polluted Meat & Seafood
+        self.assertEqual(
+            guess_deal_category("Eplumivor 300 Pcs Square Air Fryer Liners Disposable, 7.5 inch Natural Wood Pulp Parchment Baking Paper for Fried Chicken Fries Wings Veggies"),
+            "Household & Personal"
+        )
+        self.assertEqual(
+            guess_deal_category("Stove Top Stuffing Mix, 1 Box, for Dinner Sides and Thanksgiving Dinner, Turkey, 6 oz"),
+            "Pantry & Dry Goods"
+        )
+        self.assertEqual(
+            guess_deal_category("Taylor Farms or Fresh Express Chopped Salad Kits or Original Kits"),
+            "Produce"
+        )
+
+        # 2. Real Meat & Seafood items still match Meat & Seafood
+        self.assertEqual(guess_deal_category("USDA Prime Beef Boneless Top Sirloin Steaks"), "Meat & Seafood")
+        self.assertEqual(guess_deal_category("8 Pc. Fried, Spicy, Roasted or Mango Habanero Mixed Chicken"), "Meat & Seafood")
+        self.assertEqual(guess_deal_category("Catfish Nuggets"), "Meat & Seafood")
+        self.assertEqual(guess_deal_category("Bacon-Wrapped Stuffed Jalapeños"), "Meat & Seafood")
+
+        # 3. Prime Rib Dinner shouldn't falsely trigger USDA Prime grade
+        self.assertEqual(detect_beef_grade("Prime Rib Dinner", "Meat & Seafood"), "none")
+        self.assertEqual(detect_beef_grade("USDA Prime Beef Boneless Top Sirloin Steaks", "Meat & Seafood"), "prime")
+        self.assertEqual(detect_beef_grade("H-E-B Prime 1 Beef Chuck Roast", "Meat & Seafood"), "prime")
+
+        # 4. Per-lb pricing context preserves /lb unit instead of defaulting to /ea
+        p1, _ = format_deal_price_and_notes(7.99, "SAVE up to $3 per lb.", "", "HEB", "H-E-B Boneless Wagyu Beef Shoulder Roast")
+        self.assertEqual(p1, "$7.99/lb")
+        self.assertEqual(parse_numeric_price(p1)["unit"], "lb")
+
+        p2, _ = sanitize_deal_price_and_notes("$0.97", "SAVE up to $1.21 per lb.")
+        self.assertEqual(p2, "$0.97/lb")
+        self.assertEqual(parse_numeric_price(p2)["unit"], "lb")
 
 if __name__ == "__main__":
     unittest.main()
