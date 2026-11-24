@@ -3159,6 +3159,9 @@
                         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
                             <div style="display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: #cbd5e1;">
                                 <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                    <input type="checkbox" id="fbw-is-active" checked> 🟢 Watchlist Active
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
                                     <input type="checkbox" id="fbw-notify-email" checked> 📧 Email Alert on Match
                                 </label>
                                 <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
@@ -10758,7 +10761,7 @@
                             <button type="button" class="btn-meal-action" data-fid="${escapeHtml(item.id)}" onclick="runFbListingVisionInspect(this.dataset.fid, this)" title="Run Deep AI Photo Vision & Spec X-Ray on listing images" style="color: #fbbf24; border-color: rgba(245,158,11,0.45);">🔬 AI X-Ray</button>
                             <button type="button" class="btn-meal-action" data-fid="${escapeHtml(item.id)}" onclick="fbListingAction(this.dataset.fid, 'notify', this)" title="Send Email + Discord Alert for this listing">🔔 Alert</button>
                             <button type="button" class="btn-meal-action" data-fid="${escapeHtml(item.id)}" onclick="fbListingAction(this.dataset.fid, 'star', this)" style="${isStarred ? 'color:#fbbf24; border-color:#f59e0b;' : ''}">${isStarred ? '⭐' : '☆'}</button>
-                            <button type="button" class="btn-meal-action" data-fid="${escapeHtml(item.id)}" onclick="fbListingAction(this.dataset.fid, 'dismiss', this)" title="Dismiss listing" style="color: #f87171;">✕</button>
+                            <button type="button" class="btn-meal-action" data-fid="${escapeHtml(item.id)}" onclick="fbListingAction(this.dataset.fid, 'dismiss', this)" title="Remove listing from Verified Local" aria-label="Delete listing from Verified Local" style="color: #fca5a5; border-color: rgba(239,68,68,0.4);">🗑️ Remove</button>
                         </div>
                     </div>
                 `;
@@ -10836,7 +10839,7 @@
             const container = document.getElementById('fb-watchlists-list-container');
             if (!container) return;
             if (!watchlists || watchlists.length === 0) {
-                container.innerHTML = `<div style="color:#94a3b8;">No watchlists configured.</div>`;
+                container.innerHTML = `<div class="account-box" style="color:#94a3b8; text-align:center; padding: 24px;">No watchlists configured. Click <strong>➕ Create New Watchlist</strong> or choose a preset above to start monitoring Marketplace.</div>`;
                 return;
             }
             const activeEditId = (document.getElementById('fbw-id') ? document.getElementById('fbw-id').value : '');
@@ -10845,12 +10848,14 @@
                 const attrStr = (w.required_attributes || []).join(', ');
                 const exclStr = (w.exclude_keywords || []).slice(0, 14).join(', ');
                 const isEditingThis = (activeEditId && activeEditId === w.id);
+                const isActive = w.is_active !== 0 && w.is_active !== false;
                 return `
-                    <div class="account-box" style="margin-bottom: 14px; padding: 18px 20px; ${isEditingThis ? 'border: 2px solid #f59e0b; box-shadow: 0 0 18px rgba(245, 158, 11, 0.2);' : ''}">
+                    <div class="account-box" style="margin-bottom: 14px; padding: 18px 20px; ${isEditingThis ? 'border: 2px solid #f59e0b; box-shadow: 0 0 18px rgba(245, 158, 11, 0.2);' : ''} ${!isActive ? 'opacity: 0.72; border-style: dashed;' : ''}">
                         <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 10px;">
                             <div style="flex: 1; min-width: 260px;">
                                 <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                                     <strong style="font-size: 16.5px; color: #fff;">${escapeHtml(w.name)}</strong>
+                                    <span style="background: ${isActive ? 'rgba(16,185,129,0.18)' : 'rgba(100,116,139,0.22)'}; color: ${isActive ? '#34d399' : '#cbd5e1'}; border: 1px solid ${isActive ? 'rgba(16,185,129,0.35)' : 'rgba(148,163,184,0.35)'}; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 99px;">${isActive ? '🟢 Active' : '⏸️ Turned Off'}</span>
                                     <span style="background: rgba(16,185,129,0.18); color: #34d399; border: 1px solid rgba(16,185,129,0.35); font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 99px;">Query: "${escapeHtml(w.query)}"</span>
                                     <span style="background: rgba(59,130,246,0.18); color: #93c5fd; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 99px;">📍 Zip ${escapeHtml(w.postal_code)} (&le; ${w.max_radius_miles} mi)</span>
                                     <span style="background: rgba(245,158,11,0.18); color: #fbbf24; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 99px;">💰 $${w.min_price} – $${w.max_price}</span>
@@ -10869,9 +10874,10 @@
                                 ` : ''}
                             </div>
                             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                                <button type="button" class="add-btn" onclick="editFbWatchlist('${w.id}')" style="margin: 0; padding: 7px 14px; font-size: 12.5px; background: #d97706; color: #fff; font-weight: 700;">✏️ Edit</button>
-                                <button type="button" class="save-btn" onclick="scanSingleFbWatchlist('${w.id}', this)" style="margin: 0; padding: 7px 14px; font-size: 12.5px;">⚡ Scan Now</button>
-                                <button type="button" class="remove-btn" onclick="deleteFbWatchlist('${w.id}')" style="margin: 0; padding: 7px 12px; font-size: 12.5px;">Delete</button>
+                                <button type="button" class="btn-meal-action" data-wid="${escapeHtml(w.id)}" onclick="toggleFbWatchlist(this.dataset.wid, ${isActive ? 'false' : 'true'}, this)" style="margin: 0; padding: 7px 12px; font-size: 12.5px; ${isActive ? 'color:#cbd5e1; border-color:rgba(148,163,184,0.4);' : 'color:#34d399; border-color:rgba(16,185,129,0.45);'}">${isActive ? '⏸️ Turn Off' : '▶️ Turn On'}</button>
+                                <button type="button" class="add-btn" data-wid="${escapeHtml(w.id)}" onclick="editFbWatchlist(this.dataset.wid)" style="margin: 0; padding: 7px 14px; font-size: 12.5px; background: #d97706; color: #fff; font-weight: 700;">✏️ Edit</button>
+                                <button type="button" class="save-btn" data-wid="${escapeHtml(w.id)}" onclick="scanSingleFbWatchlist(this.dataset.wid, this)" style="margin: 0; padding: 7px 14px; font-size: 12.5px;">⚡ Scan Now</button>
+                                <button type="button" class="remove-btn" data-wid="${escapeHtml(w.id)}" onclick="deleteFbWatchlist(this.dataset.wid)" style="margin: 0; padding: 7px 12px; font-size: 12.5px;">🗑️ Delete</button>
                             </div>
                         </div>
                     </div>
@@ -10899,6 +10905,8 @@
             if (visEl) {
                 visEl.value = w.visual_targets || 'Inspect photos to identify exact Liv/Giant model from frame decals, verify XXS/XS compact sloping top-tube geometry & seat-tube size stickers, check Carbon vs ALUXX welded aluminum, Disc vs Rim brakes, drivetrain tier, and block 20"/24" youth kids bikes (e.g. Liv Enchant).';
             }
+            const activeCheckbox = document.getElementById('fbw-is-active');
+            if (activeCheckbox) activeCheckbox.checked = w.is_active !== 0 && w.is_active !== false;
             document.getElementById('fbw-notify-email').checked = w.notify_email !== 0 && w.notify_email !== false;
             document.getElementById('fbw-notify-discord').checked = w.notify_discord !== 0 && w.notify_discord !== false;
             document.getElementById('fbw-block-shipping').checked = w.block_shipping_only !== 0 && w.block_shipping_only !== false;
@@ -10921,6 +10929,8 @@
 
         function cancelEditFbWatchlist() {
             document.getElementById('fbw-id').value = '';
+            const activeCheckbox = document.getElementById('fbw-is-active');
+            if (activeCheckbox) activeCheckbox.checked = true;
             const titleEl = document.getElementById('fb-watchlist-form-title');
             const badgeEl = document.getElementById('fb-watchlist-edit-badge');
             const cancelBtn = document.getElementById('fbw-cancel-edit-btn');
@@ -11023,6 +11033,7 @@
             const nameVal = document.getElementById('fbw-name').value || "Custom Watchlist";
             const zipVal = document.getElementById('fbw-zip').value || "76226";
             const locName = resolveMetroFromZip(zipVal, nameVal);
+            const activeCheckbox = document.getElementById('fbw-is-active');
             const payload = {
                 id: editId,
                 name: nameVal,
@@ -11036,6 +11047,7 @@
                 required_attributes: splitClean(document.getElementById('fbw-req-attrs').value),
                 exclude_keywords: splitClean(document.getElementById('fbw-exclude').value),
                 visual_targets: visEl ? visEl.value.trim() : "",
+                is_active: activeCheckbox ? activeCheckbox.checked : true,
                 notify_email: document.getElementById('fbw-notify-email').checked,
                 notify_discord: document.getElementById('fbw-notify-discord').checked,
                 block_shipping_only: document.getElementById('fbw-block-shipping').checked
@@ -11062,13 +11074,46 @@
             }
         }
 
+        async function toggleFbWatchlist(id, nextActive, btn) {
+            const msgBox = document.getElementById('fb-msg');
+            if (btn) btn.disabled = true;
+            try {
+                const res = await fetch(`/api/facebook/watchlists/${encodeURIComponent(id)}/toggle`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ is_active: Boolean(nextActive) })
+                });
+                await handleApiError(res);
+                const data = await res.json();
+                await loadFacebookOverview();
+                if (msgBox) {
+                    msgBox.innerHTML = `<div class="success">${data.is_active ? '▶️ Watchlist turned ON.' : '⏸️ Watchlist turned OFF — background scans and active matches paused.'}</div>`;
+                    setTimeout(() => msgBox.innerHTML = '', 4500);
+                }
+            } catch (e) {
+                if (msgBox) msgBox.innerHTML = `<div class="error">Failed to update watchlist: ${escapeHtml(e.message)}</div>`;
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+
         async function deleteFbWatchlist(id) {
             if (!confirm("Delete this Facebook search watchlist and its cached listings?")) return;
+            const msgBox = document.getElementById('fb-msg');
             try {
-                await fetch(`/api/facebook/watchlists/${id}`, { method: 'DELETE' });
-                loadFacebookOverview();
+                const res = await fetch(`/api/facebook/watchlists/${encodeURIComponent(id)}`, { method: 'DELETE' });
+                await handleApiError(res);
+                if (document.getElementById('fbw-id')?.value === id) {
+                    cancelEditFbWatchlist();
+                }
+                await loadFacebookOverview();
+                if (msgBox) {
+                    msgBox.innerHTML = `<div class="success">✓ Watchlist deleted cleanly.</div>`;
+                    setTimeout(() => msgBox.innerHTML = '', 4000);
+                }
             } catch (e) {
-                alert("Failed to delete watchlist.");
+                if (msgBox) msgBox.innerHTML = `<div class="error">Failed to delete watchlist: ${escapeHtml(e.message)}</div>`;
+                else alert("Failed to delete watchlist.");
             }
         }
 
@@ -11099,7 +11144,8 @@
                 await loadFacebookOverview();
                 const msgBox = document.getElementById('fb-msg');
                 if (msgBox) {
-                    msgBox.innerHTML = `<div class="success">✓ Scanned ${data.scanned_watchlists || 1} watchlist(s): Found <strong>${data.matched_count || 0} verified local matches</strong> and blocked <strong>${data.blocked_count || 0} garbage listings</strong> (Arkansas, Oklahoma, Large Treks)!</div>`;
+                    const scannedCount = data.scanned_watchlists ?? 0;
+                    msgBox.innerHTML = `<div class="success">${scannedCount === 0 ? '⏸️ No active watchlists to scan — turn ON or create a watchlist first.' : `✓ Scanned ${scannedCount} watchlist(s): Found <strong>${data.matched_count || 0} verified local matches</strong> and blocked <strong>${data.blocked_count || 0} garbage listings</strong>!`}</div>`;
                     setTimeout(() => msgBox.innerHTML = '', 6000);
                 }
             } finally {
@@ -11121,13 +11167,15 @@
         async function fbListingAction(listingId, action, btn) {
             const orig = btn ? btn.innerHTML : '';
             if (action === 'notify' && btn) btn.innerHTML = '⏳ Sending...';
+            if ((action === 'dismiss' || action === 'delete') && btn) btn.disabled = true;
+            const msgBox = document.getElementById('fb-msg');
             try {
-                const res = await fetch(`/api/facebook/listings/${listingId}/action?action=${encodeURIComponent(action)}`, { method: 'POST' });
+                const res = await fetch(`/api/facebook/listings/${encodeURIComponent(listingId)}/action?action=${encodeURIComponent(action)}`, { method: 'POST' });
+                await handleApiError(res);
                 const data = await res.json();
                 if (action === 'notify') {
                     const dOk = data.discord && data.discord.status === 'success';
                     const eOk = data.email && data.email.status === 'success';
-                    const msgBox = document.getElementById('fb-msg');
                     if (msgBox) {
                         const safeEmailErr = escapeHtml(data.email?.error || 'Not configured');
                         const safeDiscordErr = escapeHtml(data.discord?.error || 'Add Webhook in Alerts tab');
@@ -11138,9 +11186,16 @@
                     }
                 } else {
                     await loadFacebookOverview();
+                    if ((action === 'dismiss' || action === 'delete') && msgBox) {
+                        msgBox.innerHTML = `<div class="success">✓ Listing removed from Verified Local.</div>`;
+                        setTimeout(() => msgBox.innerHTML = '', 3500);
+                    }
                 }
+            } catch (e) {
+                if (msgBox) msgBox.innerHTML = `<div class="error">Action failed: ${escapeHtml(e.message)}</div>`;
             } finally {
                 if (action === 'notify' && btn) btn.innerHTML = orig;
+                if (btn) btn.disabled = false;
             }
         }
 

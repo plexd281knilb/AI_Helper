@@ -8983,6 +8983,22 @@ DEFAULT_WIFE_BIKE_WATCHLIST = {
     "is_active": 1
 }
 
+def _set_user_setting_flag(conn: sqlite3.Connection, user_id: str, key: str, value) -> None:
+    c = conn.cursor()
+    c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
+    row = c.fetchone()
+    if not row:
+        return
+    try:
+        s = json.loads(row["settings"]) if row["settings"] else {}
+    except Exception:
+        s = {}
+    if s.get(key) == value:
+        return
+    s[key] = value
+    c.execute("UPDATE users SET settings=? WHERE id=?", (json.dumps(s), user_id))
+    conn.commit()
+
 def ensure_default_fb_watchlists(user_id: str, conn: sqlite3.Connection = None):
     should_close = False
     if conn is None:
@@ -8990,9 +9006,20 @@ def ensure_default_fb_watchlists(user_id: str, conn: sqlite3.Connection = None):
         should_close = True
     try:
         c = conn.cursor()
+        c.execute("SELECT settings FROM users WHERE id=?", (user_id,))
+        u_row = c.fetchone()
+        try:
+            u_settings = json.loads(u_row["settings"]) if u_row and u_row["settings"] else {}
+        except Exception:
+            u_settings = {}
+
         c.execute("SELECT COUNT(*) FROM fb_watchlists WHERE user_id=?", (user_id,))
+        existing_count = c.fetchone()[0]
         w = DEFAULT_WIFE_BIKE_WATCHLIST
-        if c.fetchone()[0] == 0:
+        if existing_count == 0:
+            # Only seed once per user; never resurrect watchlists after a user deletes them
+            if u_settings.get("fb_default_watchlist_seeded"):
+                return
             wid = str(uuid.uuid4())
             now = datetime.now().isoformat()
             c.execute("""
@@ -9012,10 +9039,12 @@ def ensure_default_fb_watchlists(user_id: str, conn: sqlite3.Connection = None):
                 w["notify_discord"], w["min_deal_score"], 1, None, now
             ))
             conn.commit()
+            _set_user_setting_flag(conn, user_id, "fb_default_watchlist_seeded", True)
         else:
             c.execute("UPDATE fb_watchlists SET visual_targets=? WHERE user_id=? AND (visual_targets IS NULL OR visual_targets='')",
                       (json.dumps(w.get("visual_targets", [])), user_id))
             conn.commit()
+            _set_user_setting_flag(conn, user_id, "fb_default_watchlist_seeded", True)
     finally:
         if should_close:
             conn.close()
@@ -10293,6 +10322,9 @@ class FBWatchlistCreateRequest(BaseModel):
     min_deal_score: Optional[int] = 60
     is_active: Optional[bool] = True
 
+class FBWatchlistToggleRequest(BaseModel):
+    is_active: Optional[bool] = None
+
 class FBCookieSaveRequest(BaseModel):
     cookie: str
 
@@ -10316,10 +10348,10 @@ def api_get_facebook_overview(user_id: str = Depends(verify_auth)):
         c.execute("DELETE FROM fb_listings WHERE user_id=? AND (fb_item_id LIKE 'fb_dfw_%' OR fb_item_id LIKE 'fb_junk_%' OR fb_item_id LIKE 'fb_custom_%')", (user_id,))
         conn.commit()
 
-        # Check if listings table is empty for user; if so, run initial scan on default watchlist so UI is populated immediately!
+        # Check if listings table is empty for user; if so, run initial scan on first ACTIVE watchlist
         c.execute("SELECT COUNT(*) FROM fb_listings WHERE user_id=?", (user_id,))
         if c.fetchone()[0] == 0:
-            c.execute("SELECT id FROM fb_watchlists WHERE user_id=? LIMIT 1", (user_id,))
+            c.execute("SELECT id FROM fb_watchlists WHERE user_id=? AND is_active=1 LIMIT 1", (user_id,))
             first_w = c.fetchone()
             if first_w:
                 conn.close()
@@ -10378,8 +10410,9 @@ def api_get_facebook_overview(user_id: str = Depends(verify_auth)):
         has_c_user = "c_user=" in norm_cookie
         has_xs = "xs=" in norm_cookie
 
-        matched_list = [l for l in listings if l["status"] in ("matched", "starred")]
-        blocked_list = [l for l in listings if l["status"] == "blocked"]
+        active_wids = {w["id"] for w in watchlists if w.get("is_active")}
+        matched_list = [l for l in listings if l["status"] in ("matched", "starred") and l.get("watchlist_id") in active_wids]
+        blocked_list = [l for l in listings if l["status"] == "blocked" and l.get("watchlist_id") in active_wids]
 
         return {
             "watchlists": watchlists,
@@ -10470,21 +10503,47 @@ def api_save_fb_watchlist(req: FBWatchlistCreateRequest, user_id: str = Depends(
                 None, now
             ))
         conn.commit()
+        _set_user_setting_flag(conn, user_id, "fb_default_watchlist_seeded", True)
     finally:
         conn.close()
 
-    scan_res = scan_fb_watchlist_by_id(user_id, wid, trigger_notifications=False)
-    return {"status": "success", "id": wid, "scan": scan_res}
+    scan_res = scan_fb_watchlist_by_id(user_id, wid, trigger_notifications=False) if req.is_active else {"status": "paused", "matched_count": 0, "blocked_count": 0}
+    return {"status": "success", "id": wid, "is_active": bool(req.is_active), "scan": scan_res}
+
+@app.post("/api/facebook/watchlists/{watchlist_id}/toggle")
+def api_toggle_fb_watchlist(watchlist_id: str, req: Optional[FBWatchlistToggleRequest] = None, user_id: str = Depends(verify_auth)):
+    conn = get_db_conn()
+    try:
+        c = conn.cursor()
+        c.execute("SELECT is_active FROM fb_watchlists WHERE id=? AND user_id=?", (watchlist_id, user_id))
+        row = c.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Watchlist not found.")
+        if req is not None and req.is_active is not None:
+            new_state = 1 if req.is_active else 0
+        else:
+            new_state = 0 if row["is_active"] else 1
+        c.execute("UPDATE fb_watchlists SET is_active=? WHERE id=? AND user_id=?", (new_state, watchlist_id, user_id))
+        conn.commit()
+        return {"status": "success", "id": watchlist_id, "is_active": bool(new_state)}
+    finally:
+        conn.close()
 
 @app.delete("/api/facebook/watchlists/{watchlist_id}")
 def api_delete_fb_watchlist(watchlist_id: str, user_id: str = Depends(verify_auth)):
     conn = get_db_conn()
-    c = conn.cursor()
-    c.execute("DELETE FROM fb_listings WHERE watchlist_id=? AND user_id=?", (watchlist_id, user_id))
-    c.execute("DELETE FROM fb_watchlists WHERE id=? AND user_id=?", (watchlist_id, user_id))
-    conn.commit()
-    conn.close()
-    return {"status": "success"}
+    try:
+        c = conn.cursor()
+        c.execute("DELETE FROM fb_listings WHERE watchlist_id=? AND user_id=?", (watchlist_id, user_id))
+        c.execute("DELETE FROM fb_watchlists WHERE id=? AND user_id=?", (watchlist_id, user_id))
+        deleted = c.rowcount
+        conn.commit()
+        if deleted == 0:
+            raise HTTPException(status_code=404, detail="Watchlist not found.")
+        _set_user_setting_flag(conn, user_id, "fb_default_watchlist_seeded", True)
+        return {"status": "success", "deleted": deleted}
+    finally:
+        conn.close()
 
 @app.post("/api/facebook/watchlists/{watchlist_id}/scan")
 def api_scan_single_fb_watchlist(watchlist_id: str, notify: Optional[bool] = True, user_id: str = Depends(verify_auth)):
@@ -10589,13 +10648,15 @@ def api_fb_listing_action(listing_id: str, action: str = "star", user_id: str = 
 
         if action == "star":
             new_st = "matched" if item["status"] == "starred" else "starred"
-            c.execute("UPDATE fb_listings SET status=? WHERE id=?", (new_st, listing_id))
+            c.execute("UPDATE fb_listings SET status=? WHERE id=? AND user_id=?", (new_st, listing_id, user_id))
             conn.commit()
             return {"status": "success", "new_status": new_st}
-        elif action == "dismiss":
-            c.execute("UPDATE fb_listings SET status='dismissed' WHERE id=?", (listing_id,))
+        elif action in ("dismiss", "delete"):
+            c.execute("UPDATE fb_listings SET status='dismissed' WHERE id=? AND user_id=?", (listing_id, user_id))
             conn.commit()
             return {"status": "success", "new_status": "dismissed"}
+        elif action != "notify":
+            raise HTTPException(status_code=400, detail="Unsupported listing action.")
     finally:
         conn.close()
 
@@ -10620,6 +10681,20 @@ def api_fb_listing_action(listing_id: str, action: str = "star", user_id: str = 
         )
         return {"status": "success", "discord": res_d, "email": res_e}
     return {"status": "success"}
+
+@app.delete("/api/facebook/listings/{listing_id}")
+def api_delete_fb_listing(listing_id: str, user_id: str = Depends(verify_auth)):
+    """Suppress/remove a verified local listing so it stays hidden across future scans."""
+    conn = get_db_conn()
+    try:
+        c = conn.cursor()
+        c.execute("UPDATE fb_listings SET status='dismissed' WHERE id=? AND user_id=?", (listing_id, user_id))
+        conn.commit()
+        if c.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Listing not found.")
+        return {"status": "success", "new_status": "dismissed"}
+    finally:
+        conn.close()
 
 @app.post("/api/facebook/listings/{listing_id}/vision_inspect")
 def api_fb_listing_vision_inspect(listing_id: str, user_id: str = Depends(verify_auth)):
@@ -10875,7 +10950,7 @@ def api_get_command_center_briefing(user_id: str = Depends(verify_auth)):
         conn.commit()
         c.execute("SELECT COUNT(*) FROM fb_listings WHERE user_id=?", (user_id,))
         if c.fetchone()[0] == 0:
-            c.execute("SELECT id FROM fb_watchlists WHERE user_id=? LIMIT 1", (user_id,))
+            c.execute("SELECT id FROM fb_watchlists WHERE user_id=? AND is_active=1 LIMIT 1", (user_id,))
             fw = c.fetchone()
             if fw:
                 conn.close()
@@ -10883,9 +10958,15 @@ def api_get_command_center_briefing(user_id: str = Depends(verify_auth)):
                 conn = get_db_conn()
                 c = conn.cursor()
 
-        c.execute("SELECT * FROM fb_listings WHERE user_id=? AND status IN ('matched', 'starred') ORDER BY deal_score DESC LIMIT 4", (user_id,))
+        c.execute(
+            "SELECT * FROM fb_listings WHERE user_id=? AND status IN ('matched', 'starred') AND watchlist_id IN (SELECT id FROM fb_watchlists WHERE user_id=? AND is_active=1) ORDER BY deal_score DESC LIMIT 4",
+            (user_id, user_id)
+        )
         fb_matches = [dict(r) for r in c.fetchall()]
-        c.execute("SELECT COUNT(*) FROM fb_listings WHERE user_id=? AND status='blocked'", (user_id,))
+        c.execute(
+            "SELECT COUNT(*) FROM fb_listings WHERE user_id=? AND status='blocked' AND watchlist_id IN (SELECT id FROM fb_watchlists WHERE user_id=? AND is_active=1)",
+            (user_id, user_id)
+        )
         fb_blocked_count = c.fetchone()[0]
         c.execute("SELECT COUNT(*) FROM fb_watchlists WHERE user_id=? AND is_active=1", (user_id,))
         fb_watchlists_count = c.fetchone()[0]

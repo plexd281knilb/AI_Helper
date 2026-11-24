@@ -749,5 +749,61 @@ class TestVerificationSuite(unittest.TestCase):
         self.assertIn("org.opencontainers.image.icon", dockerfile_txt)
         self.assertIn("ai-helper-logo.png", dockerfile_txt)
 
+    def test_17_fb_watchlist_toggle_delete_and_listing_dismiss(self):
+        """Verify Verified Local listings can be dismissed/deleted permanently and watchlists can be turned off or deleted without resurrecting."""
+        c = TestClient(app)
+        login_res = c.post("/api/auth/login", json={"username": "spotify", "password": "AdminPassword!1"})
+        if login_res.json().get("status") != "success":
+            c.post("/api/auth/register", json={"username": "spotify", "password": "AdminPassword!1"})
+            c.post("/api/auth/login", json={"username": "spotify", "password": "AdminPassword!1"})
+
+        ov1 = c.get("/api/facebook/overview").json()
+        self.assertGreaterEqual(len(ov1["watchlists"]), 1)
+        self.assertGreaterEqual(len(ov1["matched_listings"]), 2)
+        wid = ov1["watchlists"][0]["id"]
+        lid_dismiss = ov1["matched_listings"][0]["id"]
+        lid_delete = ov1["matched_listings"][1]["id"]
+
+        # 1. Dismissing and deleting Verified Local listings removes them and persists across re-scans
+        r_dis = c.post(f"/api/facebook/listings/{lid_dismiss}/action?action=dismiss")
+        self.assertEqual(r_dis.status_code, 200)
+        r_del_l = c.delete(f"/api/facebook/listings/{lid_delete}")
+        self.assertEqual(r_del_l.status_code, 200)
+
+        c.post(f"/api/facebook/watchlists/{wid}/scan?notify=false")
+        ov2 = c.get("/api/facebook/overview").json()
+        matched_ids_after = {m["id"] for m in ov2["matched_listings"]}
+        self.assertNotIn(lid_dismiss, matched_ids_after)
+        self.assertNotIn(lid_delete, matched_ids_after)
+
+        # 2. Turning OFF the watchlist clears active matches/counts in overview and Command Center briefing
+        r_off = c.post(f"/api/facebook/watchlists/{wid}/toggle", json={"is_active": False})
+        self.assertEqual(r_off.status_code, 200)
+        self.assertFalse(r_off.json()["is_active"])
+        ov_off = c.get("/api/facebook/overview").json()
+        self.assertEqual(ov_off["stats"]["active_watchlists"], 0)
+        self.assertEqual(len(ov_off["matched_listings"]), 0)
+        self.assertEqual(len(ov_off["blocked_listings"]), 0)
+        cc_off = c.get("/api/command_center/briefing").json()
+        self.assertEqual(cc_off["facebook_sniper"]["active_watchlists"], 0)
+        self.assertEqual(cc_off["facebook_sniper"]["verified_matches_count"], 0)
+
+        # Turn back ON restores active status
+        r_on = c.post(f"/api/facebook/watchlists/{wid}/toggle", json={"is_active": True})
+        self.assertEqual(r_on.status_code, 200)
+        self.assertTrue(r_on.json()["is_active"])
+        ov_on = c.get("/api/facebook/overview").json()
+        self.assertEqual(ov_on["stats"]["active_watchlists"], 1)
+
+        # 3. Deleting the last watchlist permanently removes it and never resurrects on reload
+        r_del_w = c.delete(f"/api/facebook/watchlists/{wid}")
+        self.assertEqual(r_del_w.status_code, 200)
+        ov_after_del = c.get("/api/facebook/overview").json()
+        self.assertEqual(len(ov_after_del["watchlists"]), 0)
+        self.assertEqual(ov_after_del["stats"]["active_watchlists"], 0)
+        self.assertEqual(len(ov_after_del["matched_listings"]), 0)
+        cc_after_del = c.get("/api/command_center/briefing").json()
+        self.assertEqual(cc_after_del["facebook_sniper"]["active_watchlists"], 0)
+
 if __name__ == "__main__":
     unittest.main()
